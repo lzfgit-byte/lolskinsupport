@@ -1,12 +1,14 @@
+// @ts-ignore
 import path from 'path'
-import { app, BrowserWindow } from 'electron'
+import {app, BrowserWindow, Menu} from 'electron'
 
 let win: BrowserWindow
 
 function createWindow() {
+  Menu.setApplicationMenu(null);
   win = new BrowserWindow({
-    frame: false,
-    transparent: true,
+    width: 1400,
+    height: 788,
     webPreferences: {
       contextIsolation: false,
       nodeIntegration: true,
@@ -21,11 +23,13 @@ function createWindow() {
 
   if (app.isPackaged) {
     win.loadFile(path.join(__dirname, '../index.html'))
+    win.webContents.openDevTools();
   } else {
     // 🚧 Use ['ENV_NAME'] avoid vite:define plugin
     const url = `http://${process.env['VITE_DEV_SERVER_HOST']}:${process.env['VITE_DEV_SERVER_PORT']}`
 
     win.loadURL(url)
+    win.webContents.openDevTools();
   }
 }
 
