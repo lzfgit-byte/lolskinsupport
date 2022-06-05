@@ -1,21 +1,4 @@
-import { useLoading } from './loading'
-
-function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
-  return new Promise(resolve => {
-    if (condition.includes(document.readyState)) {
-      resolve(true)
-    } else {
-      document.addEventListener('readystatechange', () => {
-        if (condition.includes(document.readyState)) {
-          resolve(true)
-        }
-      })
-    }
-  })
+//preload.js
+//直接在app定义会直接给到main里边
+window['preLoad'] = ()=>{
 }
-
-const { appendLoading, removeLoading } = useLoading()
-
-domReady().then(appendLoading)
-
-window['removeLoading'] = removeLoading
