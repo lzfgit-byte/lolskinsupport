@@ -18,16 +18,14 @@ function createWindow() {
 
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', '主进程发送消息')
+    win?.webContents.send('main-process-message', '主进程发送消息了')
   })
 
   if (app.isPackaged) {
     win.loadFile(path.join(__dirname, '../index.html'))
-    win.webContents.openDevTools();
   } else {
     // 🚧 Use ['ENV_NAME'] avoid vite:define plugin
     const url = `http://${process.env['VITE_DEV_SERVER_HOST']}:${process.env['VITE_DEV_SERVER_PORT']}`
-
     win.loadURL(url)
     win.webContents.openDevTools();
   }
