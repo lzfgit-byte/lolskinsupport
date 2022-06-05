@@ -1,0 +1,31 @@
+{
+  "name": "vite-plugin-electron-quick-start",
+  "version": "0.0.0",
+  "description": "vite-plugin-electron-quick-start",
+  "main": "dist/electron-main/index.js",
+  "author": "lzf",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "rimraf dist && vite build && electron-builder"
+  },
+  "dependencies": {
+    "vue": "^3.2.35"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^2.3.3",
+    "electron": "^18.2.4",
+    "electron-builder": "^23.0.3",
+    "rimraf": "^3.0.2",
+    "typescript": "^4.6.4",
+    "vite": "^2.9.9",
+    "vite-plugin-electron": "^0.4.5"
+  },
+  "keywords": [
+    "vite",
+    "plugin",
+    "electron",
+    "quick-start"
+  ]
+}
