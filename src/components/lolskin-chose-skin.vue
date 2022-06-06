@@ -27,6 +27,8 @@
   import http from '../utils/http';
   import { heroInfo, skinInfo } from '../type/type';
   import { defineProps, ref } from 'vue';
+  import fs from 'fs-extra';
+  import ini from 'ini';
   const props = defineProps({ heroId: String });
   const emits = defineEmits(['back']);
   const bigImg = ref();
@@ -35,7 +37,7 @@
   const bigImgName = ref('');
   let heroInfo$: heroInfo;
   http.axios.get(REQ_URL).then((res: any) => {
-    heroInfo$ = res;
+    heroInfo$ = res.hero;
     allSkins.value = res.skins.filter((item) => item.mainImg);
     bigImg.value = allSkins.value[0].mainImg;
     bigImgName.value = allSkins.value[0].name;
@@ -44,13 +46,25 @@
   const handlerWheel = ($event) => {
     (moreRef.value.scrollLeft as any) += $event.deltaY;
   };
+  let pickId;
   const preSkin = (item: skinInfo) => {
     bigImgName.value = item.name;
     bigImg.value = item.mainImg;
-    console.log(parseInt(item.skinId.substring(2)));
+    pickId = parseInt(item.skinId.substring(2));
   };
   const back = () => {
     emits('back');
+  };
+  const confirm_ = () => {
+    if (!pickId && pickId !== 0) {
+      alert('未选择皮肤');
+      return;
+    }
+    const path = 'C:\\Fraps\\data\\My\\Config.ini';
+    var config = ini.parse(fs.readFileSync(path, 'utf-8'));
+    config['SKIN_CHAMPION_ACTIVED'][heroInfo$.alias] = pickId + '';
+    fs.writeFileSync(path, ini.stringify(config));
+    alert('设置成功');
   };
 </script>
 
@@ -82,6 +96,7 @@
     height: auto;
     .big {
       width: auto;
+      height: 60%;
       position: relative;
       img {
         width: 100%;
@@ -97,7 +112,7 @@
     .more {
       display: flex;
       overflow: auto;
-      height: auto;
+      height: 40%;
       transition: all 0.5s;
       &::-webkit-scrollbar {
         height: 10px;
