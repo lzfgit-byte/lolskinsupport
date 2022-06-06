@@ -1,20 +1,23 @@
-export interface skinInfo{
-    loadingImg?:string
-    iconImg?:string
-    mainImg?:string
-    chromasBelongId?:string
-    name?:string
+export interface skinInfo {
+  loadingImg?: string;
+  iconImg?: string;
+  mainImg?: string;
+  chromasBelongId?: string; //0 为主皮肤 其他为附加炫彩
+  name?: string; //哥特萝莉 安妮
+  description?: string; //她的母亲死了。她的父亲死了。但安妮还活着，领会着暗中之美。
+  skinId?: string;
 }
 export interface heroInfo {
-    heroId?:number
-    name?:string
-    title?:string
-    alias?:string
-    skins?:skinInfo[]
+  heroId?: number;
+  name?: string; //黑暗之女
+  title?: string; //安妮
+  alias?: string; //Annie
+  skins?: skinInfo[];
 }
-export interface mainHeroInfo{
-    heroId?:string
-    title?:string
-    alias?:string
+export interface mainHeroInfo {
+  heroId?: string;
+  title?: string;
+  name?: string;
+  alias?: string;
 }
-export default {}
+export default {};
