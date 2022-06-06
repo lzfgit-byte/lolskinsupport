@@ -29,6 +29,7 @@
   import { defineProps, ref } from 'vue';
   import fs from 'fs-extra';
   import ini from 'ini';
+  import execuExe from '../utils/execuExe';
   const props = defineProps({ heroId: String });
   const emits = defineEmits(['back']);
   const bigImg = ref();
@@ -65,6 +66,7 @@
     config['SKIN_CHAMPION_ACTIVED'][heroInfo$.alias] = pickId + '';
     fs.writeFileSync(path, ini.stringify(config));
     alert('设置成功');
+    execuExe.execuFuc();
   };
 </script>
 

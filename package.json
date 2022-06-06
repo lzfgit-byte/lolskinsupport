@@ -1,7 +1,7 @@
 {
-  "name": "vite-plugin-electron-quick-start",
-  "version": "0.0.0",
-  "description": "vite-plugin-electron-quick-start",
+  "name": "lolskin",
+  "version": "0.1.0",
+  "description": "lolskin-support",
   "main": "dist/electron-main/index.js",
   "author": "lzf",
   "license": "MIT",
