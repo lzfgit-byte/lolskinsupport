@@ -17,6 +17,7 @@
     ]
   },
   "win": {
+    "icon": "dist/favicon.ico",
     "target": [
       {
         "target": "nsis",
@@ -31,6 +32,8 @@
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "installerIcon": "dist/favicon.ico",
+    "uninstallerIcon": "dist/favicon.ico"
   }
 }

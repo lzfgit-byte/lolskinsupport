@@ -1,6 +1,6 @@
 {
   "name": "lolskin",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "lolskin-support",
   "main": "dist/electron-main/index.js",
   "author": "lzf",
