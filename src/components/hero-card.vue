@@ -21,24 +21,25 @@
 </script>
 
 <style scoped lang="less">
+  @width: 81px;
   .container {
     display: inline-block;
     margin: 10px;
-    height: 275px;
-    width: 215px;
+    height: 132px;
+    width: @width;
     position: relative;
     overflow: hidden;
     cursor: pointer;
     border: 1px solid #313e4c;
     img {
-      width: 215px;
+      width: @width;
       object-fit: cover;
       object-position: center top;
     }
     .titleContainer {
       position: absolute;
       width: 100%;
-      height: 55px;
+      height: 35px;
       bottom: 0;
       z-index: 1;
       background-color: #111419;

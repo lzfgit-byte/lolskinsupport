@@ -15,9 +15,10 @@ export interface heroInfo {
   skins?: skinInfo[];
 }
 export interface mainHeroInfo {
-  heroId?: string;
-  title?: string;
-  name?: string;
-  alias?: string;
+  heroId?: number;
+  name?: string; //黑暗之女
+  title?: string; //安妮
+  alias?: string; //Annie
+  keywords?: string; //搜索关键字
 }
 export default {};

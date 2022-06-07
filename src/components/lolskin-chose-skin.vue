@@ -10,6 +10,7 @@
     <div class="more" ref="moreRef" @wheel="handlerWheel">
       <img
         width="168"
+        :class="{ chose: +item.skinId.substring(item.skinId.length - 2) === choseId }"
         v-for="item in allSkins"
         :key="item"
         :src="item.mainImg"
@@ -37,11 +38,21 @@
   const allSkins = ref<skinInfo[]>();
   const bigImgName = ref('');
   let heroInfo$: heroInfo;
+  const choseId = ref();
+  //读取配置文件
+  const path = 'C:\\Fraps\\data\\My\\Config.ini';
+  var config = ini.parse(fs.readFileSync(path, 'utf-8'));
   http.axios.get(REQ_URL).then((res: any) => {
     heroInfo$ = res.hero;
     allSkins.value = res.skins.filter((item) => item.mainImg);
     bigImg.value = allSkins.value[0].mainImg;
-    bigImgName.value = allSkins.value[0].name;
+    choseId.value = parseInt(config['SKIN_CHAMPION_ACTIVED'][heroInfo$.alias] || 0);
+    res.skins.filter((item) => {
+      if (choseId.value === +item.skinId.substring(item.skinId.length - 2)) {
+        bigImg.value = item.mainImg;
+        bigImgName.value = item.name;
+      }
+    });
   });
   const moreRef = ref();
   const handlerWheel = ($event) => {
@@ -51,7 +62,9 @@
   const preSkin = (item: skinInfo) => {
     bigImgName.value = item.name;
     bigImg.value = item.mainImg;
-    pickId = parseInt(item.skinId.substring(2));
+    pickId = parseInt(item.skinId.substring(item.skinId.length - 2));
+    config['SKIN_CHAMPION_ACTIVED'][heroInfo$.alias] = pickId + '';
+    choseId.value = +pickId;
   };
   const back = () => {
     emits('back');
@@ -61,12 +74,9 @@
       alert('未选择皮肤');
       return;
     }
-    const path = 'C:\\Fraps\\data\\My\\Config.ini';
-    var config = ini.parse(fs.readFileSync(path, 'utf-8'));
-    config['SKIN_CHAMPION_ACTIVED'][heroInfo$.alias] = pickId + '';
     fs.writeFileSync(path, ini.stringify(config));
     alert('设置成功');
-    execuExe.execuFuc();
+    // execuExe.execuFuc();
   };
 </script>
 
@@ -123,6 +133,10 @@
         margin-left: 10px;
         margin-right: 10px;
         cursor: pointer;
+        box-sizing: border-box;
+      }
+      .chose {
+        border: 3px solid #518a30ff;
       }
     }
   }
