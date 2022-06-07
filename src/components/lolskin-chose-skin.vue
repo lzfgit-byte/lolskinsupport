@@ -31,6 +31,8 @@
   import fs from 'fs-extra';
   import ini from 'ini';
   import execuExe from '../utils/execuExe';
+  import { message } from 'ant-design-vue';
+
   const props = defineProps({ heroId: String });
   const emits = defineEmits(['back']);
   const bigImg = ref();
@@ -47,6 +49,7 @@
     allSkins.value = res.skins.filter((item) => item.mainImg);
     bigImg.value = allSkins.value[0].mainImg;
     choseId.value = parseInt(config['SKIN_CHAMPION_ACTIVED'][heroInfo$.alias] || 0);
+    pickId = choseId.value;
     res.skins.filter((item) => {
       if (choseId.value === +item.skinId.substring(item.skinId.length - 2)) {
         bigImg.value = item.mainImg;
@@ -71,22 +74,38 @@
   };
   const confirm_ = () => {
     if (!pickId && pickId !== 0) {
-      alert('未选择皮肤');
+      message.warn('未选择皮肤');
       return;
     }
     fs.writeFileSync(path, ini.stringify(config));
-    alert('设置成功');
-    // execuExe.execuFuc();
+    let cmdStr1 = 'start /min C:\\Fraps\\LOLPRO.exe';
+    const FIND_LOL_PRO = 'tasklist | find /i "LOLPRO.exe"';
+    execuExe.execuFuc(FIND_LOL_PRO).then((res) => {
+      if (+res === 0) {
+        message.success('设置成功');
+      } else {
+        execuExe.execuFuc(cmdStr1).then((res) => {
+          message.success('设置成功');
+        });
+      }
+    });
   };
 </script>
 
 <style scoped lang="less">
+  .btn_ {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #1b2128;
+    border: 1px solid #518a30ff;
+    width: 68px;
+    height: 30px;
+    color: #ffffff;
+  }
   .back {
     position: absolute;
-    display: flex;
-    color: #ffffff;
-    width: 200px;
-    height: 75px;
+    .btn_();
     left: 10px;
     top: 10px;
     z-index: 3;
@@ -94,11 +113,8 @@
   }
   .confirm {
     position: absolute;
-    display: flex;
-    color: #ffffff;
-    width: 200px;
-    height: 75px;
-    right: -146px;
+    .btn_();
+    right: 20px;
     top: 10px;
     z-index: 3;
     cursor: pointer;

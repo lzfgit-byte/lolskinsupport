@@ -52,6 +52,7 @@
     transition: border-color 0.3s;
     input {
       height: 38px;
+      width: 100%;
       background-color: transparent;
       border: none;
       font-size: 16px;

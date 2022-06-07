@@ -6,7 +6,7 @@
 </script>
 <style>
   body {
-    background-color: #1b2128;
+    background-color: #1b2128 !important;
     width: 100%;
     height: 100%;
     overflow-x: hidden;
