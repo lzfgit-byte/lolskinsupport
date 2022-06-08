@@ -6,6 +6,7 @@ export interface skinInfo {
   name?: string; //哥特萝莉 安妮
   description?: string; //她的母亲死了。她的父亲死了。但安妮还活着，领会着暗中之美。
   skinId?: string;
+  chromaImg?: string;
 }
 export interface heroInfo {
   heroId?: number;
