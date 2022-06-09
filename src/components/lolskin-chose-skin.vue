@@ -172,7 +172,7 @@
     height: 20px;
     border-radius: 50%;
     left: 50%;
-    top: 48%;
+    top: 81%;
     z-index: 9;
     cursor: pointer;
   }
