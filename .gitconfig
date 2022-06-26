@@ -1,0 +1,4 @@
+[http]
+	sslVerify = false
+[https]
+	proxy = 127.0.0.1:10808
