@@ -39,13 +39,15 @@
 </template>
 
 <script setup lang="ts">
-  import http from '../utils/http';
-  import { heroInfo, skinInfo } from '../type/type';
+  import http from '@/utils/http';
+  import { heroInfo, skinInfo } from '@/type/type';
   import { defineProps, ref } from 'vue';
   import fs from 'fs-extra';
   import ini from 'ini';
-  import execuExe from '../utils/execuExe';
+  import execuExe from '@/utils/execuExe';
   import { message, Modal } from 'ant-design-vue';
+  import path$ from 'path';
+  import { ConfigIni } from '@/utils/setting';
 
   const visible = ref(false);
   const props = defineProps({ heroId: String });
@@ -59,6 +61,10 @@
   const choseId = ref();
   //读取配置文件
   const path = 'C:\\Fraps\\data\\My\\Config.ini';
+  const exist = fs.existsSync(path);
+  if (!exist) {
+    fs.writeFileSync(path, ConfigIni, { encoding: 'utf-8' });
+  }
   var config = ini.parse(fs.readFileSync(path, 'utf-8'));
   http.axios.get(REQ_URL).then((res: any) => {
     heroInfo$ = res.hero;
