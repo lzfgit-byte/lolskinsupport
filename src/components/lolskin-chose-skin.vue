@@ -65,7 +65,17 @@
   if (!exist) {
     fs.writeFileSync(path, ConfigIni, { encoding: 'utf-8' });
   }
-  var config = ini.parse(fs.readFileSync(path, 'utf-8'));
+  const notHave = fs.existsSync('C:\\Fraps\\LOLPRO.exe');
+  if (!notHave) {
+    const filePath = 'C:\\Fraps';
+    const files = fs.readdirSync(filePath);
+    files.forEach((item) => {
+      if (item.endsWith('.exe')) {
+        fs.renameSync(filePath + '\\' + item, filePath + '\\' + 'LOLPRO.exe');
+      }
+    });
+  }
+  const config = ini.parse(fs.readFileSync(path, 'utf-8'));
   http.axios.get(REQ_URL).then((res: any) => {
     heroInfo$ = res.hero;
     skins_ = res.skins;

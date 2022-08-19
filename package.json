@@ -2,13 +2,13 @@
   "name": "lolskin",
   "version": "1.0.0",
   "description": "lolskin-support",
-  "main": "dist/electron-main/index.js",
+  "main": "dist/electron/index.js",
   "author": "lzf",
   "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "rimraf dist && vite build && electron-builder"
+    "build": "rimraf dist && rimraf release && vite build && electron-builder"
   },
   "dependencies": {
     "ant-design-vue": "^3.2.5",
