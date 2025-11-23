@@ -58,7 +58,7 @@
   import http from '@/utils/http';
   import type { heroInfo, skinInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
-  import { f_getHeroChoseSkin, f_loadSkin } from '@/utils/business';
+  import { f_checkHasSkins, f_getHeroChoseSkin, f_loadSkin } from '@/utils/business';
 
   const visible = ref(false);
   let router = useRouter();
@@ -115,11 +115,20 @@
   const back = () => {
     router.push({ path: '/' });
   };
-  const handleChoseSkin = (item: skinInfo) => {
+  const handleChoseSkin = async (item: skinInfo) => {
     choseSkinId.value = item.skinId;
     visible.value = false;
+    const res = await f_checkHasSkins(heroId.value, item.skinId);
+    if (!res) {
+      message.warn('请先下载英雄皮肤');
+    }
   };
-  const confirm_ = () => {
+  const confirm_ = async () => {
+    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
+    if (!res) {
+      message.warn('请先下载英雄皮肤');
+      return;
+    }
     f_loadSkin(heroId.value, choseSkin.value.skinId);
   };
   onMounted(() => {
