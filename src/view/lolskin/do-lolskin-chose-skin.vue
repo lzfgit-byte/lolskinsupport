@@ -6,6 +6,9 @@
     <div class="confirm" @click="confirm_">
       <span>确定[{{ choseSkin?.name }}]</span>
     </div>
+    <div class="confirm" style="top: 50px" @click="preChose">
+      <span>提前选择[{{ choseSkin?.name }}]</span>
+    </div>
     <div class="skin-container" h-full w-full pos-relative box-border>
       <div class="skin-more">
         <div h-full style="width: 430px">
@@ -58,12 +61,17 @@
   import http from '@/utils/http';
   import type { heroInfo, skinInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
-  import { f_checkHasSkins, f_getHeroChoseSkin, f_loadSkin } from '@/utils/business';
+  import {
+    f_checkHasSkins,
+    f_getHeroChoseSkin,
+    f_loadSkin,
+    f_setHeroChoseSkin,
+  } from '@/utils/business';
   import { notify } from '@/utils/kit-utils';
 
   const visible = ref(false);
   let router = useRouter();
-  const { heroId } = useGlobalState();
+  const { heroId, autoChose } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
   const allSkins = ref<skinInfo[]>();
   const choseSkinId = ref('');
@@ -105,7 +113,7 @@
       })
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
-        if (!choseSkinId.value?.endsWith('0')) {
+        if (autoChose.value && !choseSkinId.value?.endsWith('0')) {
           notify('', '自动应用', '自动应用', true);
           confirm_();
         }
@@ -135,6 +143,15 @@
       return;
     }
     f_loadSkin(heroId.value, choseSkin.value.skinId);
+  };
+  const preChose = async () => {
+    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
+    if (!res) {
+      message.warn('请先下载英雄皮肤');
+      return;
+    }
+    await f_setHeroChoseSkin(heroId.value, choseSkinId.value);
+    message.success('已应用');
   };
   onMounted(() => {
     getSkins();

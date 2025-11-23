@@ -22,7 +22,9 @@ export const initLcu = async (win: BrowserWindow) => {
   });
   gameflowMonitor.on('phase-changed', (phase, previousPhase) => {});
   return () => {
-    lcuConnector.disconnect();
-    gameflowMonitor.stop();
+    try {
+      lcuConnector?.disconnect();
+      gameflowMonitor?.stop();
+    } catch (e) {}
   };
 };

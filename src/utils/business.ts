@@ -56,3 +56,9 @@ export const f_checkHasSkins = async (heroId: string, skinId: string) => {
 export const f_getHeroChoseSkin = async (heroId: string) => {
   return executeFunction('getHeroChoseSkin', heroId);
 };
+/**
+ * export const setHeroChoseSkin = (heroId: string, skinId: string) => {
+ */
+export const f_setHeroChoseSkin = async (heroId: string, skinId: string) => {
+  return executeFunction('setHeroChoseSkin', heroId, skinId);
+};

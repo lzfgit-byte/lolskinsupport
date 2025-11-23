@@ -11,6 +11,7 @@ const toolsPath = ref('');
 const overlayPath = ref('');
 const overlayConfigPath = ref('');
 const installedPath = ref('');
+const autoChose = ref(false);
 
 export default () => ({
   loading,
