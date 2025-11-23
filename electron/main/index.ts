@@ -7,6 +7,7 @@ import './init/init-env';
 import 'reflect-metadata';
 import { resolvePreload, resolvePublic } from '../utils/KitUtil';
 import { LogMsgUtil, MessageUtil, useGlobalMessage } from '../utils/message';
+import { initLcu } from '../http/connect-league-legends';
 // 启动服务
 let win: BrowserWindow | null = null;
 const url = process.env.VITE_DEV_SERVER_URL;
@@ -77,4 +78,6 @@ app.on('activate', () => {
 // 注册远程方法
 useIpcMain();
 useCookie();
+// initWs();
+initLcu();
 export const getMainWin = (): BrowserWindow => win;
