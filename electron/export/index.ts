@@ -167,7 +167,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
         `--mods:${uniqueId}`,
         '--ignoreConflict',
       ],
-      5000,
+      50000,
       true
     )
     .catch((msg) => {
