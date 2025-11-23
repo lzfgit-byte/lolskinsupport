@@ -50,3 +50,9 @@ export const f_getInstalledPath = async (): Promise<string> => {
 export const f_checkHasSkins = async (heroId: string, skinId: string) => {
   return executeFunction('checkHasSkins', heroId, skinId);
 };
+/**
+ * export const getHeroChoseSkin = (heroId: string) => {
+ */
+export const f_getHeroChoseSkin = async (heroId: string) => {
+  return executeFunction('getHeroChoseSkin', heroId);
+};

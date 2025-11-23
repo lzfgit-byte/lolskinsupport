@@ -58,7 +58,7 @@
   import http from '@/utils/http';
   import type { heroInfo, skinInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
-  import { f_loadSkin } from '@/utils/business';
+  import { f_getHeroChoseSkin, f_loadSkin } from '@/utils/business';
 
   const visible = ref(false);
   let router = useRouter();
@@ -92,13 +92,19 @@
   const getSkins = () => {
     const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId.value}.js`;
     if (!heroId.value) {
+      message.warn('请选择英雄');
       return;
     }
-    http.axios.get(REQ_URL).then((res: any) => {
-      skins_.value = res.skins;
-      allSkins.value = res.skins.filter((item: skinInfo) => item.chromasBelongId === '0');
-      choseSkinId.value = allSkins.value[0].skinId;
-    });
+    http.axios
+      .get(REQ_URL)
+      .then((res: any) => {
+        skins_.value = res.skins;
+        allSkins.value = res.skins.filter((item: skinInfo) => item.chromasBelongId === '0');
+        return f_getHeroChoseSkin(heroId.value);
+      })
+      .then((id) => {
+        choseSkinId.value = id || allSkins.value[0].skinId;
+      });
   };
   const isChose = (item: skinInfo) => {
     if (choseSkin.value?.chromasBelongId === '0') {

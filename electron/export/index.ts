@@ -2,6 +2,7 @@ import * as Path from 'node:path';
 import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
 import {
   GAME_PATH,
+  HERO_SKIN,
   INSTALLED_PATH,
   MOD_TOOLS_PATH,
   OVERLAY_CONFIG_PATH,
@@ -20,7 +21,6 @@ import {
   modToolsWrapper,
 } from '../const';
 import { MessageUtil } from '../utils/message';
-import { ModToolsWrapper } from './modToolsWrapper';
 
 export * from '../http';
 
@@ -65,6 +65,17 @@ export const getOverlayConfigPath = () => {
     writeFileSync(r, JSON.stringify([], null, 2));
   }
   return r;
+};
+export const setHeroChoseSkin = (heroId: string, skinId: string) => {
+  const data = readConfigOrDefault(HERO_SKIN, '{}');
+  const d = JSON.parse(data);
+  d[heroId] = skinId;
+  setConfig(HERO_SKIN, JSON.stringify(d, null, 2));
+};
+export const getHeroChoseSkin = (heroId: string) => {
+  const data = readConfigOrDefault(HERO_SKIN, '{}');
+  const d = JSON.parse(data);
+  return d[heroId] || '';
 };
 export const getModToolsPath = () => {
   return readConfigOrDefault(MOD_TOOLS_PATH, defaultModToolsPath);
@@ -117,6 +128,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     MessageUtil.error(`${skinPath} not exists`);
     return;
   }
+  setHeroChoseSkin(heroId, skinId);
   const uniqueId = `${heroId}_${skinId}`;
   const overlayPath = `${getOverlayPath()}\\${uniqueId}`;
   const overlayPathConfig = `${getOverlayConfigPath()}`;
