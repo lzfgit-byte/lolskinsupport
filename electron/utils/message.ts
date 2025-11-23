@@ -1,8 +1,9 @@
-import { webContents } from 'electron';
+import type { BrowserWindow } from 'electron';
 import { MESSAGE_EVENT_KEY } from '@ghs/constant';
 import type { MessageInfo } from '@ghs/types';
 import { eventEmitter, getCurrentDate } from './KitUtil';
 
+let win: BrowserWindow;
 /**
  * 发送及时的消息
  */
@@ -24,7 +25,7 @@ export class MessageUtil {
   }
 
   private static sendMsg(msg: MessageInfo) {
-    webContents?.getFocusedWebContents()?.send(MESSAGE_EVENT_KEY.SEND_MESSAGE, msg);
+    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_MESSAGE, msg);
   }
 }
 
@@ -34,9 +35,10 @@ export class MessageUtil {
 export class StepMessageUtil {
   static key: 'step_msg_key';
   private static sendMsg(msg: MessageInfo) {
-    webContents
-      ?.getFocusedWebContents()
-      ?.send(MESSAGE_EVENT_KEY.SEND_STEP_MESSAGE, { ...msg, key: StepMessageUtil.key });
+    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_STEP_MESSAGE, {
+      ...msg,
+      key: StepMessageUtil.key,
+    });
   }
 
   static sendStepMsg(title: string, msg: string, key: string) {
@@ -53,7 +55,7 @@ export class StepMessageUtil {
  */
 export class NotifyMsgUtil {
   private static sendMsg(msg: MessageInfo) {
-    webContents?.getFocusedWebContents()?.send(MESSAGE_EVENT_KEY.SEND_NOTIFY_MESSAGE, msg);
+    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_NOTIFY_MESSAGE, msg);
   }
 
   static sendNotifyMsg(title: string, msg: string, key: string) {
@@ -70,7 +72,7 @@ export class NotifyMsgUtil {
  */
 export class LogMsgUtil {
   private static sendMsg(msg: MessageInfo) {
-    webContents?.getFocusedWebContents()?.send(MESSAGE_EVENT_KEY.SEND_LOG_MESSAGE, msg);
+    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_LOG_MESSAGE, msg);
   }
 
   static sendLogMsg(...msg: string[]) {
@@ -87,7 +89,7 @@ export class LogMsgUtil {
  */
 export class ProgressMsgUtil {
   private static sendMsg(msg: MessageInfo) {
-    webContents?.getFocusedWebContents()?.send(MESSAGE_EVENT_KEY.SEND_PROCESS_MESSAGE, msg);
+    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_PROCESS_MESSAGE, msg);
   }
 
   static sendProgressMsg(msg: MessageInfo) {
@@ -108,7 +110,7 @@ export class ProgressMsgUtil {
  */
 export class ConsoleLogUtil {
   private static sendMsg(msg: MessageInfo) {
-    webContents?.getFocusedWebContents()?.send(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, msg);
+    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, msg);
   }
 
   static sendLogMsg(...msg: string[]) {
@@ -116,7 +118,8 @@ export class ConsoleLogUtil {
   }
 }
 
-export const useGlobalMessage = () => {
+export const useGlobalMessage = (win_: BrowserWindow) => {
+  win = win_;
   eventEmitter.on(MESSAGE_EVENT_KEY.SEND_LOG_MESSAGE, (msg) => {
     LogMsgUtil.sendLogMsg(msg);
   });

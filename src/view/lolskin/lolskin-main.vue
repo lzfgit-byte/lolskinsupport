@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, watchEffect } from 'vue';
+  import { onMounted, ref, watchEffect } from 'vue';
   import { useRouter } from 'vue-router';
   import HeroCard from './hero-card.vue';
   import http from '@/utils/http';
@@ -37,13 +37,17 @@
     heroId.value = heroId_;
     router.push({ path: '/choseSkin' });
   };
-  bus.on('champion-selected', () => {
-    router.push({ path: '/choseSkin' });
-  });
   const searchValue = ref();
   watchEffect(() => {
     console.log(searchValue.value);
     mainIMg.value = heros.filter((item) => item.keywords.indexOf(searchValue.value) > -1);
+  });
+  onMounted(() => {
+    bus.off('champion-selected');
+    bus.on('champion-selected', () => {
+      debugger;
+      router.push({ path: '/choseSkin' });
+    });
   });
 </script>
 

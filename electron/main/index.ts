@@ -27,7 +27,7 @@ async function createWindow() {
     },
   });
   useGlobalShortcut(win);
-  useGlobalMessage();
+  useGlobalMessage(win);
   if (process.env.VITE_DEV_SERVER_URL) {
     await win.loadURL(url);
     win.webContents.openDevTools();
@@ -79,5 +79,5 @@ app.on('activate', () => {
 useIpcMain();
 useCookie();
 // initWs();
-initLcu();
+initLcu(win);
 export const getMainWin = (): BrowserWindow => win;

@@ -55,6 +55,8 @@ ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, (_event, args: MessageInfo) =
   console.log(args.msg);
 });
 ipcRenderer.on('champion-selected', (_event, championId: string) => {
+  debugger;
   heroId.value = championId;
+  console.log('英雄选择', championId);
   bus.emit('champion-selected', championId);
 });
