@@ -115,4 +115,3 @@ export const cache_dir_size = () => {
   }
   return formatSize(calculateDirectorySize(CACHE_PATH));
 };
-export const cache_dir_db = () => APP_PATHS.db_path;

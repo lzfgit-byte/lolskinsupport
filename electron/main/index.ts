@@ -6,21 +6,13 @@ import useGlobalShortcut from '../hooks/use-global-shortcut';
 import './init/init-env';
 import 'reflect-metadata';
 import { resolvePreload, resolvePublic } from '../utils/KitUtil';
-import useHtmlGetWin from '../http/use-html-get-win';
-import useProxySetting from '../setting/use-proxy-setting';
-import useImgGetWin from '../http/use-img-get-win';
-import useAppDataSource from '../database/use-app-data-source';
 import { useGlobalMessage } from '../utils/message';
-import useInitWebConfig from '../business/use-init-web-config';
-import { useServer } from '../server';
-import useHandleMainEvent from './event/use-handle-main-event';
 // 启动服务
 let win: BrowserWindow | null = null;
 const url = process.env.VITE_DEV_SERVER_URL;
 const indexHtml = join(process.env.DIST, 'index.html');
 let execFuncOnClose = [];
 async function createWindow() {
-  execFuncOnClose.push(await useAppDataSource());
   win = new BrowserWindow({
     title: 'ghs',
     width: 1450,
@@ -32,14 +24,8 @@ async function createWindow() {
       contextIsolation: false,
     },
   });
-  useProxySetting(win);
-  useHandleMainEvent(win);
   useGlobalShortcut(win);
-  useHtmlGetWin(win);
-  useImgGetWin(win);
   useGlobalMessage();
-  useInitWebConfig();
-  useServer();
   if (process.env.VITE_DEV_SERVER_URL) {
     await win.loadURL(url);
     win.webContents.openDevTools();

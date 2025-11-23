@@ -7,8 +7,7 @@
   "private": true,
   "workspaces": [
     "packages/types",
-    "packages/constant",
-    "packages/h5"
+    "packages/constant"
   ],
   "keywords": [
     "electron",
