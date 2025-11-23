@@ -2,10 +2,11 @@
   <div class="searchInput">
     <input v-model="searchValue" />
   </div>
-  <div style="padding-top: 38px">
+  <div style="padding-top: 38px; overflow-y: auto; height: calc(100vh - 38px)">
     <HeroCard
       v-for="item in mainIMg"
-      :hero-id="item.heroId"
+      :hero-id="`${item.heroId}`"
+      :instance_id="item.instance_id"
       :title="item.name"
       @click-hero="handlerClickHero"
     ></HeroCard>

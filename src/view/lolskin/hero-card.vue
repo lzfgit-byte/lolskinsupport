@@ -1,6 +1,6 @@
 <template>
   <div class="container" @click="handlerClick">
-    <img :src="`${BASE_URL + heroId}000.jpg`" />
+    <img :src="`${BASE_URL + instance_id}.jpg`" />
     <div class="titleContainer">
       <span>{{ title }}</span>
     </div>
@@ -13,6 +13,7 @@
   const props = defineProps({
     heroId: String,
     title: String,
+    instance_id: String,
   });
   const emits = defineEmits(['clickHero']);
   const BASE_URL = 'https://game.gtimg.cn/images/lol/act/img/skinloading/';
