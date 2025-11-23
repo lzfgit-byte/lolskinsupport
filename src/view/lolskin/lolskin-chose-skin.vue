@@ -8,16 +8,25 @@
     </div>
     <div class="skin-container" h-full w-full pos-relative box-border>
       <div class="skin-more">
-        <div v-for="item in allSkins" :key="item.skinId" style="padding: 10px; position: relative">
-          <img width="168" :src="item.mainImg" :title="item.description" @click="preSkin(item)" />
-          <div class="skinName">{{ item.name }}</div>
+        <div
+          v-for="item in allSkins"
+          :key="item.skinId"
+          style="padding: 10px; padding-bottom: 20px; position: relative"
+        >
+          <img
+            :class="choseSkinId === item.skinId ? 'chose' : ''"
+            width="168"
+            :src="item.mainImg"
+            :title="item.description"
+            @click="handleChoseSkin(item)"
+          />
+          <div class="skinName" :title="item.name">{{ item.name }}</div>
         </div>
       </div>
       <div class="big">
-        <img :src="bigImg" />
-        <div class="skinName">{{ bigImgName }}</div>
+        <img :src="choseSkin?.mainImg" />
       </div>
-      <div v-if="showClor" class="showChild" @click="visible = true"></div>
+      <div v-if="skinChild?.length > 0" class="showChild" @click="visible = true"></div>
     </div>
 
     <Modal
@@ -33,7 +42,7 @@
           width="25"
           :src="item.chromaImg"
           :title="item.name"
-          @click="preSkin(item)"
+          @click="handleChoseSkin(item)"
         />
       </div>
     </Modal>
@@ -41,91 +50,52 @@
 </template>
 
 <script setup lang="ts">
-  import { defineProps, onMounted, ref } from 'vue';
+  import type { Ref } from 'vue';
+  import { computed, defineProps, onMounted, ref } from 'vue';
   import { Modal, message } from 'ant-design-vue';
   import { useRouter } from 'vue-router';
   import http from '@/utils/http';
   import type { heroInfo, skinInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
 
-  const emits = defineEmits(['back']);
   const visible = ref(false);
   let router = useRouter();
-  const bigImg = ref();
   const { heroId } = useGlobalState();
+  let skins_ = ref<skinInfo[]>([]);
   const allSkins = ref<skinInfo[]>();
-  const bigImgName = ref('');
-  let heroInfo$: heroInfo;
-  let skins_: skinInfo[];
-  const choseId = ref('');
+  const choseSkinId = ref('');
+  const choseSkin = computed(() => {
+    if (choseSkinId.value) {
+      const f = skins_.value.filter((item) => item.skinId === choseSkinId.value);
+      if (f?.length > 0) {
+        return f[0];
+      }
+    }
+    return {};
+  });
+  const skinChild: Ref<skinInfo[]> = computed(() => {
+    return skins_.value.filter((item_) => choseSkinId.value === item_.chromasBelongId)[0];
+  }) as any;
+
   const getSkins = () => {
     const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId.value}.js`;
-    // 读取配置文件
-    // const path = 'C:\\Fraps\\data\\My\\Config.ini';
-    // const exist = fs.existsSync(path);
-    // if (!exist) {
-    // fs.writeFileSync(path, ConfigIni, { encoding: 'utf-8' });
-    // }
-    if (choseId.value) {
+    if (!heroId.value) {
       return;
     }
     http.axios.get(REQ_URL).then((res: any) => {
-      heroInfo$ = res.hero;
-      skins_ = res.skins;
-      allSkins.value = res.skins.filter((item) => item.mainImg);
-      bigImg.value = allSkins.value[0].mainImg;
-      // choseId.value = parseInt(config.SKIN_CHAMPION_ACTIVED[heroInfo$.alias] || 0);
-      pickId = choseId.value;
-      res.skins?.forEach((item) => {
-        if (choseId.value === +item.skinId.substring(item.skinId.length - 2)) {
-          bigImg.value = item.mainImg || getParent(item).mainImg;
-          if (item.chromasBelongId !== '0') {
-            const parentId = getParent(item).skinId;
-            choseId.value = parseInt(parentId.substring(parentId.length - 2));
-            skinChild.value = getColorfulSkin(parentId);
-            showClor.value = true;
-          }
-          bigImgName.value = item.name;
-        }
-      });
+      skins_.value = res.skins;
+      allSkins.value = res.skins.filter((item: skinInfo) => item.chromasBelongId === '0');
+      choseSkinId.value = allSkins.value[0].skinId;
     });
   };
 
-  const getParent = (item): skinInfo => {
-    return skins_.filter((item_) => item_.skinId === item.chromasBelongId)[0];
-  };
-  const moreRef = ref();
-  const handlerWheel = ($event) => {
-    (moreRef.value.scrollLeft as any) += $event.deltaY;
-  };
-  let pickId;
-  const skinChild = ref<skinInfo[]>();
-  const showClor = ref(false);
-  const preSkin = (item: skinInfo) => {
-    if (item.chromasBelongId !== '0') {
-      const parentSkin = getParent(item);
-      bigImgName.value = item.name;
-      bigImg.value = parentSkin.mainImg;
-    } else {
-      showClor.value = false;
-      bigImgName.value = item.name;
-      bigImg.value = item.mainImg;
-      skinChild.value = getColorfulSkin(item.skinId);
-      showClor.value = skinChild.value.length > 0;
-    }
-    pickId = parseInt(item.skinId.substring(item.skinId.length - 2));
-  };
-  const getColorfulSkin = (skinId) => {
-    return skins_.filter((item) => item.chromasBelongId === skinId);
-  };
   const back = () => {
     router.push({ path: '/' });
   };
-  const confirm_ = () => {
-    if (!pickId && pickId !== 0) {
-      message.warn('未选择皮肤');
-    }
+  const handleChoseSkin = (item: skinInfo) => {
+    choseSkinId.value = item.skinId;
   };
+  const confirm_ = () => {};
   onMounted(() => {
     getSkins();
   });
@@ -203,8 +173,12 @@
   .skinName {
     color: #fff5e0;
     position: absolute;
-    bottom: 10px;
-    left: 10px;
+    bottom: -4px;
+    left: 20px;
+    white-space: nowrap; /* 不换行 */
+    overflow: hidden; /* 超出隐藏 */
+    text-overflow: ellipsis; /* 显示省略号 */
+    max-width: 140px; /* 必须设置宽度 */
   }
   .skin-container {
     display: inline-flex;
