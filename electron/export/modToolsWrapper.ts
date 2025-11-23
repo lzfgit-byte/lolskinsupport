@@ -21,7 +21,6 @@ export class ModToolsWrapper {
 
   public sendState = () => {
     setInterval(() => {
-      LogMsgUtil.sendLogMsg(`${this.isCancelled}`);
       LogMsgUtil.sendLogMsg(`${this.isRunning()}`);
     }, 1000);
   };
@@ -52,6 +51,53 @@ export class ModToolsWrapper {
     }
   }
 
+  public async runOverlay(command: string, args: string[]): Promise<void> {
+    this.runningProcess = spawn(command, args, {
+      detached: false,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    this.activeProcesses.push(this.runningProcess);
+
+    this.runningProcess.stdout?.on('data', (data) => {
+      const output = data.toString();
+      const lines = output.split('\n').filter((line) => line.trim());
+
+      lines.forEach((line) => {
+        const trimmedLine = line.trim();
+        console.log(`[MOD-TOOLS]: ${trimmedLine}`);
+
+        // Only send to renderer if it's not a DLL log
+        if (!trimmedLine.startsWith('[DLL]')) {
+          LogMsgUtil.sendLogMsg(trimmedLine);
+        }
+      });
+    });
+
+    this.runningProcess.stderr?.on('data', (data) => {
+      const output = data.toString();
+      const lines = output.split('\n').filter((line) => line.trim());
+
+      lines.forEach((line) => {
+        const trimmedLine = line.trim();
+        console.error(`[MOD-TOOLS ERROR]: ${trimmedLine}`);
+
+        // Only send to renderer if it's not a DLL log
+        if (!trimmedLine.startsWith('[DLL]')) {
+          LogMsgUtil.sendLogMsg(trimmedLine);
+        }
+      });
+    });
+
+    this.runningProcess.on('exit', (code) => {
+      console.log(`Mod tools process exited with code ${code}`);
+      this.cleanupProcess(this.runningProcess);
+      this.runningProcess = null;
+      LogMsgUtil.sendLogMsg('exit');
+    });
+
+    this.applyInProgress = false;
+  }
+
   public async execToolWithTimeout(
     command: string,
     args: string[],
@@ -65,7 +111,7 @@ export class ModToolsWrapper {
         return;
       }
 
-      const process = spawn(command, args);
+      const process = spawn(command, args, {});
       this.currentOperation = process;
       this.activeProcesses.push(process);
 

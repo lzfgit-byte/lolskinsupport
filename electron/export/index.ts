@@ -163,18 +163,13 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     });
   MessageUtil.success(`创建${uniqueId}成功`);
   await modToolsWrapper
-    .execToolWithTimeout(
-      command,
-      [
-        'runoverlay',
-        Path.normalize(overlayPath),
-        Path.normalize(overlayPathConfig),
-        `--game:${Path.normalize(gamePath)}`,
-        '--opts:none',
-      ],
-      5000,
-      true
-    )
+    .runOverlay(command, [
+      'runoverlay',
+      Path.normalize(overlayPath),
+      Path.normalize(overlayPathConfig),
+      `--game:${Path.normalize(gamePath)}`,
+      '--opts:none',
+    ])
     .catch((msg) => {
       MessageUtil.error(msg);
     });
