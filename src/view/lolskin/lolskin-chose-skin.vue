@@ -58,6 +58,7 @@
   import http from '@/utils/http';
   import type { heroInfo, skinInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
+  import { f_loadSkin } from '@/utils/business';
 
   const visible = ref(false);
   let router = useRouter();
@@ -112,7 +113,9 @@
     choseSkinId.value = item.skinId;
     visible.value = false;
   };
-  const confirm_ = () => {};
+  const confirm_ = () => {
+    f_loadSkin(heroId.value, choseSkin.value.skinId);
+  };
   onMounted(() => {
     getSkins();
   });

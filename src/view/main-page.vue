@@ -16,8 +16,10 @@
         <h1>设置信息</h1>
         皮肤存储路径：{{ skinPath }}<br />
         游戏路径：{{ gamePath }}<br />
+        installedPath路径：{{ installedPath }}<br />
         overlay路径：{{ overlayPath }}<br />
         overlayConfig路径：{{ overlayConfigPath }}<br />
+        toolsPath路径：{{ toolsPath }}<br />
       </transition-group>
     </div>
   </a-drawer>
@@ -30,7 +32,8 @@
   import useGlobalState from '@/hooks/use-global-state';
 
   const route = useRoute();
-  const { skinPath, gamePath, toolsPath, overlayPath, overlayConfigPath } = useGlobalState();
+  const { skinPath, gamePath, toolsPath, overlayPath, overlayConfigPath, installedPath } =
+    useGlobalState();
   const { handleDrawOpen, drawerOpen } = useFeature();
 </script>
 

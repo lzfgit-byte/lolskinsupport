@@ -1,4 +1,3 @@
-import { getSkinPath } from '../../electron/export';
 import { executeFunction } from '@/utils/ipc';
 
 /**
@@ -36,6 +35,18 @@ export const f_getModToolsPath = async (): Promise<string> => {
 /**
  * export const loadSkin = async (...args: string[]) => {
  */
-export const f_loadSkin = async (...args: string[]) => {
-  return executeFunction('loadSkin', ...args);
+export const f_loadSkin = async (heroId: string, skinId: string) => {
+  return executeFunction('loadSkin', heroId, skinId);
+};
+/**
+ * export const getInstalledPath = () => {
+ */
+export const f_getInstalledPath = async (): Promise<string> => {
+  return executeFunction('getInstalledPath');
+};
+/**
+ * export const checkHasSkins = (...args: string[]) => {}
+ */
+export const f_checkHasSkins = async (heroId: string, skinId: string) => {
+  return executeFunction('checkHasSkins', heroId, skinId);
 };

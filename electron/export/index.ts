@@ -1,6 +1,8 @@
+import * as Path from 'node:path';
 import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
 import {
   GAME_PATH,
+  INSTALLED_PATH,
   MOD_TOOLS_PATH,
   OVERLAY_CONFIG_PATH,
   OVERLAY_PATH,
@@ -10,11 +12,13 @@ import {
 import {
   configPath,
   defaultGamePath,
+  defaultInstalledPath,
   defaultModToolsPath,
   defaultOverlayConfigPath,
   defaultOverlayPath,
   defaultSkinPath,
 } from '../const';
+import { MessageUtil } from '../utils/message';
 import { ModToolsWrapper } from './modToolsWrapper';
 
 export * from '../http';
@@ -55,15 +59,123 @@ export const getOverlayPath = () => {
   return readConfigOrDefault(OVERLAY_PATH, defaultOverlayPath);
 };
 export const getOverlayConfigPath = () => {
-  return readConfigOrDefault(OVERLAY_CONFIG_PATH, defaultOverlayConfigPath);
+  const r = readConfigOrDefault(OVERLAY_CONFIG_PATH, defaultOverlayConfigPath);
+  if (!existsSync(r)) {
+    ensureFileSync(r);
+    writeFileSync(r, JSON.stringify([], null, 2));
+  }
+  return r;
 };
 export const getModToolsPath = () => {
   return readConfigOrDefault(MOD_TOOLS_PATH, defaultModToolsPath);
 };
-export const loadSkin = async (...args: string[]) => {
+export const getInstalledPath = () => {
+  return readConfigOrDefault(INSTALLED_PATH, defaultInstalledPath);
+};
+const buildSkinPath = (heroId: string, skinId: string) => {
+  return `${getSkinPath()}\\${heroId}\\${skinId}\\${skinId}.zip`;
+};
+export const checkHasSkins = (heroId: string, skinId: string) => {
+  const skinPath = buildSkinPath(heroId, skinId);
+  return existsSync(skinPath);
+};
+/**
+ * mod-tools.exe
+ * import
+ * "C:\Users\18074\Downloads\LeagueSkins-main\LeagueSkins-main\skins\1\1001\1001.zip"
+ * "D:\\WeGameApps\\installed\\11001"
+ * --game:"E:\\game\\Riot Games\\League of Legends\\Game"
+ * --noTFT
+ *
+ * mod-tools.exe
+ * mkoverlay
+ * "D:\\WeGameApps\\installed"
+ * "D:\\WeGameApps\\preset_temp_1763828056312"
+ * --game:"E:\\game\\Riot Games\\League of Legends\\Game"
+ * --mods:11001
+ * --ignoreConflict
+ *
+ *
+ *
+ * mod-tools.exe
+ * runoverlay
+ * "D:\\WeGameApps\\preset_temp_1763828056312"
+ * "C:\\Users\\18074\\AppData\\Roaming\\bocchi\\presets.json"
+ * --game:"E:\\game\\Riot Games\\League of Legends\\Game"
+ * --opts:none
+ * @param heroId
+ * @param skinId
+ */
+export const loadSkin = async (heroId: string, skinId: string) => {
   const command = getModToolsPath();
   if (!existsSync(command)) {
+    MessageUtil.error(`${command} not exists`);
     return;
   }
-  return modToolsWrapper.execToolWithTimeout(command, args, 5000);
+  const skinPath = buildSkinPath(heroId, skinId);
+  if (!existsSync(skinPath)) {
+    MessageUtil.error(`${skinPath} not exists`);
+    return;
+  }
+  const uniqueId = `${heroId}_${skinId}`;
+  const overlayPath = `${getOverlayPath()}\\${uniqueId}`;
+  const overlayPathConfig = `${getOverlayConfigPath()}`;
+  const gamePath = getGamePath();
+  const installedPath = `${getInstalledPath()}\\${uniqueId}`;
+  await modToolsWrapper.forceKillModTools();
+  if (!existsSync(installedPath)) {
+    await modToolsWrapper
+      .execToolWithTimeout(
+        command,
+        [
+          'import',
+          Path.normalize(skinPath),
+          Path.normalize(installedPath),
+          `--game:${Path.normalize(gamePath)}`,
+          '--noTFT',
+        ],
+        5000,
+        true
+      )
+      .catch((msg) => {
+        MessageUtil.error(msg);
+      });
+    MessageUtil.success(`导入${uniqueId}成功`);
+  }
+
+  await modToolsWrapper.ensureCleanDirectoryWithRetry(overlayPath);
+  await modToolsWrapper
+    .execToolWithTimeout(
+      command,
+      [
+        'mkoverlay',
+        Path.normalize(getInstalledPath()),
+        Path.normalize(overlayPath),
+        `--game:${Path.normalize(gamePath)}`,
+        `--mods:${uniqueId}`,
+        '--ignoreConflict',
+      ],
+      5000,
+      true
+    )
+    .catch((msg) => {
+      MessageUtil.error(msg);
+    });
+  MessageUtil.success(`创建${uniqueId}成功`);
+  await modToolsWrapper
+    .execToolWithTimeout(
+      command,
+      [
+        'runoverlay',
+        Path.normalize(overlayPath),
+        Path.normalize(overlayPathConfig),
+        `--game:${Path.normalize(gamePath)}`,
+        '--opts:none',
+      ],
+      5000,
+      true
+    )
+    .catch((msg) => {
+      MessageUtil.error(msg);
+    });
 };

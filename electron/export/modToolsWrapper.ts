@@ -3,13 +3,12 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import type { BrowserWindow } from 'electron';
-import { app } from 'electron';
+import { LogMsgUtil } from '../utils/message';
 
 export class ModToolsWrapper {
   private profilesPath: string;
   private installedPath: string;
   private runningProcess: ChildProcess | null = null;
-  private mainWindow: BrowserWindow | null = null;
   private activeProcesses: ChildProcess[] = [];
   private timeout = 300000; // Default 5 minutes in milliseconds
   private isCancelled = false;
@@ -19,7 +18,7 @@ export class ModToolsWrapper {
 
   constructor() {}
 
-  private async forceKillModTools(): Promise<void> {
+  public async forceKillModTools(): Promise<void> {
     return new Promise((resolve) => {
       const process = spawn('taskkill', ['/F', '/IM', 'mod-tools.exe']);
       process.on('close', () => {
@@ -29,7 +28,7 @@ export class ModToolsWrapper {
     });
   }
 
-  private async ensureCleanDirectoryWithRetry(dirPath: string, retries = 3): Promise<void> {
+  public async ensureCleanDirectoryWithRetry(dirPath: string, retries = 3): Promise<void> {
     for (let i = 0; i < retries; i++) {
       try {
         await fs.rm(dirPath, { recursive: true, force: true }).catch(() => {});
@@ -94,12 +93,12 @@ export class ModToolsWrapper {
         stdout += output;
 
         // Send progress to renderer if requested
-        if (sendProgress && this.mainWindow && !this.mainWindow.isDestroyed()) {
+        if (sendProgress) {
           const lines = output.split('\n').filter((line) => line.trim());
           lines.forEach((line) => {
             const trimmedLine = line.trim();
             console.log(`[MOD-TOOLS]: ${trimmedLine}`);
-            this.mainWindow!.webContents.send('patcher-status', trimmedLine);
+            LogMsgUtil.sendLogMsg(trimmedLine);
           });
         }
       });
@@ -109,13 +108,13 @@ export class ModToolsWrapper {
         stderr += output;
 
         // Also send stderr to renderer if it contains status info
-        if (sendProgress && this.mainWindow && !this.mainWindow.isDestroyed()) {
+        if (sendProgress) {
           const lines = output.split('\n').filter((line) => line.trim());
           lines.forEach((line) => {
             const trimmedLine = line.trim();
             if (trimmedLine.includes('[INFO]') || trimmedLine.includes('[WARN]')) {
               console.log(`[MOD-TOOLS]: ${trimmedLine}`);
-              this.mainWindow!.webContents.send('patcher-status', trimmedLine);
+              LogMsgUtil.sendLogMsg(trimmedLine);
             }
           });
         }
@@ -141,12 +140,13 @@ export class ModToolsWrapper {
         clearInterval(cancellationChecker);
         this.cleanupProcess(process);
         this.currentOperation = null;
+        LogMsgUtil.sendLogMsg(err?.message);
         reject(err);
       });
     });
   }
 
-  private cleanupProcess(process: ChildProcess | null) {
+  public cleanupProcess(process: ChildProcess | null) {
     if (!process) {
       return;
     }
@@ -217,10 +217,7 @@ export class ModToolsWrapper {
     this.applyInProgress = false;
     this.importedMods = [];
 
-    // Notify renderer
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send('patcher-status', 'Apply operation cancelled');
-    }
+    LogMsgUtil.sendLogMsg('Apply operation cancelled');
 
     return { success: true, message: 'Apply operation cancelled successfully' };
   }

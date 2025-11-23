@@ -7,3 +7,4 @@ export const GAME_PATH = 'GAME_PATH';
 export const OVERLAY_PATH = 'OVERLAY_PATH';
 export const OVERLAY_CONFIG_PATH = 'OVERLAY_CONFIG_PATH';
 export const MOD_TOOLS_PATH = 'MOD_TOOLS_PATH';
+export const INSTALLED_PATH = 'INSTALLED_PATH';

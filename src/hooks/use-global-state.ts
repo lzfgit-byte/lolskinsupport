@@ -10,6 +10,7 @@ const gamePath = ref('');
 const toolsPath = ref('');
 const overlayPath = ref('');
 const overlayConfigPath = ref('');
+const installedPath = ref('');
 
 export default () => ({
   loading,
@@ -22,4 +23,5 @@ export default () => ({
   toolsPath,
   overlayPath,
   overlayConfigPath,
+  installedPath,
 });
