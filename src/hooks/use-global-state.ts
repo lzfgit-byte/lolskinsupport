@@ -6,6 +6,10 @@ const logs = ref([]);
 const skinId = ref('');
 const heroId = ref('');
 const skinPath = ref('');
+const gamePath = ref('');
+const toolsPath = ref('');
+const overlayPath = ref('');
+const overlayConfigPath = ref('');
 
 export default () => ({
   loading,
@@ -14,4 +18,8 @@ export default () => ({
   skinId,
   heroId,
   skinPath,
+  gamePath,
+  toolsPath,
+  overlayPath,
+  overlayConfigPath,
 });

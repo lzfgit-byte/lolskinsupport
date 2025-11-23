@@ -1,6 +1,12 @@
-import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'fs-extra';
+import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
+import {
+  GAME_PATH,
+  MOD_TOOLS_PATH,
+  OVERLAY_CONFIG_PATH,
+  OVERLAY_PATH,
+  SKIN_PATH,
+} from '@ghs/constant';
+
 import {
   configPath,
   defaultGamePath,
@@ -12,14 +18,11 @@ import {
 import { ModToolsWrapper } from './modToolsWrapper';
 
 export * from '../http';
-const SKIN_PATH = 'SKIN_PATH';
-const GAME_PATH = 'GAME_PATH';
-const OVERLAY_PATH = 'OVERLAY_PATH';
-const OVERLAY_CONFIG_PATH = 'OVERLAY_CONFIG_PATH';
-const MOD_TOOLS_PATH = 'MOD_TOOLS_PATH';
+
 const modToolsWrapper = new ModToolsWrapper();
 export const readConfig = () => {
   if (!existsSync(configPath)) {
+    ensureFileSync(configPath);
     writeFileSync(configPath, JSON.stringify({}));
   }
   return JSON.parse(readFileSync(configPath, { encoding: 'utf-8' }));
@@ -27,7 +30,7 @@ export const readConfig = () => {
 export const setConfig = (key: string, value: string) => {
   const config = readConfig();
   config[key] = value;
-  writeFileSync(configPath, JSON.stringify(config));
+  writeFileSync(configPath, JSON.stringify(config, null, 2));
 };
 export const readConfigValue = (key: string) => {
   const config = readConfig();
@@ -46,7 +49,7 @@ export const getSkinPath = () => {
   return readConfigOrDefault(SKIN_PATH, defaultSkinPath);
 };
 export const getGamePath = () => {
-  readConfigOrDefault(GAME_PATH, defaultGamePath);
+  return readConfigOrDefault(GAME_PATH, defaultGamePath);
 };
 export const getOverlayPath = () => {
   return readConfigOrDefault(OVERLAY_PATH, defaultOverlayPath);
@@ -54,11 +57,11 @@ export const getOverlayPath = () => {
 export const getOverlayConfigPath = () => {
   return readConfigOrDefault(OVERLAY_CONFIG_PATH, defaultOverlayConfigPath);
 };
-export const getDefaultModToolsPath = () => {
+export const getModToolsPath = () => {
   return readConfigOrDefault(MOD_TOOLS_PATH, defaultModToolsPath);
 };
 export const loadSkin = async (...args: string[]) => {
-  const command = getDefaultModToolsPath();
+  const command = getModToolsPath();
   if (!existsSync(command)) {
     return;
   }

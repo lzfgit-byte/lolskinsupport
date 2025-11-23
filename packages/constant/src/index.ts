@@ -2,3 +2,8 @@ export * from './event';
 export * from './system';
 export * from './shortcuts';
 export * from './table';
+export const SKIN_PATH = 'SKIN_PATH';
+export const GAME_PATH = 'GAME_PATH';
+export const OVERLAY_PATH = 'OVERLAY_PATH';
+export const OVERLAY_CONFIG_PATH = 'OVERLAY_CONFIG_PATH';
+export const MOD_TOOLS_PATH = 'MOD_TOOLS_PATH';
