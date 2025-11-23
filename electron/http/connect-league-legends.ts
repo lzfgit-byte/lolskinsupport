@@ -18,9 +18,11 @@ export const initLcu = async (win: BrowserWindow) => {
   lcuConnector.connect();
   gameflowMonitor.start();
   gameflowMonitor.on('champion-selected', (args) => {
-    console.log('英雄选择', args.championId);
-    LogMsgUtil.sendLogMsg('英雄选择', args?.championId);
     win?.webContents?.send('champion-selected', args?.championId);
   });
   gameflowMonitor.on('phase-changed', (phase, previousPhase) => {});
+  return () => {
+    lcuConnector.disconnect();
+    gameflowMonitor.stop();
+  };
 };

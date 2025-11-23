@@ -28,6 +28,7 @@ async function createWindow() {
   });
   useGlobalShortcut(win);
   useGlobalMessage(win);
+  execFuncOnClose.push(initLcu(win));
   if (process.env.VITE_DEV_SERVER_URL) {
     await win.loadURL(url);
     win.webContents.openDevTools();
@@ -78,6 +79,4 @@ app.on('activate', () => {
 // 注册远程方法
 useIpcMain();
 useCookie();
-// initWs();
-initLcu(win);
 export const getMainWin = (): BrowserWindow => win;
