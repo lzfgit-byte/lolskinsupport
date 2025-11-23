@@ -78,5 +78,3 @@ app.on('activate', () => {
 useIpcMain();
 useCookie();
 export const getMainWin = (): BrowserWindow => win;
-MessageUtil.success('启动成功');
-LogMsgUtil.sendLogMsg('启动成功');

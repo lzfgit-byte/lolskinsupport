@@ -48,7 +48,7 @@ declare module 'vue' {
     ImgPercentage: typeof import('./src/components/image/component/ImgPercentage.vue')['default']
     ImgViewer: typeof import('./src/components/imgViewer/img-viewer.vue')['default']
     Loading: typeof import('./src/components/layout/components/loading.vue')['default']
-    MainLayout: typeof import('./src/components/layout/main-layout.vue')['default']
+    MainLayout: typeof import('./src/components/main-layout.vue')['default']
     MonacoEditor: typeof import('./src/components/monacoEditor/monaco-editor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
