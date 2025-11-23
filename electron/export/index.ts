@@ -17,13 +17,13 @@ import {
   defaultOverlayConfigPath,
   defaultOverlayPath,
   defaultSkinPath,
+  modToolsWrapper,
 } from '../const';
 import { MessageUtil } from '../utils/message';
 import { ModToolsWrapper } from './modToolsWrapper';
 
 export * from '../http';
 
-const modToolsWrapper = new ModToolsWrapper();
 export const readConfig = () => {
   if (!existsSync(configPath)) {
     ensureFileSync(configPath);
@@ -122,7 +122,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
   const overlayPathConfig = `${getOverlayConfigPath()}`;
   const gamePath = getGamePath();
   const installedPath = `${getInstalledPath()}\\${uniqueId}`;
-  // await modToolsWrapper.forceKillModTools();
+  await modToolsWrapper.forceKillModTools();
   if (!existsSync(installedPath)) {
     await modToolsWrapper
       .execToolWithTimeout(

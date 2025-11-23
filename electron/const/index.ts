@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { ModToolsWrapper } from '../export/modToolsWrapper';
 
 let temp_dir = `${process.env.LOCALAPPDATA}\\lol-skin-ll`; // aka C:\Users\用户名\AppData\Local\ghs4.0
 const cache_path = path.join(process.cwd(), '\\lsl-cache');
@@ -12,7 +13,7 @@ export class APP_PATHS {
     return cache_path;
   }
 }
-
+export const modToolsWrapper = new ModToolsWrapper();
 export const tempPath = temp_dir;
 export const configPath = path.join(temp_dir, 'config.json');
 export const defaultOverlayConfigPath = path.join(temp_dir, 'overlay.json');

@@ -5,25 +5,17 @@ import fs from 'node:fs/promises';
 import { LogMsgUtil } from '../utils/message';
 
 export class ModToolsWrapper {
-  private profilesPath: string;
   private installedPath: string;
   private runningProcess: ChildProcess | null = null;
   private activeProcesses: ChildProcess[] = [];
-  private timeout = 300000; // Default 5 minutes in milliseconds
   private isCancelled = false;
   private currentOperation: ChildProcess | null = null;
   private applyInProgress = false;
   private importedMods: string[] = []; // Track successfully imported mods for cleanup
 
-  constructor() {
-    this.sendState();
-  }
+  constructor() {}
 
-  public sendState = () => {
-    setInterval(() => {
-      LogMsgUtil.sendLogMsg(`${this.isRunning()}`);
-    }, 1000);
-  };
+  public sendState = () => {};
 
   public async forceKillModTools(): Promise<void> {
     return new Promise((resolve) => {
