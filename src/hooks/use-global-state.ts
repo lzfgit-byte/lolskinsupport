@@ -25,4 +25,5 @@ export default () => ({
   overlayPath,
   overlayConfigPath,
   installedPath,
+  autoChose,
 });

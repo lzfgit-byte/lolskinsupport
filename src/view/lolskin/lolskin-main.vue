@@ -25,7 +25,7 @@
 
   const mainIMg = ref<mainHeroInfo[]>();
   let heros: mainHeroInfo[] = [];
-  const { skinId, heroId } = useGlobalState();
+  const { heroId, autoChose } = useGlobalState();
   let router = useRouter();
   http.axios
     .get('https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js')
