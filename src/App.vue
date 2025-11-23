@@ -7,14 +7,14 @@
   </a-config-provider>
 </template>
 <script setup lang="ts">
-import zhCN from 'ant-design-vue/es/locale/zh_CN';
-import MainLayout from '@/components/layout/main-layout.vue';
-import useGlobalRef from '@/hooks/use-global-ref';
-import LogView from '@/view/components/log-view.vue';
+  import zhCN from 'ant-design-vue/es/locale/zh_CN';
+  import useGlobalRef from '@/hooks/use-global-ref';
+  import LogView from '@/view/components/log-view.vue';
+  import MainLayout from '@/components/main-layout.vue';
 
-const {logRef} = useGlobalRef();
+  const { logRef } = useGlobalRef();
 </script>
 
 <style lang="less">
-@import '@/styles/style';
+  @import '@/styles/style';
 </style>

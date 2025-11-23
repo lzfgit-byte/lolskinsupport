@@ -6,18 +6,16 @@
     @click="handleDrawOpen"
   >
     <template #icon>
-      <CarOutlined/>
+      <CarOutlined />
     </template>
   </a-float-button>
 </template>
 <script setup lang="ts">
-import {
-  CarOutlined,
-} from '@ant-design/icons-vue';
+  import { CarOutlined } from '@ant-design/icons-vue';
 
-defineProps({
-  handleDrawOpen: Function,
-});
+  defineProps({
+    handleDrawOpen: Function,
+  });
 </script>
 
 <style scoped lang="less"></style>

@@ -6,12 +6,13 @@ import useGlobalShortcut from '../hooks/use-global-shortcut';
 import './init/init-env';
 import 'reflect-metadata';
 import { resolvePreload, resolvePublic } from '../utils/KitUtil';
-import { useGlobalMessage } from '../utils/message';
+import { LogMsgUtil, MessageUtil, useGlobalMessage } from '../utils/message';
 // 启动服务
 let win: BrowserWindow | null = null;
 const url = process.env.VITE_DEV_SERVER_URL;
 const indexHtml = join(process.env.DIST, 'index.html');
 let execFuncOnClose = [];
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'ghs',
@@ -77,3 +78,5 @@ app.on('activate', () => {
 useIpcMain();
 useCookie();
 export const getMainWin = (): BrowserWindow => win;
+MessageUtil.success('启动成功');
+LogMsgUtil.sendLogMsg('启动成功');
