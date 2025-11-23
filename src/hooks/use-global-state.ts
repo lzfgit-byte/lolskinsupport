@@ -5,6 +5,7 @@ const loading = ref(false);
 const logs = ref([]);
 const skinId = ref('');
 const heroId = ref('');
+const skinPath = ref('');
 
 export default () => ({
   loading,
@@ -12,4 +13,5 @@ export default () => ({
   logs,
   skinId,
   heroId,
+  skinPath,
 });

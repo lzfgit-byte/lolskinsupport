@@ -14,6 +14,7 @@
         :duration="200"
       >
         <h1>设置信息</h1>
+        {{ skinPath }}
       </transition-group>
     </div>
   </a-drawer>
@@ -23,8 +24,10 @@
   import FloatButtonGroup from '@/view/components/float-button-group.vue';
   import useFeature from '@/view/hook/use-feature';
   import LolskinMain from '@/view/lolskin/lolskin-main.vue';
+  import useGlobalState from '@/hooks/use-global-state';
 
   const route = useRoute();
+  const { skinPath } = useGlobalState();
   const { handleDrawOpen, drawerOpen } = useFeature();
 </script>
 

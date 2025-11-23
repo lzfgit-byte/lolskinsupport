@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from 'fs-extra';
 import { formatSize, hashString, isFalsity } from '@ilzf/utils';
-import { APP_PATHS } from '../const/app-paths';
+import { APP_PATHS } from '../const';
 import { MessageUtil } from './message';
 
 const CACHE_PATH = APP_PATHS.cache_path;
