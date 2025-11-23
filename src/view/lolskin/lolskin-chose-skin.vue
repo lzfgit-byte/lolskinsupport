@@ -4,31 +4,32 @@
       <span>返回</span>
     </div>
     <div class="confirm" @click="confirm_">
-      <span>确定</span>
+      <span>确定[{{ choseSkin?.name }}]</span>
     </div>
     <div class="skin-container" h-full w-full pos-relative box-border>
       <div class="skin-more">
-        <div
-          v-for="item in allSkins"
-          :key="item.skinId"
-          style="padding: 10px; padding-bottom: 20px; position: relative"
-        >
-          <img
-            :class="choseSkinId === item.skinId ? 'chose' : ''"
-            width="168"
-            :src="item.mainImg"
-            :title="item.description"
-            @click="handleChoseSkin(item)"
-          />
-          <div class="skinName" :title="item.name">{{ item.name }}</div>
+        <div h-full style="width: 430px">
+          <div
+            v-for="item in allSkins"
+            :key="item.skinId"
+            style="padding: 10px 10px 20px; position: relative; width: 200px; display: inline-flex"
+          >
+            <img
+              :class="isChose(item) ? 'chose' : ''"
+              width="168"
+              :src="item.mainImg"
+              :title="item.description"
+              @click="handleChoseSkin(item)"
+            />
+            <div class="skinName" :title="item.name">{{ item.name }}</div>
+          </div>
         </div>
       </div>
       <div class="big">
-        <img :src="choseSkin?.mainImg" />
+        <img :src="choseSkinMainImg" />
       </div>
-      <div v-if="skinChild?.length > 0" class="showChild" @click="visible = true"></div>
+      <div v-if="skinChild?.length > 0" class="showChild" @click="visible = true">选择炫彩</div>
     </div>
-
     <Modal
       v-model:visible="visible"
       title="炫彩"
@@ -73,8 +74,18 @@
     }
     return {};
   });
+  const choseSkinMainImg = computed(() => {
+    if (choseSkin.value?.chromasBelongId === '0') {
+      return choseSkin.value.mainImg;
+    }
+    const s = allSkins.value?.filter((item) => item.skinId === choseSkin.value?.chromasBelongId);
+    if (s?.length > 0) {
+      return s[0].mainImg;
+    }
+    return '';
+  });
   const skinChild: Ref<skinInfo[]> = computed(() => {
-    return skins_.value.filter((item_) => choseSkinId.value === item_.chromasBelongId)[0];
+    return skins_.value.filter((item_) => choseSkinId.value === item_.chromasBelongId);
   }) as any;
 
   const getSkins = () => {
@@ -88,12 +99,18 @@
       choseSkinId.value = allSkins.value[0].skinId;
     });
   };
-
+  const isChose = (item: skinInfo) => {
+    if (choseSkin.value?.chromasBelongId === '0') {
+      return item.skinId === choseSkinId.value;
+    }
+    return item.skinId === choseSkin.value?.chromasBelongId;
+  };
   const back = () => {
     router.push({ path: '/' });
   };
   const handleChoseSkin = (item: skinInfo) => {
     choseSkinId.value = item.skinId;
+    visible.value = false;
   };
   const confirm_ = () => {};
   onMounted(() => {
@@ -138,18 +155,19 @@
     width: 68px;
     height: 30px;
     color: #ffffff;
+    padding: 10px;
   }
 
   .showChild {
     position: absolute;
-    background-color: #fff5e0;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
+    border-radius: 2%;
     left: 50%;
-    top: 81%;
+    bottom: 20px;
     z-index: 9;
+    color: white;
     cursor: pointer;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.42);
   }
 
   .back {
@@ -164,6 +182,7 @@
   .confirm {
     position: absolute;
     .btn_();
+    width: auto;
     right: 20px;
     top: 10px;
     z-index: 3;
