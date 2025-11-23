@@ -17,7 +17,7 @@ export const executeFunction = async (funcName: string, ...args: any[]) => {
   });
   return await ipcRenderer.invoke(funcName, ...args);
 };
-const { logs } = useGlobalState();
+const { logs, heroId } = useGlobalState();
 // 获取后台的消息
 ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_MESSAGE, (_event, args: MessageInfo) => {
   const { msg, type } = args;
@@ -53,4 +53,7 @@ ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_LOG_MESSAGE, (_event, args: MessageInfo) =
 });
 ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, (_event, args: MessageInfo) => {
   console.log(args.msg);
+});
+ipcRenderer.on('champion-selected', (_event, championId: string) => {
+  heroId.value = championId;
 });
