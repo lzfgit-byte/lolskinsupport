@@ -1,4 +1,5 @@
 <template>
+  <LolskinMain></LolskinMain>
   <FloatButtonGroup :handle-draw-open="handleDrawOpen"></FloatButtonGroup>
   <a-drawer
     v-model:open="drawerOpen"
@@ -21,6 +22,7 @@
   import { useRoute } from 'vue-router';
   import FloatButtonGroup from '@/view/components/float-button-group.vue';
   import useFeature from '@/view/hook/use-feature';
+  import LolskinMain from '@/view/lolskin/lolskin-main.vue';
 
   const route = useRoute();
   const { handleDrawOpen, drawerOpen } = useFeature();

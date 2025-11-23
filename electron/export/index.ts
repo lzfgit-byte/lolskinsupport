@@ -1,3 +1,2 @@
-export const execCmd = ()=>{
-
-}
+export * from '../http';
+export const execCmd = () => {};
