@@ -1,0 +1,23 @@
+@import "values";
+html,body,#app{
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-size: 14px;
+}
+div::-webkit-scrollbar {
+  width: 0;
+}
+div{
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+.ghs-video-drawer-container{
+  z-index: 20000 !important;
+  .ant-drawer-mask{
+    z-index: 20000 !important;
+  }
+}

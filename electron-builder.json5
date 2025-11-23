@@ -2,12 +2,14 @@
  * @see https://www.electron.build/configuration/configuration
  */
 {
-  "appId": "YourAppID",
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "ghs",
   "asar": true,
   "directories": {
     "output": "release/${version}"
   },
   "files": [
+    "dist-electron",
     "dist"
   ],
   "mac": {
@@ -32,8 +34,6 @@
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false,
-    "installerIcon": "dist/favicon.ico",
-    "uninstallerIcon": "dist/favicon.ico"
+    "deleteAppDataOnUninstall": false
   }
 }

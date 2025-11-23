@@ -1,0 +1,28 @@
+{
+  "extends": [
+    "@antfu",
+    "plugin:prettier/recommended"
+  ],
+  "rules": {
+    "vue/component-tags-order": "off",
+    "vue/padding-line-between-blocks": "off",
+    "semi": [
+      2,
+      "always"
+    ],
+    "@typescript-eslint/semi": "off",
+    "unused-imports/no-unused-imports":"off",
+    "no-console":"off",
+    "prefer-promise-reject-errors":"off",
+    "@typescript-eslint/prefer-ts-expect-error":"off",
+    "@typescript-eslint/ban-ts-comment":"off",
+    "no-unmodified-loop-condition":"off",
+    "vue/no-constant-condition":"off",
+    "@typescript-eslint/no-use-before-define":"off",
+    "no-eval":"off",
+    "no-new-func":"off",
+    "import/no-mutable-exports":"off",
+    "unicorn/prefer-includes":"off",
+    "prefer-const": "off"
+  }
+}
