@@ -20,7 +20,7 @@ import {
   defaultSkinPath,
   modToolsWrapper,
 } from '../const';
-import { MessageUtil } from '../utils/message';
+import { MessageUtil, NotifyMsgUtil } from '../utils/message';
 
 export * from '../http';
 
@@ -152,7 +152,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
       .catch((msg) => {
         MessageUtil.error(msg);
       });
-    MessageUtil.success(`导入${uniqueId}成功`);
+    NotifyMsgUtil.sendNotifyMsg(`提示+${uniqueId}成功`, `安装皮肤成功`, uniqueId);
   }
 
   await modToolsWrapper.ensureCleanDirectoryWithRetry(getOverlayPath());
@@ -173,7 +173,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     .catch((msg) => {
       MessageUtil.error(msg);
     });
-  MessageUtil.success(`创建${uniqueId}成功`);
+  NotifyMsgUtil.sendNotifyMsg(`提示+${uniqueId}成功`, `mkoverlay成功`, uniqueId);
   await modToolsWrapper
     .runOverlay(command, [
       'runoverlay',
@@ -185,4 +185,5 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     .catch((msg) => {
       MessageUtil.error(msg);
     });
+  NotifyMsgUtil.sendNotifyMsg(`提示+${uniqueId}成功`, `runoverlay成功`, uniqueId);
 };

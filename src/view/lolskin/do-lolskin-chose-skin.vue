@@ -135,6 +135,7 @@
     if (!res) {
       message.warn('请先下载英雄皮肤');
     }
+    preChose();
   };
   const confirm_ = async () => {
     const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
