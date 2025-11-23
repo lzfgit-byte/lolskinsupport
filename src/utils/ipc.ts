@@ -56,4 +56,5 @@ ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, (_event, args: MessageInfo) =
 });
 ipcRenderer.on('champion-selected', (_event, championId: string) => {
   heroId.value = championId;
+  bus.emit('champion-selected', championId);
 });

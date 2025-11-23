@@ -21,6 +21,7 @@
   import http from '@/utils/http';
   import type { mainHeroInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
+  import bus from '@/utils/bus';
 
   const mainIMg = ref<mainHeroInfo[]>();
   let heros: mainHeroInfo[] = [];
@@ -36,6 +37,9 @@
     heroId.value = heroId_;
     router.push({ path: '/choseSkin' });
   };
+  bus.on('champion-selected', () => {
+    router.push({ path: '/choseSkin' });
+  });
   const searchValue = ref();
   watchEffect(() => {
     console.log(searchValue.value);
