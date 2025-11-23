@@ -59,6 +59,7 @@
   import type { heroInfo, skinInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
   import { f_checkHasSkins, f_getHeroChoseSkin, f_loadSkin } from '@/utils/business';
+  import { notify } from '@/utils/kit-utils';
 
   const visible = ref(false);
   let router = useRouter();
@@ -104,6 +105,10 @@
       })
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
+        if (!choseSkinId.value?.endsWith('0')) {
+          notify('', '自动应用', '自动应用', true);
+          confirm_();
+        }
       });
   };
   const isChose = (item: skinInfo) => {
