@@ -45,7 +45,6 @@
   onMounted(() => {
     bus.off('champion-selected');
     bus.on('champion-selected', () => {
-      debugger;
       router.push({ path: '/choseSkin' });
     });
   });
