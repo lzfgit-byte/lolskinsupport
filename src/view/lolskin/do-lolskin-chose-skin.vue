@@ -114,7 +114,7 @@
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
         if (autoChose.value && !choseSkinId.value?.endsWith('0')) {
-          notify('', '自动应用', '自动应用', true);
+          notify('', '自动应用', '自动应用', false);
           confirm_();
         }
       });
