@@ -2,7 +2,6 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import type { BrowserWindow } from 'electron';
 import { LogMsgUtil } from '../utils/message';
 
 export class ModToolsWrapper {
@@ -16,7 +15,16 @@ export class ModToolsWrapper {
   private applyInProgress = false;
   private importedMods: string[] = []; // Track successfully imported mods for cleanup
 
-  constructor() {}
+  constructor() {
+    this.sendState();
+  }
+
+  public sendState = () => {
+    setInterval(() => {
+      LogMsgUtil.sendLogMsg(`${this.isCancelled}`);
+      LogMsgUtil.sendLogMsg(`${this.isRunning()}`);
+    }, 1000);
+  };
 
   public async forceKillModTools(): Promise<void> {
     return new Promise((resolve) => {

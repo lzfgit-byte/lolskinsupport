@@ -122,7 +122,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
   const overlayPathConfig = `${getOverlayConfigPath()}`;
   const gamePath = getGamePath();
   const installedPath = `${getInstalledPath()}\\${uniqueId}`;
-  await modToolsWrapper.forceKillModTools();
+  // await modToolsWrapper.forceKillModTools();
   if (!existsSync(installedPath)) {
     await modToolsWrapper
       .execToolWithTimeout(
@@ -143,7 +143,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     MessageUtil.success(`导入${uniqueId}成功`);
   }
 
-  await modToolsWrapper.ensureCleanDirectoryWithRetry(overlayPath);
+  await modToolsWrapper.ensureCleanDirectoryWithRetry(getOverlayPath());
   await modToolsWrapper
     .execToolWithTimeout(
       command,
