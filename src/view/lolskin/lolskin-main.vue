@@ -5,6 +5,7 @@
   <div style="padding-top: 38px; overflow-y: auto; height: calc(100vh - 38px)">
     <HeroCard
       v-for="item in mainIMg"
+      :key="item.heroId"
       :hero-id="`${item.heroId}`"
       :instance_id="item.instance_id"
       :title="item.name"
@@ -15,21 +16,25 @@
 
 <script setup lang="ts">
   import { ref, watchEffect } from 'vue';
+  import { useRouter } from 'vue-router';
   import HeroCard from './hero-card.vue';
   import http from '@/utils/http';
   import type { mainHeroInfo } from '@/type/type';
+  import useGlobalState from '@/hooks/use-global-state';
 
-  const emits = defineEmits(['clickHero']);
   const mainIMg = ref<mainHeroInfo[]>();
   let heros: mainHeroInfo[] = [];
+  const { skinId, heroId } = useGlobalState();
+  let router = useRouter();
   http.axios
     .get('https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js')
     .then((res: any) => {
       mainIMg.value = res.hero;
       heros = res.hero;
     });
-  const handlerClickHero = (heroId: string) => {
-    emits('clickHero', heroId);
+  const handlerClickHero = (heroId_: string) => {
+    heroId.value = heroId_;
+    router.push({ path: '/choseSkin' });
   };
   const searchValue = ref();
   watchEffect(() => {

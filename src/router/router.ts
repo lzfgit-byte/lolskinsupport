@@ -21,6 +21,13 @@ export const staticRoutes: RouterType[] = [
     showInMenu: true,
     component: () => import('@/view/main-page.vue'),
   },
+  {
+    path: '/choseSkin',
+    name: 'choseSkin',
+    aliasZH: 'choseSkin',
+    showInMenu: true,
+    component: () => import('@/view/lolskin/lolskin-chose-skin.vue'),
+  },
 ];
 
 const router = createRouter({

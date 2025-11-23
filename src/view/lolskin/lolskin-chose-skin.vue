@@ -1,101 +1,96 @@
 <template>
-  <div class="back" @click="back">
-    <span>返回</span>
-  </div>
-  <div class="container" align="center">
-    <div class="big">
-      <img :src="bigImg" />
-      <div class="skinName">{{ bigImgName }}</div>
+  <div h-full w-full box-border pos-relative>
+    <div class="back" @click="back">
+      <span>返回</span>
     </div>
-    <div v-if="showClor" class="showChild" @click="visible = true"></div>
-    <div ref="moreRef" class="more" @wheel="handlerWheel">
-      <img
-        v-for="item in allSkins"
-        :key="item"
-        width="168"
-        :class="{ chose: +item.skinId.substring(item.skinId.length - 2) === choseId }"
-        :src="item.mainImg"
-        :title="item.description"
-        @click="preSkin(item)"
-      />
+    <div class="confirm" @click="confirm_">
+      <span>确定</span>
     </div>
-  </div>
-  <div class="confirm" @click="confirm_">
-    <span>确定</span>
-  </div>
-  <Modal v-model:visible="visible" title="炫彩" wrap-class-name="modal-skin" @ok="visible = false">
-    <div class="childSkin">
-      <img
-        v-for="item in skinChild"
-        :key="item"
-        width="25"
-        :class="{ chose: +item.skinId.substring(item.skinId.length - 2) === choseId }"
-        :src="item.chromaImg"
-        :title="item.name"
-        @click="preSkin(item)"
-      />
+    <div class="skin-container" h-full w-full pos-relative box-border>
+      <div class="skin-more">
+        <div v-for="item in allSkins" :key="item.skinId" style="padding: 10px; position: relative">
+          <img width="168" :src="item.mainImg" :title="item.description" @click="preSkin(item)" />
+          <div class="skinName">{{ item.name }}</div>
+        </div>
+      </div>
+      <div class="big">
+        <img :src="bigImg" />
+        <div class="skinName">{{ bigImgName }}</div>
+      </div>
+      <div v-if="showClor" class="showChild" @click="visible = true"></div>
     </div>
-  </Modal>
+
+    <Modal
+      v-model:visible="visible"
+      title="炫彩"
+      wrap-class-name="modal-skin"
+      @ok="visible = false"
+    >
+      <div class="childSkin">
+        <img
+          v-for="item in skinChild"
+          :key="item.skinId"
+          width="25"
+          :src="item.chromaImg"
+          :title="item.name"
+          @click="preSkin(item)"
+        />
+      </div>
+    </Modal>
+  </div>
 </template>
 
 <script setup lang="ts">
-  import path$ from 'node:path';
-  import { defineProps, ref } from 'vue';
-  import fs from 'fs-extra';
-  import ini from 'ini';
+  import { defineProps, onMounted, ref } from 'vue';
   import { Modal, message } from 'ant-design-vue';
+  import { useRouter } from 'vue-router';
   import http from '@/utils/http';
   import type { heroInfo, skinInfo } from '@/type/type';
-  import execuExe from '@/utils/execuExe';
-  import { ConfigIni } from '@/utils/setting';
+  import useGlobalState from '@/hooks/use-global-state';
 
-  const props = defineProps({ heroId: String });
   const emits = defineEmits(['back']);
   const visible = ref(false);
+  let router = useRouter();
   const bigImg = ref();
-  const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${props?.heroId}.js`;
+  const { heroId } = useGlobalState();
   const allSkins = ref<skinInfo[]>();
   const bigImgName = ref('');
   let heroInfo$: heroInfo;
   let skins_: skinInfo[];
-  const choseId = ref();
-  // 读取配置文件
-  const path = 'C:\\Fraps\\data\\My\\Config.ini';
-  const exist = fs.existsSync(path);
-  if (!exist) {
-    fs.writeFileSync(path, ConfigIni, { encoding: 'utf-8' });
-  }
-  const notHave = fs.existsSync('C:\\Fraps\\LOLPRO.exe');
-  if (!notHave) {
-    const filePath = 'C:\\Fraps';
-    const files = fs.readdirSync(filePath);
-    files.forEach((item) => {
-      if (item.endsWith('.exe')) {
-        fs.renameSync(`${filePath}\\${item}`, `${filePath}\\` + `LOLPRO.exe`);
-      }
-    });
-  }
-  const config = ini.parse(fs.readFileSync(path, 'utf-8'));
-  http.axios.get(REQ_URL).then((res: any) => {
-    heroInfo$ = res.hero;
-    skins_ = res.skins;
-    allSkins.value = res.skins.filter((item) => item.mainImg);
-    bigImg.value = allSkins.value[0].mainImg;
-    choseId.value = parseInt(config.SKIN_CHAMPION_ACTIVED[heroInfo$.alias] || 0);
-    pickId = choseId.value;
-    res.skins.filter((item) => {
-      if (choseId.value === +item.skinId.substring(item.skinId.length - 2)) {
-        bigImg.value = item.mainImg || getParent(item).mainImg;
-        if (item.chromasBelongId !== '0') {
-          const parentId = getParent(item).skinId;
-          choseId.value = parseInt(parentId.substring(parentId.length - 2));
-          skinChild.value = getColorfulSkin(parentId);
-          showClor.value = true;
+  const choseId = ref('');
+  const getSkins = () => {
+    const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId.value}.js`;
+    // 读取配置文件
+    // const path = 'C:\\Fraps\\data\\My\\Config.ini';
+    // const exist = fs.existsSync(path);
+    // if (!exist) {
+    // fs.writeFileSync(path, ConfigIni, { encoding: 'utf-8' });
+    // }
+    if (choseId.value) {
+      return;
+    }
+    http.axios.get(REQ_URL).then((res: any) => {
+      heroInfo$ = res.hero;
+      skins_ = res.skins;
+      allSkins.value = res.skins.filter((item) => item.mainImg);
+      bigImg.value = allSkins.value[0].mainImg;
+      // choseId.value = parseInt(config.SKIN_CHAMPION_ACTIVED[heroInfo$.alias] || 0);
+      pickId = choseId.value;
+      res.skins?.forEach((item) => {
+        if (choseId.value === +item.skinId.substring(item.skinId.length - 2)) {
+          bigImg.value = item.mainImg || getParent(item).mainImg;
+          if (item.chromasBelongId !== '0') {
+            const parentId = getParent(item).skinId;
+            choseId.value = parseInt(parentId.substring(parentId.length - 2));
+            skinChild.value = getColorfulSkin(parentId);
+            showClor.value = true;
+          }
+          bigImgName.value = item.name;
         }
-        bigImgName.value = item.name;
-      }
+      });
     });
-  });
+  };
+
   const getParent = (item): skinInfo => {
     return skins_.filter((item_) => item_.skinId === item.chromasBelongId)[0];
   };
@@ -119,33 +114,21 @@
       showClor.value = skinChild.value.length > 0;
     }
     pickId = parseInt(item.skinId.substring(item.skinId.length - 2));
-    config.SKIN_CHAMPION_ACTIVED[heroInfo$.alias] = `${pickId}`;
-    choseId.value = +pickId;
   };
   const getColorfulSkin = (skinId) => {
     return skins_.filter((item) => item.chromasBelongId === skinId);
   };
   const back = () => {
-    emits('back');
+    router.push({ path: '/' });
   };
   const confirm_ = () => {
     if (!pickId && pickId !== 0) {
       message.warn('未选择皮肤');
-      return;
     }
-    fs.writeFileSync(path, ini.stringify(config));
-    let cmdStr1 = 'start /min C:\\Fraps\\LOLPRO.exe';
-    const FIND_LOL_PRO = 'tasklist | find /i "LOLPRO.exe"';
-    execuExe.execuFuc(FIND_LOL_PRO).then((res) => {
-      if (+res === 0) {
-        message.success('设置成功');
-      } else {
-        execuExe.execuFuc(cmdStr1).then((res) => {
-          message.success('设置成功');
-        });
-      }
-    });
   };
+  onMounted(() => {
+    getSkins();
+  });
 </script>
 <style lang="less">
   @colorTheme: #1b2128;
@@ -217,33 +200,31 @@
     cursor: pointer;
   }
 
-  .container {
-    width: 98%;
-    height: auto;
-
+  .skinName {
+    color: #fff5e0;
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+  }
+  .skin-container {
+    display: inline-flex;
+    justify-content: start;
+    flex: 1;
     .big {
-      width: auto;
-      height: 60%;
-      position: relative;
-
+      display: flex;
+      justify-content: center;
+      align-items: center;
       img {
         width: 100%;
       }
-
-      .skinName {
-        color: #fff5e0;
-        position: absolute;
-        bottom: 10px;
-        left: 10px;
-      }
     }
 
-    .more {
+    .skin-more {
       display: flex;
+      flex-direction: column;
       position: relative;
       overflow: auto;
-      height: 40%;
-      margin-top: 30px;
+      margin-top: 10px;
       transition: all 0.5s;
 
       &::-webkit-scrollbar {

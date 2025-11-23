@@ -19,7 +19,7 @@ export interface heroInfo {
 
 export interface mainHeroInfo {
   heroId?: number;
-  instance_id?: heroInfo;
+  instance_id?: string;
   name?: string; // 黑暗之女
   title?: string; // 安妮
   alias?: string; // Annie
