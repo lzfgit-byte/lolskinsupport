@@ -35,7 +35,6 @@ async function createWindow() {
   if (process.env.VITE_DEV_SERVER_URL) {
     await win.loadURL(url);
     win.webContents.openDevTools();
-    showConfirmWindow();
   } else {
     await win.loadFile(indexHtml);
   }

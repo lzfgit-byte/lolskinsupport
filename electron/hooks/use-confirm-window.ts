@@ -4,7 +4,11 @@ import { BrowserWindow, ipcMain, screen } from 'electron';
 import { MessageUtil } from '../utils/message';
 import { confirmHtml } from './export-confirm-html';
 let htmlContent = confirmHtml;
+let win: BrowserWindow;
 export const showConfirmWindow = () => {
+  if (win != null) {
+    return;
+  }
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
 
   let targetWidth = 300;
@@ -12,7 +16,7 @@ export const showConfirmWindow = () => {
   let targetY = 30;
 
   // 初始宽度设为 0，实现动画效果
-  let win: BrowserWindow = new BrowserWindow({
+  win = new BrowserWindow({
     width: targetWidth,
     height: targetHeight,
     x: screenWidth, // 从屏幕最右边开始
@@ -61,7 +65,6 @@ export const showConfirmWindow = () => {
     win.show();
     toShow(true);
   });
-
   ipcMain.on('confirm-confirm', () => {
     toShow(false);
   });

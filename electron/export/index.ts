@@ -21,6 +21,7 @@ import {
   modToolsWrapper,
 } from '../const';
 import { MessageUtil, NotifyMsgUtil } from '../utils/message';
+import { showConfirmWindow } from '../hooks/use-confirm-window';
 
 export * from '../http';
 
@@ -67,6 +68,7 @@ export const getOverlayConfigPath = () => {
   return r;
 };
 export const setHeroChoseSkin = (heroId: string, skinId: string) => {
+  showConfirmWindow();
   const data = readConfigOrDefault(HERO_SKIN, '{}');
   const d = JSON.parse(data);
   d[heroId] = skinId;
