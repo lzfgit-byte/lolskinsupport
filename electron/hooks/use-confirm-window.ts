@@ -6,7 +6,7 @@ import { MessageUtil } from '../utils/message';
 import { confirmHtml } from './export-confirm-html';
 let htmlContent = confirmHtml;
 let showCount = 0;
-export const showConfirmWindow = (msg: string, okFunc: any, cFunc: any) => {
+export const showSliderConfirm = (msg: string, okFunc: any, cFunc: any) => {
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
   const hashId = Date.now().toString();
   let targetWidth = 300;

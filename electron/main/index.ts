@@ -10,7 +10,6 @@ import { LogMsgUtil, MessageUtil, useGlobalMessage } from '../utils/message';
 import { initLcu } from '../http/connect-league-legends';
 import { lcuConnector } from '../http/lcuConnector';
 import { gameflowMonitor } from '../http/gameflowMonitor';
-import { showConfirmWindow } from '../hooks/use-confirm-window';
 // 启动服务
 let win: BrowserWindow | null = null;
 const url = process.env.VITE_DEV_SERVER_URL;
