@@ -1,17 +1,17 @@
-import {rmSync} from 'node:fs';
-import {resolve} from 'node:path';
-import {defineConfig} from 'vite';
+import { rmSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { defineConfig } from 'vite';
 import UnoCSS from 'unocss/vite';
 import vue from '@vitejs/plugin-vue';
 // eslint-disable-next-line import/default
 import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
 import Components from 'unplugin-vue-components/vite';
-import {AntDesignVueResolver} from 'unplugin-vue-components/resolvers';
+import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers';
 import pkg from './package.json';
 
-export default defineConfig(({command}) => {
-  rmSync('dist-electron', {recursive: true, force: true});
+export default defineConfig(({ command }) => {
+  rmSync('dist-electron', { recursive: true, force: true });
 
   const isServe = command === 'serve';
   const isBuild = command === 'build';
