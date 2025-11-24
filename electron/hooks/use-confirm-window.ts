@@ -31,27 +31,41 @@ export const showConfirmWindow = () => {
   );
   win.loadURL(`data:text/html;base64,${base64Html}`);
 
-  win.once('ready-to-show', () => {
-    win.show();
+  const toShow = (flag: boolean) => {
     const targetX = screenWidth - targetWidth - 20;
-    let x = screenWidth;
+    let x = flag ? screenWidth : targetX;
     const step = 24; // 步长：可调，越大越快但更“跳”
     const fpsInterval = 16; // ~60 FPS
     const anim = setInterval(() => {
-      x -= step;
-      if (x <= targetX) {
-        win.setPosition(targetX, targetY);
-        clearInterval(anim); // 注意 clearInterval
+      if (flag) {
+        x -= step;
+        if (x <= targetX) {
+          win.setPosition(targetX, targetY);
+          clearInterval(anim); // 注意 clearInterval
+          return;
+        }
+        win.setPosition(Math.round(x), targetY);
+        return;
+      }
+      x += step;
+      if (x >= screenWidth + 20) {
+        clearInterval(anim);
+        win.close();
         return;
       }
       win.setPosition(Math.round(x), targetY);
     }, fpsInterval);
+  };
+
+  win.once('ready-to-show', () => {
+    win.show();
+    toShow(true);
   });
 
   ipcMain.on('confirm-confirm', () => {
-    win.close();
+    toShow(false);
   });
   ipcMain.on('confirm-cancel', () => {
-    win.close();
+    toShow(false);
   });
 };
