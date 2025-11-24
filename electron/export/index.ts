@@ -68,7 +68,6 @@ export const getOverlayConfigPath = () => {
   return r;
 };
 export const setHeroChoseSkin = (heroId: string, skinId: string) => {
-  showConfirmWindow();
   const data = readConfigOrDefault(HERO_SKIN, '{}');
   const d = JSON.parse(data);
   d[heroId] = skinId;

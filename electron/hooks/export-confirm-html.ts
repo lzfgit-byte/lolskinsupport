@@ -129,7 +129,7 @@ export const confirmHtml = `
     <script>
     const { ipcRenderer } = require('electron');
         let startTime = Date.now();
-        const duration = 10000; // 10秒
+        const duration = 5000; // 5
         const progressFill = document.getElementById('progress-fill');
 
         function updateProgress() {
@@ -141,20 +141,18 @@ export const confirmHtml = `
             if (progress > 0) {
                 requestAnimationFrame(updateProgress);
             } else {
-                // 自动销毁
-                document.querySelector('.notification').style.opacity = '0';
                 setTimeout(() => {
-                    document.querySelector('.notification').style.display = 'none';
-                }, 300);
+              ipcRenderer.send('$hashId-confirm-confirm')
+                }, 100);
             }
         }
 
         function cancelNotification() {
-           ipcRenderer.send('confirm-cancel')
+           ipcRenderer.send('$hashId-confirm-cancel')
         }
 
         function confirmNotification() {
-              ipcRenderer.send('confirm-confirm')
+             ipcRenderer.send('$hashId-confirm-confirm')
         }
 
         // 启动进度条
