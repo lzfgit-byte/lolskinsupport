@@ -33,20 +33,19 @@ export const showConfirmWindow = () => {
 
   win.once('ready-to-show', () => {
     win.show();
-    // 动画：逐步展开窗口
-    let c = 0;
-    let animation = setInterval(() => {
-      if (c > targetWidth + 20) {
-        clearTimeout(animation);
+    const targetX = screenWidth - targetWidth - 20;
+    let x = screenWidth;
+    const step = 24; // 步长：可调，越大越快但更“跳”
+    const fpsInterval = 16; // ~60 FPS
+    const anim = setInterval(() => {
+      x -= step;
+      if (x <= targetX) {
+        win.setPosition(targetX, targetY);
+        clearInterval(anim); // 注意 clearInterval
         return;
       }
-      win.setBounds({
-        x: screenWidth - c++,
-        y: targetY,
-        width: targetWidth,
-        height: targetHeight,
-      });
-    });
+      win.setPosition(Math.round(x), targetY);
+    }, fpsInterval);
   });
 
   ipcMain.on('confirm-confirm', () => {
