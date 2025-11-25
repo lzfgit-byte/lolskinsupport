@@ -10,6 +10,7 @@
       padding: 0;
       box-sizing: border-box;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
     }
 
     body {
@@ -18,7 +19,7 @@
 
     .notification {
       width: 300px;
-      height: 100px;
+      height: 292px;
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
       border-radius: 12px;
@@ -30,7 +31,7 @@
 
     .notification-content {
       padding: 12px;
-      height: 60px;
+      height: 87%;
     }
 
     .title {
@@ -113,8 +114,9 @@
 <body>
 <div class="notification">
   <div class="notification-content">
-    <div class="title">通知</div>
+    <div class="title">$title</div>
     <div class="message">$message</div>
+    <img width="250px" src="$imageSrc" id="hImg">
   </div>
   <div class="progress-bar">
     <div class="progress-fill" id="progress-fill"></div>
@@ -156,6 +158,10 @@
 
   // 启动进度条
   requestAnimationFrame(updateProgress);
+  let iSrc = $imageSrc;
+  if($imageSrc){
+    document.getElementById('hImg').remove();
+  }
 </script>
 </body>
 </html>

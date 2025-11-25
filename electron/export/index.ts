@@ -12,6 +12,7 @@ import {
 } from '@ghs/constant';
 
 import { shell } from 'electron';
+import type { ShowSliderConfirmType } from '@ghs/constant';
 import {
   configPath,
   defaultGamePath,
@@ -155,9 +156,9 @@ export const loadSkin = async (heroId: string, skinId: string) => {
       .catch((msg) => {
         MessageUtil.error(msg);
       });
-    showSliderConfirm(`安装皮肤成功:${uniqueId}`, null, null, 3000);
+    showSliderConfirm({ msg: `导入皮肤成功:${uniqueId}`, title: '提示' });
   } else {
-    showSliderConfirm(`已经安装过:${uniqueId}`, null, null, 3000);
+    showSliderConfirm({ msg: `已经安装过:${uniqueId}`, title: '提示' });
   }
 
   if (!existsSync(overlayPath)) {
@@ -179,7 +180,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
         MessageUtil.error(msg);
       });
   } else {
-    showSliderConfirm(`已经mkoverlay:${uniqueId}`, null, null, 2000);
+    showSliderConfirm({ msg: `mkoverlay --${uniqueId}--成功`, title: '提示' });
   }
 
   await modToolsWrapper
@@ -193,19 +194,18 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     .catch((msg) => {
       MessageUtil.error(msg);
     });
-  showSliderConfirm(`runoverlay --${uniqueId}--成功`);
+  showSliderConfirm({ msg: `runoverlay --${uniqueId}--成功`, title: '提示' });
 };
-export const checkCanAutoConfirm = (msg: string, delay = 3000) => {
+export const checkCanAutoConfirm = (opt: ShowSliderConfirmType) => {
   return new Promise((resolve) => {
     showSliderConfirm(
-      msg,
+      opt,
       () => {
         resolve(true);
       },
       () => {
         resolve(false);
-      },
-      delay
+      }
     );
   });
 };

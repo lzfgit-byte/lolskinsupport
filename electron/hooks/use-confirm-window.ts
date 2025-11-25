@@ -2,11 +2,12 @@ import path from 'node:path';
 import { clearTimeout } from 'node:timers';
 import { BrowserWindow, ipcMain, screen } from 'electron';
 import { executeFunc } from '@ilzf/utils';
+import type { ShowSliderConfirmType } from '@ghs/constant';
 import { MessageUtil } from '../utils/message';
 import { confirmHtml } from './export-confirm-html';
 let htmlContent = confirmHtml;
 let showCount = 0;
-export const showSliderConfirm = (msg: string, okFunc?: any, cFunc?: any, delay = 3000) => {
+export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFunc?: any) => {
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
   const hashId = Date.now().toString();
   let targetWidth = 300;
@@ -33,11 +34,14 @@ export const showSliderConfirm = (msg: string, okFunc?: any, cFunc?: any, delay 
     }
     return str;
   };
-  const base64Html = Buffer.from(
-    strReplaceAll(htmlContent, '$hashId', hashId)
-      .replace('$message', msg)
-      .replace('$delay', `${delay}`)
-  ).toString('base64');
+  const getHtml = () => {
+    return strReplaceAll(htmlContent, '$hashId', hashId)
+      .replace('$message', opt.msg)
+      .replace('$imageSrc', opt.src)
+      .replace('$title', opt.title || '提醒')
+      .replace('$delay', `${opt.delay || 3000}`);
+  };
+  const base64Html = Buffer.from(getHtml()).toString('base64');
   win.loadURL(`data:text/html;base64,${base64Html}`);
 
   const toShow = (flag: boolean, cb: any) => {

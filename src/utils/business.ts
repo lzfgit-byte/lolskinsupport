@@ -1,3 +1,4 @@
+import type { ShowSliderConfirmType } from '@ghs/constant';
 import { executeFunction } from '@/utils/ipc';
 
 /**
@@ -65,8 +66,8 @@ export const f_setHeroChoseSkin = async (heroId: string, skinId: string) => {
 /**
  * export const checkCanAutoConfirm = (msg: string, delay = 3000) => {
  */
-export const f_checkCanAutoConfirm = async (msg: string, delay = 3000) => {
-  return executeFunction('checkCanAutoConfirm', msg, delay);
+export const f_checkCanAutoConfirm = async (opt: ShowSliderConfirmType) => {
+  return executeFunction('checkCanAutoConfirm', opt);
 };
 /**
  * export const openPath = (path_: string) => {

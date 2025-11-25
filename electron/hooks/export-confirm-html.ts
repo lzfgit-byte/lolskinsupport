@@ -2,162 +2,169 @@ export const confirmHtml = `
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MacOS 风格通知</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MacOS 风格通知</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
 
-        body {
-            background: #f0f0f0;
-        }
+    body {
+      background: #f0f0f0;
+    }
 
-        .notification {
-            width: 300px;
-            height: 100px;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-            position: relative;
-            border: 1px solid rgba(0, 0, 0, 0.05);
-        }
+    .notification {
+      width: 300px;
+      height: 292px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(0, 0, 0, 0.05);
+    }
 
-        .notification-content {
-            padding: 12px;
-            height: 60px;
-        }
+    .notification-content {
+      padding: 12px;
+      height: 87%;
+    }
 
-        .title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #111;
-            margin-bottom: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+    .title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
-        .message {
-            font-size: 12px;
-            color: #666;
-            line-height: 1.4;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
+    .message {
+      font-size: 12px;
+      color: #666;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
 
-        .notification-actions {
-            display: flex;
-            padding: 0 12px 12px 12px;
-            gap: 8px;
-        }
+    .notification-actions {
+      display: flex;
+      padding: 0 12px 12px 12px;
+      gap: 8px;
+    }
 
-        .btn {
-            flex: 1;
-            padding: 6px 0;
-            border-radius: 5px;
-            border: none;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
+    .btn {
+      flex: 1;
+      padding: 6px 0;
+      border-radius: 5px;
+      border: none;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
 
-        .btn-cancel {
-            background: transparent;
-            color: #666;
-            border: 1px solid #ddd;
-        }
+    .btn-cancel {
+      background: transparent;
+      color: #666;
+      border: 1px solid #ddd;
+    }
 
-        .btn-cancel:hover {
-            background: #f5f5f5;
-            color: #333;
-        }
+    .btn-cancel:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
 
-        .btn-confirm {
-            background: #007AFF;
-            color: white;
-            border: 1px solid #007AFF;
-        }
+    .btn-confirm {
+      background: #007AFF;
+      color: white;
+      border: 1px solid #007AFF;
+    }
 
-        .btn-confirm:hover {
-            background: #0062CC;
-            border-color: #0062CC;
-        }
+    .btn-confirm:hover {
+      background: #0062CC;
+      border-color: #0062CC;
+    }
 
-        .progress-bar {
-            height: 2px;
-            background: rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            position: absolute;
-            bottom: 42px;
-            left: 0;
-            right: 0;
-        }
+    .progress-bar {
+      height: 2px;
+      background: rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      position: absolute;
+      bottom: 42px;
+      left: 0;
+      right: 0;
+    }
 
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #007AFF, #00D4FF);
-            width: 100%;
-            transition: width 0.1s linear;
-        }
-    </style>
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #007AFF, #00D4FF);
+      width: 100%;
+      transition: width 0.1s linear;
+    }
+  </style>
 </head>
 <body>
-    <div class="notification">
-        <div class="notification-content">
-            <div class="title">通知</div>
-            <div class="message">$message</div>
-        </div>
-        <div class="progress-bar">
-            <div class="progress-fill" id="progress-fill"></div>
-        </div>
-        <div class="notification-actions">
-            <button class="btn btn-cancel" onclick="cancelNotification()">取消</button>
-            <button class="btn btn-confirm" onclick="confirmNotification()">确认</button>
-        </div>
-    </div>
+<div class="notification">
+  <div class="notification-content">
+    <div class="title">$title</div>
+    <div class="message">$message</div>
+    <img width="250px" src="$imageSrc" id="hImg">
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+  <div class="notification-actions">
+    <button class="btn btn-cancel" onclick="cancelNotification()">取消</button>
+    <button class="btn btn-confirm" onclick="confirmNotification()">确认</button>
+  </div>
+</div>
 
-    <script>
-    const { ipcRenderer } = require('electron');
-        let startTime = Date.now();
-        const duration = $delay; // 5
-        const progressFill = document.getElementById('progress-fill');
+<script>
+  const { ipcRenderer } = require('electron');
+  let startTime = Date.now();
+  const duration = $delay; // 5
+  const progressFill = document.getElementById('progress-fill');
 
-        function updateProgress() {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.max(0, 100 - (elapsed / duration * 100));
-            
-            progressFill.style.width = progress + '%';
-            
-            if (progress > 0) {
-                requestAnimationFrame(updateProgress);
-            } else {
-                setTimeout(() => {
-              ipcRenderer.send('$hashId-confirm-confirm')
-                }, 100);
-            }
-        }
+  function updateProgress() {
+    const elapsed = Date.now() - startTime;
+    const progress = Math.max(0, 100 - (elapsed / duration * 100));
 
-        function cancelNotification() {
-           ipcRenderer.send('$hashId-confirm-cancel')
-        }
+    progressFill.style.width = progress + '%';
 
-        function confirmNotification() {
-             ipcRenderer.send('$hashId-confirm-confirm')
-        }
+    if (progress > 0) {
+      requestAnimationFrame(updateProgress);
+    } else {
+      setTimeout(() => {
+        ipcRenderer.send('$hashId-confirm-confirm')
+      }, 100);
+    }
+  }
 
-        // 启动进度条
-        requestAnimationFrame(updateProgress);
-    </script>
+  function cancelNotification() {
+    ipcRenderer.send('$hashId-confirm-cancel')
+  }
+
+  function confirmNotification() {
+    ipcRenderer.send('$hashId-confirm-confirm')
+  }
+
+  // 启动进度条
+  requestAnimationFrame(updateProgress);
+  let iSrc = $imageSrc;
+  if($imageSrc){
+    document.getElementById('hImg').remove();
+  }
+</script>
 </body>
 </html>
+
 `;
