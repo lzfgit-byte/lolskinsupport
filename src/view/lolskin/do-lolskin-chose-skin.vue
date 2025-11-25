@@ -115,9 +115,7 @@
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
         if (autoChose.value && !choseSkinId.value?.endsWith('0')) {
-          notify('', '自动应用', '自动应用', false);
           f_checkCanAutoConfirm('自动应用嘛?').then((res) => {
-            debugger;
             if (res) {
               confirm_();
             }

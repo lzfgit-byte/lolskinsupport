@@ -6,7 +6,7 @@ import { MessageUtil } from '../utils/message';
 import { confirmHtml } from './export-confirm-html';
 let htmlContent = confirmHtml;
 let showCount = 0;
-export const showSliderConfirm = (msg: string, okFunc: any, cFunc: any, delay = 3000) => {
+export const showSliderConfirm = (msg: string, okFunc?: any, cFunc?: any, delay = 3000) => {
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
   const hashId = Date.now().toString();
   let targetWidth = 300;
@@ -27,9 +27,16 @@ export const showSliderConfirm = (msg: string, okFunc: any, cFunc: any, delay = 
       contextIsolation: false,
     },
   });
-
+  const strReplaceAll = (str: string, find: string, replace: string) => {
+    while (str.indexOf(find) > -1) {
+      str = str.replace(find, replace);
+    }
+    return str;
+  };
   const base64Html = Buffer.from(
-    htmlContent.replace('$message', msg).replace('$hashId', hashId).replace('$delay', `${delay}`)
+    strReplaceAll(htmlContent, '$hashId', hashId)
+      .replace('$message', msg)
+      .replace('$delay', `${delay}`)
   ).toString('base64');
   win.loadURL(`data:text/html;base64,${base64Html}`);
 

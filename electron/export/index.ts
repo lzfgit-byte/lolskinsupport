@@ -154,27 +154,33 @@ export const loadSkin = async (heroId: string, skinId: string) => {
         MessageUtil.error(msg);
       });
     NotifyMsgUtil.sendNotifyMsg(`提示+${uniqueId}成功`, `安装皮肤成功`, uniqueId);
+  } else {
+    showSliderConfirm(`已经安装过:${uniqueId}`, null, null, 3000);
   }
 
-  await modToolsWrapper.ensureCleanDirectoryWithRetry(getOverlayPath());
-  await modToolsWrapper
-    .execToolWithTimeout(
-      command,
-      [
-        'mkoverlay',
-        Path.normalize(getInstalledPath()),
-        Path.normalize(overlayPath),
-        `--game:${Path.normalize(gamePath)}`,
-        `--mods:${uniqueId}`,
-        '--ignoreConflict',
-      ],
-      50000,
-      true
-    )
-    .catch((msg) => {
-      MessageUtil.error(msg);
-    });
-  NotifyMsgUtil.sendNotifyMsg(`提示+${uniqueId}成功`, `mkoverlay成功`, uniqueId);
+  // await modToolsWrapper.ensureCleanDirectoryWithRetry(getOverlayPath());
+  if (!existsSync(overlayPath)) {
+    await modToolsWrapper
+      .execToolWithTimeout(
+        command,
+        [
+          'mkoverlay',
+          Path.normalize(getInstalledPath()),
+          Path.normalize(overlayPath),
+          `--game:${Path.normalize(gamePath)}`,
+          `--mods:${uniqueId}`,
+          '--ignoreConflict',
+        ],
+        50000,
+        true
+      )
+      .catch((msg) => {
+        MessageUtil.error(msg);
+      });
+  } else {
+    showSliderConfirm(`已经mkoverlay:${uniqueId}`, null, null, 2000);
+  }
+
   await modToolsWrapper
     .runOverlay(command, [
       'runoverlay',
@@ -186,7 +192,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     .catch((msg) => {
       MessageUtil.error(msg);
     });
-  NotifyMsgUtil.sendNotifyMsg(`提示+${uniqueId}成功`, `runoverlay成功`, uniqueId);
+  showSliderConfirm(`runoverlay --${uniqueId}--成功`);
 };
 export const checkCanAutoConfirm = (msg: string, delay = 3000) => {
   return new Promise((resolve) => {
