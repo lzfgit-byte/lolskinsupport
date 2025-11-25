@@ -115,7 +115,7 @@
       })
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
-        if (autoChose.value && !choseSkinId.value?.endsWith('0')) {
+        if (autoChose.value && !choseSkinId.value?.endsWith('00')) {
           f_confirmChoseSkin(`选择皮肤【${choseSkin.value?.name}】`, choseSkin.value.mainImg).then(
             (res) => {
               if (res) {
