@@ -68,3 +68,21 @@ export const f_setHeroChoseSkin = async (heroId: string, skinId: string) => {
 export const f_checkCanAutoConfirm = async (msg: string, delay = 3000) => {
   return executeFunction('checkCanAutoConfirm', msg, delay);
 };
+/**
+ * export const openPath = (path_: string) => {
+ */
+export const f_openPath = async (path_: string) => {
+  return executeFunction('openPath', path_);
+};
+/**
+ * export const emptyPah = (path_: string) => {
+ */
+export const f_emptyPah = async (path_: string) => {
+  return executeFunction('emptyPah', path_);
+};
+/**
+ * export const getLcuState = () => {
+ */
+export const f_getLcuState = async () => {
+  return executeFunction('getLcuState');
+};

@@ -12,6 +12,7 @@ const overlayPath = ref('');
 const overlayConfigPath = ref('');
 const installedPath = ref('');
 const autoChose = ref(false);
+const lcuState = ref(false);
 
 export default () => ({
   loading,
@@ -26,4 +27,5 @@ export default () => ({
   overlayConfigPath,
   installedPath,
   autoChose,
+  lcuState,
 });

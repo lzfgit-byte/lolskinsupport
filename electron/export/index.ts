@@ -1,4 +1,5 @@
 import * as Path from 'node:path';
+import path from 'node:path';
 import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
 import {
   GAME_PATH,
@@ -10,6 +11,7 @@ import {
   SKIN_PATH,
 } from '@ghs/constant';
 
+import { shell } from 'electron';
 import {
   configPath,
   defaultGamePath,
@@ -20,8 +22,9 @@ import {
   defaultSkinPath,
   modToolsWrapper,
 } from '../const';
-import { MessageUtil, NotifyMsgUtil } from '../utils/message';
+import { MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
+// import { lcuConnector } from '../http/lcuConnector';
 
 export * from '../http';
 
@@ -158,7 +161,6 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     showSliderConfirm(`已经安装过:${uniqueId}`, null, null, 3000);
   }
 
-  // await modToolsWrapper.ensureCleanDirectoryWithRetry(getOverlayPath());
   if (!existsSync(overlayPath)) {
     await modToolsWrapper
       .execToolWithTimeout(
@@ -207,4 +209,13 @@ export const checkCanAutoConfirm = (msg: string, delay = 3000) => {
       delay
     );
   });
+};
+export const openPath = (path_: string) => {
+  shell.openPath(path.normalize(path_));
+};
+export const emptyPah = (path_: string) => {
+  modToolsWrapper.ensureCleanDirectoryWithRetry(path_);
+};
+export const getLcuState = () => {
+  // return lcuConnector.isConnected();
 };
