@@ -42,6 +42,7 @@ export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFun
       .replace('$width', `${targetWidth}`)
       .replace('$height', `${targetHeight}`)
       .replace('$title', opt.title || '提醒')
+      .replace('$showBtn', `${opt.showBtn || false}`)
       .replace('$delay', `${opt.delay || 3000}`);
   };
   const base64Html = Buffer.from(getHtml()).toString('base64');

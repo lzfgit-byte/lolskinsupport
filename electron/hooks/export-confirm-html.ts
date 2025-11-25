@@ -122,7 +122,7 @@ export const confirmHtml = `
   <div class="progress-bar">
     <div class="progress-fill" id="progress-fill"></div>
   </div>
-  <div class="notification-actions">
+  <div class="notification-actions" id="btns">
     <button class="btn btn-cancel" onclick="cancelNotification()">取消</button>
     <button class="btn btn-confirm" onclick="confirmNotification()">确认</button>
   </div>
@@ -162,6 +162,10 @@ export const confirmHtml = `
   let iSrc = $imageSrc;
   if($imageSrc){
     document.getElementById('hImg').remove();
+  }
+  let showBtn = $showBtn;
+  if(!showBtn){
+     document.getElementById('btns').remove();
   }
 </script>
 </body>
