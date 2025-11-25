@@ -153,7 +153,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
       .catch((msg) => {
         MessageUtil.error(msg);
       });
-    NotifyMsgUtil.sendNotifyMsg(`提示+${uniqueId}成功`, `安装皮肤成功`, uniqueId);
+    showSliderConfirm(`安装皮肤成功:${uniqueId}`, null, null, 3000);
   } else {
     showSliderConfirm(`已经安装过:${uniqueId}`, null, null, 3000);
   }
