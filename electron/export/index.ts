@@ -1,5 +1,6 @@
 import * as Path from 'node:path';
 import path from 'node:path';
+import fs from 'node:fs';
 import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
 import {
   GAME_PATH,
@@ -210,7 +211,19 @@ export const checkCanAutoConfirm = (opt: ShowSliderConfirmType) => {
   });
 };
 export const openPath = (path_: string) => {
-  shell.openPath(path.normalize(path_));
+  const normalized = path.normalize(path_);
+  try {
+    const stat = fs.statSync(normalized);
+    if (stat.isFile()) {
+      // 如果是文件，打开父级目录
+      shell.openPath(path.dirname(normalized));
+    } else {
+      // 如果是目录，直接打开
+      shell.openPath(normalized);
+    }
+  } catch (err) {
+    console.error('路径不存在或无法访问:', err);
+  }
 };
 export const emptyPah = (path_: string) => {
   modToolsWrapper.ensureCleanDirectoryWithRetry(path_);
