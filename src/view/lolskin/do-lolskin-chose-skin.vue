@@ -29,7 +29,7 @@
         </div>
       </div>
       <div class="big">
-        <img :src="choseSkinMainImg" />
+        <img style="max-width: 90%" :src="choseSkinMainImg" />
       </div>
       <div v-if="skinChild?.length > 0" class="showChild" @click="visible = true">选择炫彩</div>
     </div>
