@@ -15,5 +15,8 @@ export interface ShowSliderConfirmType {
   okText?: string;
   cancelText?: string;
   delay?: number;
+  width?: number;
+  height?: number;
+  showBtn?: boolean;
   src?: string;
 }
