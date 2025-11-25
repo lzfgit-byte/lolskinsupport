@@ -81,3 +81,15 @@ export const f_openPath = async (path_: string) => {
 export const f_emptyPah = async (path_: string) => {
   return executeFunction('emptyPah', path_);
 };
+/**
+ * export const confirmChoseSkin = async (msg: string, imageSrc: string) => {
+ */
+export const f_confirmChoseSkin = async (msg: string, imageSrc: string) => {
+  return executeFunction('confirmChoseSkin', msg, imageSrc);
+};
+/**
+ * export const showToast = async (msg: string) => {
+ */
+export const f_showToast = async (msg: string) => {
+  return executeFunction('showToast', msg);
+};

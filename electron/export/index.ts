@@ -156,9 +156,9 @@ export const loadSkin = async (heroId: string, skinId: string) => {
       .catch((msg) => {
         MessageUtil.error(msg);
       });
-    showSliderConfirm({ msg: `导入皮肤成功:${uniqueId}`, title: '提示' });
+    showToast(`导入皮肤成功:${uniqueId}`);
   } else {
-    showSliderConfirm({ msg: `已经安装过:${uniqueId}`, title: '提示' });
+    showToast(`已经安装过:${uniqueId}`);
   }
 
   if (!existsSync(overlayPath)) {
@@ -180,7 +180,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
         MessageUtil.error(msg);
       });
   } else {
-    showSliderConfirm({ msg: `mkoverlay --${uniqueId}--成功`, title: '提示' });
+    showToast(`mkoverlay --${uniqueId}--成功`);
   }
 
   await modToolsWrapper
@@ -194,7 +194,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     .catch((msg) => {
       MessageUtil.error(msg);
     });
-  showSliderConfirm({ msg: `runoverlay --${uniqueId}--成功`, title: '提示' });
+  showToast(`runoverlay --${uniqueId}--成功`);
 };
 export const checkCanAutoConfirm = (opt: ShowSliderConfirmType) => {
   return new Promise((resolve) => {
@@ -214,4 +214,22 @@ export const openPath = (path_: string) => {
 };
 export const emptyPah = (path_: string) => {
   modToolsWrapper.ensureCleanDirectoryWithRetry(path_);
+};
+export const confirmChoseSkin = async (msg: string, imageSrc: string) => {
+  return checkCanAutoConfirm({
+    title: '提示',
+    msg,
+    src: imageSrc,
+    showBtn: true,
+    height: 250,
+    delay: 3000,
+  });
+};
+export const showToast = async (msg: string) => {
+  showSliderConfirm({
+    title: '提示',
+    msg,
+    height: 80,
+    delay: 3000,
+  });
 };

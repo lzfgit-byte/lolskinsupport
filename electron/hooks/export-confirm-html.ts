@@ -32,7 +32,7 @@ export const confirmHtml = `
 
     .notification-content {
       padding: 12px;
-      height: 87%;
+      height: 86%;
     }
 
     .title {
@@ -102,6 +102,7 @@ export const confirmHtml = `
       bottom: 42px;
       left: 0;
       right: 0;
+      margin: 0 10px 10px;
     }
 
     .progress-fill {
@@ -119,10 +120,10 @@ export const confirmHtml = `
     <div class="message">$message</div>
     <img width="250px" src="$imageSrc" id="hImg">
   </div>
-  <div class="progress-bar">
+  <div class="progress-bar" id="progress-bar">
     <div class="progress-fill" id="progress-fill"></div>
   </div>
-  <div class="notification-actions" id="btns">
+  <div class="notification-actions" id="btnS">
     <button class="btn btn-cancel" onclick="cancelNotification()">取消</button>
     <button class="btn btn-confirm" onclick="confirmNotification()">确认</button>
   </div>
@@ -159,13 +160,14 @@ export const confirmHtml = `
 
   // 启动进度条
   requestAnimationFrame(updateProgress);
-  let iSrc = $imageSrc;
-  if($imageSrc){
+   let iSrc = "$imageSrc";
+  if(!iSrc){
     document.getElementById('hImg').remove();
   }
   let showBtn = $showBtn;
   if(!showBtn){
-     document.getElementById('btns').remove();
+     document.getElementById('btnS').remove();
+     document.getElementById('progress-bar').style.bottom = '5px'
   }
 </script>
 </body>
