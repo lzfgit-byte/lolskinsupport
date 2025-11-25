@@ -64,6 +64,7 @@
   import {
     f_checkCanAutoConfirm,
     f_checkHasSkins,
+    f_confirmChoseSkin,
     f_getHeroChoseSkin,
     f_loadSkin,
     f_setHeroChoseSkin,
@@ -115,15 +116,13 @@
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
         if (autoChose.value && !choseSkinId.value?.endsWith('0')) {
-          f_checkCanAutoConfirm({
-            msg: '自动应用嘛?',
-            src: choseSkin.value.mainImg,
-            height: 292,
-          }).then((res) => {
-            if (res) {
-              confirm_();
+          f_confirmChoseSkin(`选择皮肤【${choseSkin.value?.name}】`, choseSkin.value.mainImg).then(
+            (res) => {
+              if (res) {
+                confirm_();
+              }
             }
-          });
+          );
         }
       });
   };
