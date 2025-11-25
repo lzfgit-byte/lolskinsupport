@@ -19,8 +19,8 @@ export const confirmHtml = `
     }
 
     .notification {
-      width: 300px;
-      height: 292px;
+      width: $widthpx;
+      height: $heightpx;
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
       border-radius: 12px;

@@ -6,13 +6,14 @@ import type { ShowSliderConfirmType } from '@ghs/constant';
 import { MessageUtil } from '../utils/message';
 import { confirmHtml } from './export-confirm-html';
 let htmlContent = confirmHtml;
-let showCount = 0;
+let startX = 30;
 export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFunc?: any) => {
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
   const hashId = Date.now().toString();
-  let targetWidth = 300;
-  let targetHeight = 292;
-  let targetY = 30 + showCount++ * 120;
+  let targetWidth = opt.width || 300;
+  let targetHeight = opt.height || 100;
+  let targetY = startX;
+  startX += targetHeight + 20;
 
   // 初始宽度设为 0，实现动画效果
   let win = new BrowserWindow({
@@ -38,6 +39,8 @@ export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFun
     return strReplaceAll(htmlContent, '$hashId', hashId)
       .replace('$message', opt.msg)
       .replace('$imageSrc', opt.src)
+      .replace('$width', `${targetWidth}`)
+      .replace('$height', `${targetHeight}`)
       .replace('$title', opt.title || '提醒')
       .replace('$delay', `${opt.delay || 3000}`);
   };
@@ -80,14 +83,14 @@ export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFun
     toShow(false, null);
     ipcMain.off(`${hashId}-confirm-cancel`, cancelFunc);
     ipcMain.off(`${hashId}-confirm-confirm`, confirmFunc);
-    showCount--;
+    startX -= targetHeight + 20;
     executeFunc(cFunc);
   };
   const confirmFunc = () => {
     toShow(false, null);
     ipcMain.off(`${hashId}-confirm-confirm`, confirmFunc);
     ipcMain.off(`${hashId}-confirm-cancel`, cancelFunc);
-    showCount--;
+    startX -= targetHeight + 20;
     executeFunc(okFunc);
   };
   ipcMain.on(`${hashId}-confirm-confirm`, confirmFunc);
