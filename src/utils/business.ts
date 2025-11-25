@@ -62,3 +62,9 @@ export const f_getHeroChoseSkin = async (heroId: string) => {
 export const f_setHeroChoseSkin = async (heroId: string, skinId: string) => {
   return executeFunction('setHeroChoseSkin', heroId, skinId);
 };
+/**
+ * export const checkCanAutoConfirm = (msg: string, delay = 3000) => {
+ */
+export const f_checkCanAutoConfirm = async (msg: string, delay = 3000) => {
+  return executeFunction('checkCanAutoConfirm', msg, delay);
+};

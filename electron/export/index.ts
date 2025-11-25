@@ -21,7 +21,7 @@ import {
   modToolsWrapper,
 } from '../const';
 import { MessageUtil, NotifyMsgUtil } from '../utils/message';
-import { showConfirmWindow } from '../hooks/use-confirm-window';
+import { showSliderConfirm } from '../hooks/use-confirm-window';
 
 export * from '../http';
 
@@ -187,4 +187,18 @@ export const loadSkin = async (heroId: string, skinId: string) => {
       MessageUtil.error(msg);
     });
   NotifyMsgUtil.sendNotifyMsg(`提示+${uniqueId}成功`, `runoverlay成功`, uniqueId);
+};
+export const checkCanAutoConfirm = (msg: string, delay = 3000) => {
+  return new Promise((resolve) => {
+    showSliderConfirm(
+      msg,
+      () => {
+        resolve(true);
+      },
+      () => {
+        resolve(false);
+      },
+      delay
+    );
+  });
 };

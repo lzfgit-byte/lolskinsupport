@@ -6,7 +6,7 @@ import { MessageUtil } from '../utils/message';
 import { confirmHtml } from './export-confirm-html';
 let htmlContent = confirmHtml;
 let showCount = 0;
-export const showSliderConfirm = (msg: string, okFunc: any, cFunc: any) => {
+export const showSliderConfirm = (msg: string, okFunc: any, cFunc: any, delay = 3000) => {
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
   const hashId = Date.now().toString();
   let targetWidth = 300;
@@ -29,7 +29,7 @@ export const showSliderConfirm = (msg: string, okFunc: any, cFunc: any) => {
   });
 
   const base64Html = Buffer.from(
-    htmlContent.replace('$message', msg).replace('$hashId', hashId)
+    htmlContent.replace('$message', msg).replace('$hashId', hashId).replace('$delay', `${delay}`)
   ).toString('base64');
   win.loadURL(`data:text/html;base64,${base64Html}`);
 
@@ -79,6 +79,6 @@ export const showSliderConfirm = (msg: string, okFunc: any, cFunc: any) => {
     showCount--;
     executeFunc(okFunc);
   };
-  ipcMain.on(`${hashId}-confirm-confirm`, cancelFunc);
-  ipcMain.on(`${hashId}-confirm-cancel`, confirmFunc);
+  ipcMain.on(`${hashId}-confirm-confirm`, confirmFunc);
+  ipcMain.on(`${hashId}-confirm-cancel`, cancelFunc);
 };

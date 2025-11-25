@@ -129,7 +129,7 @@ export const confirmHtml = `
     <script>
     const { ipcRenderer } = require('electron');
         let startTime = Date.now();
-        const duration = 5000; // 5
+        const duration = $delay; // 5
         const progressFill = document.getElementById('progress-fill');
 
         function updateProgress() {

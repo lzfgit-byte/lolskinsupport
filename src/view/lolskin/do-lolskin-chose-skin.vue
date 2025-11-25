@@ -62,6 +62,7 @@
   import type { heroInfo, skinInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
   import {
+    f_checkCanAutoConfirm,
     f_checkHasSkins,
     f_getHeroChoseSkin,
     f_loadSkin,
@@ -115,7 +116,12 @@
         choseSkinId.value = id || allSkins.value[0].skinId;
         if (autoChose.value && !choseSkinId.value?.endsWith('0')) {
           notify('', '自动应用', '自动应用', false);
-          confirm_();
+          f_checkCanAutoConfirm('自动应用嘛?').then((res) => {
+            debugger;
+            if (res) {
+              confirm_();
+            }
+          });
         }
       });
   };
