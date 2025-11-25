@@ -80,9 +80,3 @@ export const f_openPath = async (path_: string) => {
 export const f_emptyPah = async (path_: string) => {
   return executeFunction('emptyPah', path_);
 };
-/**
- * export const getLcuState = () => {
- */
-export const f_getLcuState = async () => {
-  return executeFunction('getLcuState');
-};

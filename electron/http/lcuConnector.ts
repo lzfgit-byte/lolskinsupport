@@ -37,13 +37,13 @@ export class LCUConnector extends EventEmitter {
     void options;
   }
 
-  async connect(): Promise<boolean> {
+  async connect(auto = false): Promise<boolean> {
     try {
       // Try to find and read the lockfile
       const credentials = getLockfile();
       if (!credentials) {
         // Don't emit error for auto-connect attempts
-        if (!this.autoConnectInterval) {
+        if (!auto && !this.autoConnectInterval) {
           console.log('LCU: League client lockfile not found');
           this.emit('error', new Error('League client not found'));
         }
@@ -68,7 +68,7 @@ export class LCUConnector extends EventEmitter {
       // Test connection with a simple API call
       const isConnected = await this.testConnection();
       if (!isConnected) {
-        if (!this.autoConnectInterval) {
+        if (!auto && !this.autoConnectInterval) {
           this.emit('error', new Error('Failed to connect to League client'));
         }
         return false;
@@ -86,7 +86,7 @@ export class LCUConnector extends EventEmitter {
       return true;
     } catch {
       // Only emit error if not auto-connecting
-      if (!this.autoConnectInterval) {
+      if (!auto && !this.autoConnectInterval) {
         this.emit('error', new Error('Failed to connect to League client'));
       }
       return false;
@@ -389,7 +389,7 @@ export class LCUConnector extends EventEmitter {
     this.stopAutoConnect();
 
     // Try immediate connection
-    this.connect();
+    this.connect(true);
 
     // Set up polling
     this.autoConnectInterval = setInterval(() => {

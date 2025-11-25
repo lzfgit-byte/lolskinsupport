@@ -17,7 +17,7 @@ export const executeFunction = async (funcName: string, ...args: any[]) => {
   });
   return await ipcRenderer.invoke(funcName, ...args);
 };
-const { logs, heroId } = useGlobalState();
+const { logs, heroId, lcuState } = useGlobalState();
 // 获取后台的消息
 ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_MESSAGE, (_event, args: MessageInfo) => {
   const { msg, type } = args;
@@ -57,4 +57,7 @@ ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, (_event, args: MessageInfo) =
 ipcRenderer.on('champion-selected', (_event, championId: string) => {
   heroId.value = championId;
   bus.emit('champion-selected', championId);
+});
+ipcRenderer.on('notify-lcu-connect', (_event, lcuState_: boolean) => {
+  lcuState.value = lcuState_;
 });

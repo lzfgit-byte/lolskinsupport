@@ -24,7 +24,6 @@ import {
 } from '../const';
 import { MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
-// import { lcuConnector } from '../http/lcuConnector';
 
 export * from '../http';
 
@@ -215,7 +214,4 @@ export const openPath = (path_: string) => {
 };
 export const emptyPah = (path_: string) => {
   modToolsWrapper.ensureCleanDirectoryWithRetry(path_);
-};
-export const getLcuState = () => {
-  // return lcuConnector.isConnected();
 };
