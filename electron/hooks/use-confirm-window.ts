@@ -11,7 +11,7 @@ export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFun
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
   const hashId = Date.now().toString();
   let targetWidth = 300;
-  let targetHeight = 100;
+  let targetHeight = 292;
   let targetY = 30 + showCount++ * 120;
 
   // 初始宽度设为 0，实现动画效果

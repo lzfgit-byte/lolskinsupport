@@ -115,11 +115,13 @@
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
         if (autoChose.value && !choseSkinId.value?.endsWith('0')) {
-          f_checkCanAutoConfirm('自动应用嘛?').then((res) => {
-            if (res) {
-              confirm_();
+          f_checkCanAutoConfirm({ msg: '自动应用嘛?', src: choseSkin.value.mainImg }).then(
+            (res) => {
+              if (res) {
+                confirm_();
+              }
             }
-          });
+          );
         }
       });
   };
