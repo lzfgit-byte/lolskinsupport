@@ -112,3 +112,9 @@ export const f_request_string_get = async (url: string): Promise<string> => {
 export const f_requestHtmlByWindows = async (url: string) => {
   return executeFunction('requestHtmlByWindows', url);
 };
+/**
+ * export const winGetData = async (code: string, url: string, show = false) => {
+ */
+export const f_winGetData = async (code: string, url: string, show = false) => {
+  return executeFunction('winGetData', code, url, show);
+};

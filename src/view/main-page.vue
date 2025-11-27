@@ -1,4 +1,4 @@
-<template>
+<template xmlns="http://www.w3.org/1999/html">
   <LolskinMain></LolskinMain>
   <FloatButtonGroup :handle-draw-open="handleDrawOpen"></FloatButtonGroup>
   <a-drawer
@@ -14,10 +14,12 @@
         :duration="200"
       >
         <h1>设置信息</h1>
+
         皮肤存储路径：
-        {{ skinPath }}{{ updateData }}
+        {{ skinPath }}
         <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
         <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button>
+        皮肤最后更新时间：{{ updateData }} <br /><br />
         <br /><br />
         游戏路径：{{ gamePath }}
         <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
@@ -62,6 +64,7 @@
     f_removePath,
     f_requestHtmlByWindows,
     f_request_string_get,
+    f_winGetData,
   } from '@/utils/business';
   import http from '@/utils/http';
 
@@ -89,11 +92,16 @@
     });
   };
   const getSkinUpdate = () => {
-    f_requestHtmlByWindows('https://api.github.com/repos/Alban1911/LeagueSkins').then(
-      (res: any) => {
-        updateData.value = res?.pushed_at;
-      }
-    );
+    f_winGetData(
+      ` (() =>
+        new Promise((resolve) => {
+          resolve(document.getElementsByTagName('pre')[0].innerHTML);
+        }))();`,
+      'https://api.github.com/repos/Alban1911/LeagueSkins',
+      false
+    ).then((res: any) => {
+      updateData.value = JSON.parse(res)?.pushed_at;
+    });
   };
   onMounted(() => {
     getSkinUpdate();
