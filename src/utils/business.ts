@@ -1,4 +1,5 @@
 import type { ShowSliderConfirmType } from '@ghs/constant';
+import { requestHtmlByWindows } from '../../electron/http';
 import { executeFunction } from '@/utils/ipc';
 
 /**
@@ -92,4 +93,22 @@ export const f_confirmChoseSkin = async (msg: string, imageSrc: string) => {
  */
 export const f_showToast = async (msg: string) => {
   return executeFunction('showToast', msg);
+};
+/**
+ * export const removePath = (path_: string) => {
+ */
+export const f_removePath = async (path_: string) => {
+  return executeFunction('removePath', path_);
+};
+/**
+ * export const request_string_get = (url: string, suffix = FileType.TEXT): Promise<string> => {
+ */
+export const f_request_string_get = async (url: string): Promise<string> => {
+  return executeFunction('request_string_get', url);
+};
+/**
+ * export const requestHtmlByWindows = async (url: string) => {
+ */
+export const f_requestHtmlByWindows = async (url: string) => {
+  return executeFunction('requestHtmlByWindows', url);
 };

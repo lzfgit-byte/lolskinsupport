@@ -9,13 +9,13 @@ import { MessageUtil, ProgressMsgUtil } from '../utils/message';
  * @param url
  * @param suffix
  */
-export const request_string_get = (url: string, suffix = FileType.TEXT): Promise<string> => {
+export const request_string_get = (url: string): Promise<string> => {
   return new Promise((resolve) => {
-    if (cache_exist(url, suffix)) {
-      const cache = cache_get(url, suffix);
-      resolve(cache || '');
-      return;
-    }
+    // if (cache_exist(url, suffix)) {
+    //   const cache = cache_get(url, suffix);
+    //   resolve(cache || '');
+    //   return;
+    // }
 
     const request = net.request(url);
 
@@ -26,7 +26,8 @@ export const request_string_get = (url: string, suffix = FileType.TEXT): Promise
         blob = Buffer.concat([blob, chunk], blob.length + chunk.length);
       });
       response.on('end', () => {
-        resolve(cache_save(url, String(blob), suffix));
+        // resolve(cache_save(url, String(blob), suffix));
+        resolve(String(blob));
         blob = null;
       });
       response.on('error', () => {

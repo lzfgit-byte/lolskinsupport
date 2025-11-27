@@ -225,6 +225,22 @@ export const openPath = (path_: string) => {
     console.error('路径不存在或无法访问:', err);
   }
 };
+export const removePath = (path_: string) => {
+  const normalized = path.normalize(path_);
+  try {
+    const stat = fs.statSync(normalized);
+    if (stat.isFile()) {
+      // 如果是文件，打开父级目录
+      fs.rmdirSync(path.dirname(normalized));
+    } else {
+      // 如果是目录，直接打开
+      fs.rmdirSync(normalized);
+    }
+  } catch (err) {
+    console.error('路径不存在或无法访问:', err);
+  }
+  MessageUtil.success('删除成功');
+};
 export const emptyPah = (path_: string) => {
   modToolsWrapper.ensureCleanDirectoryWithRetry(path_);
 };
