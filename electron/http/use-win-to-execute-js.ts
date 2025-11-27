@@ -17,12 +17,7 @@ export const win_get_data = (code: string, url: string, show = false): Promise<a
     MessageUtil.info('没有执行代码');
     return;
   }
-  const html = cache_get(url, FileType.HTML);
-  if (html) {
-    return Promise.resolve(html);
-  }
-  const key = hashString(url);
-  NotifyMsgUtil.sendNotifyMsg('executeJs', '开始', key);
+  // NotifyMsgUtil.sendNotifyMsg('executeJs', '开始', key);
   const pw = getMainWin();
   const win = new BrowserWindow({
     width: 1450,
@@ -48,9 +43,9 @@ export const win_get_data = (code: string, url: string, show = false): Promise<a
 
   return new Promise((resolve) => {
     const keyEvt = 'executeJsInElectron';
-    NotifyMsgUtil.sendNotifyMsg(keyEvt, '进入promise', key);
+    // NotifyMsgUtil.sendNotifyMsg(keyEvt, '进入promise', key);
     const l = (se, arg) => {
-      NotifyMsgUtil.sendNotifyMsg(keyEvt, arg, key);
+      // NotifyMsgUtil.sendNotifyMsg(keyEvt, arg, key);
     };
     ipcMain.removeHandler(MESSAGE_EVENT_KEY.SEND_EXECUTE_JS_MESSAGE);
     ipcMain.handle(MESSAGE_EVENT_KEY.SEND_EXECUTE_JS_MESSAGE, l);
@@ -65,7 +60,7 @@ export const win_get_data = (code: string, url: string, show = false): Promise<a
     });
 
     const func = (se: any, html: string) => {
-      NotifyMsgUtil.sendNotifyMsg(keyEvt, '开始执行', key);
+      // NotifyMsgUtil.sendNotifyMsg(keyEvt, '开始执行', key);
       webContents
         .executeJavaScript(code)
         .then((res: string) => {
@@ -78,16 +73,16 @@ export const win_get_data = (code: string, url: string, show = false): Promise<a
           }
         })
         .catch((reason) => {
-          NotifyMsgUtil.sendNotifyMsg(keyEvt, reason.toString(), key);
+          // NotifyMsgUtil.sendNotifyMsg(keyEvt, reason.toString(), key);
           win.show();
         })
         .finally(() => {
-          NotifyMsgUtil.close(key);
+          // NotifyMsgUtil.close(key);
         });
     };
     ipcMain.removeHandler(USE_CHILD_WIN_EVENT.JS_SEND_HTML);
     ipcMain.handle(USE_CHILD_WIN_EVENT.JS_SEND_HTML, func);
-    NotifyMsgUtil.sendNotifyMsg(keyEvt, '加载url', key);
+    // NotifyMsgUtil.sendNotifyMsg(keyEvt, '加载url', key);
     win.loadURL(url);
   });
 };
