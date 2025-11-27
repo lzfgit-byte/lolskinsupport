@@ -241,6 +241,9 @@ export const removePath = (path_: string) => {
   }
   MessageUtil.success('删除成功');
 };
+export const openUrl = (url: string) => {
+  shell.openExternal(url);
+};
 export const emptyPah = (path_: string) => {
   modToolsWrapper.ensureCleanDirectoryWithRetry(path_);
 };

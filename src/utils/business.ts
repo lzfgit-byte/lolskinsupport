@@ -118,3 +118,9 @@ export const f_requestHtmlByWindows = async (url: string) => {
 export const f_winGetData = async (code: string, url: string, show = false) => {
   return executeFunction('winGetData', code, url, show);
 };
+/**
+ * export const openUrl = (url: string) => {
+ */
+export const f_openUrl = async (url: string) => {
+  return executeFunction('openUrl', url);
+};

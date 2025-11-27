@@ -19,7 +19,11 @@
         {{ skinPath }}
         <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
         <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button>
-        皮肤最后更新时间：{{ updateData }} <br /><br />
+        <br /><br />
+        皮肤最后更新时间：{{ updateData }}
+        <a-button @click="f_openUrl('https://github.com/Alban1911/LeagueSkins')">
+          打开连接地址
+        </a-button>
         <br /><br />
         游戏路径：{{ gamePath }}
         <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
@@ -61,6 +65,7 @@
   import {
     f_checkCanAutoConfirm,
     f_openPath,
+    f_openUrl,
     f_removePath,
     f_requestHtmlByWindows,
     f_request_string_get,
