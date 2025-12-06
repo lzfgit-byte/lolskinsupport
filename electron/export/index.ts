@@ -88,8 +88,31 @@ export const getModToolsPath = () => {
 export const getInstalledPath = () => {
   return readConfigOrDefault(INSTALLED_PATH, defaultInstalledPath);
 };
+export const findFile = (dir, targetFile) => {
+  const files = fs.readdirSync(dir);
+
+  for (const file of files) {
+    const fullPath = path.join(dir, file);
+    const stat = fs.statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      // 递归搜索子目录
+      const result = findFile(fullPath, targetFile);
+      if (result) {
+        return result;
+      }
+    } else if (file === targetFile) {
+      return fullPath;
+    }
+  }
+  return null;
+};
 const buildSkinPath = (heroId: string, skinId: string) => {
-  return `${getSkinPath()}\\${heroId}\\${skinId}\\${skinId}.zip`;
+  const foo = `${getSkinPath()}\\${heroId}\\${skinId}\\${skinId}.zip`;
+  if (existsSync(foo)) {
+    return foo;
+  }
+  return findFile(`${getSkinPath()}\\${heroId}`, `${skinId}.zip`);
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);

@@ -45,7 +45,6 @@ export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFun
       .replace('$showBtn', `${opt.showBtn || false}`)
       .replace('$delay', `${opt.delay || 3000}`);
   };
-  debugger;
   const base64Html = Buffer.from(getHtml()).toString('base64');
   win.loadURL(`data:text/html;base64,${base64Html}`);
 
