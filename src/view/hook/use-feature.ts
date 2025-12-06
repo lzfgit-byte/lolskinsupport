@@ -23,16 +23,20 @@ export default () => {
   const handleDrawOpen = () => {
     drawerOpen.value = true;
   };
-  onMounted(async () => {
+  const loadFilePath = async () => {
     skinPath.value = await f_getSkinPath();
     gamePath.value = await f_getGamePath();
     overlayPath.value = await f_getOverlayPath();
     overlayConfigPath.value = await f_getOverlayConfigPath();
     toolsPath.value = await f_getModToolsPath();
     installedPath.value = await f_getInstalledPath();
+  };
+  onMounted(async () => {
+    await loadFilePath();
   });
   return {
     drawerOpen,
     handleDrawOpen,
+    loadFilePath,
   };
 };

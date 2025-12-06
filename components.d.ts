@@ -11,6 +11,7 @@ declare module 'vue' {
     AConfigProvider: typeof import('ant-design-vue/es')['ConfigProvider']
     ADrawer: typeof import('ant-design-vue/es')['Drawer']
     AFloatButton: typeof import('ant-design-vue/es')['FloatButton']
+    ASpace: typeof import('ant-design-vue/es')['Space']
     ASwitch: typeof import('ant-design-vue/es')['Switch']
     GhsDialog: typeof import('./src/components/dialog/ghs-dialog.vue')['default']
     MainLayout: typeof import('./src/components/main-layout.vue')['default']

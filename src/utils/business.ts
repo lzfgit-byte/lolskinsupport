@@ -124,3 +124,21 @@ export const f_winGetData = async (code: string, url: string, show = false) => {
 export const f_openUrl = async (url: string) => {
   return executeFunction('openUrl', url);
 };
+/**
+ * export const setConfig = (key: string, value: string) => {
+ */
+export const f_setConfig = async (key: string, value: string) => {
+  return executeFunction('setConfig', key, value);
+};
+/**
+ * export const selectPathOrFile = async (
+ *   properties: 'openFile' | 'openDirectory' | 'all' = 'all',
+ *   defaultPath: string
+ * )
+ */
+export const f_selectPathOrFile = async (
+  properties: 'openFile' | 'openDirectory' | 'all' = 'all',
+  defaultPath: string
+) => {
+  return executeFunction('selectPathOrFile', properties, defaultPath);
+};

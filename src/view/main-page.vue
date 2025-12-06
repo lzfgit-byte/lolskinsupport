@@ -1,10 +1,10 @@
-<template xmlns="http://www.w3.org/1999/html">
+<template>
   <LolskinMain></LolskinMain>
   <FloatButtonGroup :handle-draw-open="handleDrawOpen"></FloatButtonGroup>
   <a-drawer
     v-model:open="drawerOpen"
     placement="right"
-    width="60vw"
+    width="70vw"
     :header-style="{ display: 'none' }"
   >
     <div h-85vh overflow-auto w-full m-t-4 p-t-2>
@@ -17,8 +17,12 @@
 
         皮肤存储路径：
         {{ skinPath }}
-        <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
-        <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button>
+        <a-space>
+          <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
+          <!--          <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button> -->
+          <a-button size="small" @click="setConfigPath(SKIN_PATH, skinPath)">设置文件地址</a-button>
+        </a-space>
+
         <br /><br />
         皮肤最后更新时间：{{ updateData }}
         <a-button @click="f_openUrl('https://github.com/Alban1911/LeagueSkins')">
@@ -26,30 +30,54 @@
         </a-button>
         <br /><br />
         游戏路径：{{ gamePath }}
-        <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
-        <a-button size="small" @click="f_removePath(gamePath)">删除文件路径</a-button>
+        <a-space>
+          <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
+          <a-button size="small" @click="setConfigPath(GAME_PATH, gamePath)">设置文件地址</a-button>
+        </a-space>
         <br /><br />
         installedPath路径：{{ installedPath }}
-        <a-button size="small" @click="f_openPath(installedPath)">删除文进路径</a-button>
-        <a-button size="small" @click="f_removePath(installedPath)">删除文件路径</a-button>
+        <a-space>
+          <a-button size="small" @click="f_openPath(installedPath)">打开文件路径</a-button>
+          <a-button size="small" danger @click="f_removePath(installedPath)">删除文件路径</a-button>
+          <a-button size="small" @click="setConfigPath(INSTALLED_PATH, installedPath)">
+            设置文件地址
+          </a-button>
+        </a-space>
         <br /><br />
         overlay路径：{{ overlayPath }}
-        <a-button size="small" @click="f_openPath(overlayPath)">打开文件路径</a-button>
-        <a-button size="small" @click="f_removePath(overlayPath)">删除文件路径</a-button>
+        <a-space>
+          <a-button size="small" @click="f_openPath(overlayPath)">打开文件路径</a-button>
+          <a-button size="small" danger @click="f_removePath(overlayPath)">删除文件路径</a-button>
+          <a-button size="small" @click="setConfigPath(OVERLAY_PATH, overlayPath)">
+            设置文件地址
+          </a-button>
+        </a-space>
         <br /><br />
         overlayConfig路径：{{ overlayConfigPath }}
-        <a-button size="small" @click="f_openPath(overlayConfigPath)">打开文件路径</a-button>
-        <a-button size="small" @click="f_removePath(overlayConfigPath)">删除文件路径</a-button>
+        <a-space>
+          <a-button size="small" @click="f_openPath(overlayConfigPath)">打开文件路径</a-button>
+          <!--          <a-button size="small" @click="f_removePath(overlayConfigPath)">删除文件路径</a-button> -->
+          <a-button size="small" @click="setConfigPath(OVERLAY_CONFIG_PATH, overlayConfigPath)">
+            设置文件地址
+          </a-button>
+        </a-space>
         <br /><br />
         toolsPath路径：{{ toolsPath }}
-        <a-button size="small" @click="f_openPath(toolsPath)">打开文进路径</a-button>
-        <a-button size="small" @click="f_removePath(toolsPath)">删除文件路径</a-button>
+        <a-space>
+          <a-button size="small" @click="f_openPath(toolsPath)">打开文进路径</a-button>
+          <!--          <a-button size="small" @click="f_removePath(toolsPath)">删除文件路径</a-button> -->
+          <a-button size="small" @click="setConfigPath(MOD_TOOLS_PATH, toolsPath)">
+            设置文件地址
+          </a-button>
+        </a-space>
         <br /><br />
         lcuState：{{ lcuState }}<br /><br />
 
         <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
         <br /><br />
         <a-button size="small" @click="testNotify">测试通知</a-button>
+        <br /><br />
+        <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
         <br /><br />
       </transition-group>
     </div>
@@ -58,6 +86,15 @@
 <script setup lang="ts">
   import { useRoute } from 'vue-router';
   import { onMounted, ref } from 'vue';
+  import {
+    GAME_PATH,
+    HERO_SKIN,
+    INSTALLED_PATH,
+    MOD_TOOLS_PATH,
+    OVERLAY_CONFIG_PATH,
+    OVERLAY_PATH,
+    SKIN_PATH,
+  } from '@ghs/constant';
   import FloatButtonGroup from '@/view/components/float-button-group.vue';
   import useFeature from '@/view/hook/use-feature';
   import LolskinMain from '@/view/lolskin/lolskin-main.vue';
@@ -69,15 +106,16 @@
     f_removePath,
     f_requestHtmlByWindows,
     f_request_string_get,
+    f_selectPathOrFile,
+    f_setConfig,
     f_winGetData,
   } from '@/utils/business';
-  import http from '@/utils/http';
 
   const route = useRoute();
   const updateData = ref('');
   const { skinPath, gamePath, toolsPath, overlayPath, overlayConfigPath, installedPath, lcuState } =
     useGlobalState();
-  const { handleDrawOpen, drawerOpen } = useFeature();
+  const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const testSlideWin = () => {
     f_checkCanAutoConfirm({
       title: '提示',
@@ -107,6 +145,15 @@
     ).then((res: any) => {
       updateData.value = JSON.parse(res)?.pushed_at;
     });
+  };
+  const setConfigPath = async (key: string, dpath) => {
+    const path = await f_selectPathOrFile('openDirectory', dpath);
+    await f_setConfig(key, path);
+    await loadFilePath();
+  };
+  const deleteSkinCache = () => {
+    f_removePath(installedPath.value);
+    f_removePath(overlayPath.value);
   };
   onMounted(() => {
     getSkinUpdate();

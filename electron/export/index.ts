@@ -1,6 +1,7 @@
 import * as Path from 'node:path';
 import path from 'node:path';
 import fs from 'node:fs';
+import { dialog, shell } from 'electron';
 import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
 import {
   GAME_PATH,
@@ -12,7 +13,6 @@ import {
   SKIN_PATH,
 } from '@ghs/constant';
 
-import { shell } from 'electron';
 import type { ShowSliderConfirmType } from '@ghs/constant';
 import {
   configPath,
@@ -26,6 +26,7 @@ import {
 } from '../const';
 import { MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
+import { lcuConnector } from '../http/lcuConnector';
 
 export * from '../http';
 
@@ -257,10 +258,12 @@ export const removePath = (path_: string) => {
       fs.rmdirSync(path.dirname(normalized));
     } else {
       // 如果是目录，直接打开
-      fs.rmdirSync(normalized);
+      modToolsWrapper.ensureCleanDirectoryWithRetry(normalized);
     }
   } catch (err) {
     console.error('路径不存在或无法访问:', err);
+    MessageUtil.error(`删除失败${err.message}`);
+    return;
   }
   MessageUtil.success('删除成功');
 };
@@ -287,4 +290,39 @@ export const showToast = async (msg: string) => {
     height: 80,
     delay: 3000,
   });
+};
+export const selectPathOrFile = async (
+  properties: 'openFile' | 'openDirectory' | 'all' = 'all',
+  defaultPath: string
+) => {
+  const cp = properties === 'all' ? ['openFile', 'openDirectory'] : [properties];
+  const result = await dialog.showOpenDialog({
+    properties: cp as any, // 允许选择文件或文件夹
+    defaultPath,
+  });
+
+  if (result.canceled) {
+    return null;
+  }
+
+  const selectedPath = result.filePaths[0];
+  return selectedPath;
+  // const stats = fs.statSync(selectedPath);
+  //
+  // if (stats.isDirectory()) {
+  //   // 如果是文件夹，读取内容
+  //   const files = fs.readdirSync(selectedPath);
+  //   return {
+  //     type: 'directory',
+  //     path: selectedPath,
+  //     files,
+  //   };
+  // } else {
+  //   // 如果是文件，返回文件信息
+  //   return {
+  //     type: 'file',
+  //     path: selectedPath,
+  //     name: path.basename(selectedPath),
+  //   };
+  // }
 };
