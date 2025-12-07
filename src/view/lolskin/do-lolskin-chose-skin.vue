@@ -44,7 +44,7 @@
           v-for="item in skinChild"
           :key="item.skinId"
           width="25"
-          :src="item.chromaImg"
+          :src="getSkinChromaUrl(item)"
           :title="item.name"
           @click="handleChoseSkin(item)"
         />
@@ -59,21 +59,19 @@
   import { Modal, message } from 'ant-design-vue';
   import { useRouter } from 'vue-router';
   import http from '@/utils/http';
-  import type { heroInfo, skinInfo } from '@/type/type';
+  import type { skinInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
   import {
-    f_checkCanAutoConfirm,
     f_checkHasSkins,
     f_confirmChoseSkin,
     f_getHeroChoseSkin,
     f_loadSkin,
     f_setHeroChoseSkin,
   } from '@/utils/business';
-  import { notify } from '@/utils/kit-utils';
 
   const visible = ref(false);
   let router = useRouter();
-  const { heroId, autoChose } = useGlobalState();
+  const { heroId, autoChose, heros } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
   const allSkins = ref<skinInfo[]>();
   const choseSkinId = ref('');
@@ -100,6 +98,9 @@
     return skins_.value.filter((item_) => choseSkinId.value === item_.chromasBelongId);
   }) as any;
 
+  const getSkinChromaUrl = (item: skinInfo) => {
+    return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-chroma-images/${heroId.value}/${item.skinId}.png`;
+  };
   const getSkins = () => {
     const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId.value}.js`;
     if (!heroId.value) {
@@ -116,13 +117,14 @@
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
         if (autoChose.value && !choseSkinId.value?.endsWith('00')) {
-          f_confirmChoseSkin(`选择皮肤【${choseSkin.value?.name}】`, choseSkin.value.mainImg).then(
-            (res) => {
-              if (res) {
-                confirm_();
-              }
+          f_confirmChoseSkin(
+            `选择皮肤【${choseSkin.value?.name}】`,
+            choseSkin.value.mainImg || getSkinChromaUrl(choseSkin.value)
+          ).then((res) => {
+            if (res) {
+              confirm_();
             }
-          );
+          });
         }
       });
   };

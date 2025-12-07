@@ -10,7 +10,7 @@ export interface skinInfo {
 }
 
 export interface heroInfo {
-  heroId?: number;
+  heroId?: string;
   name?: string; // 黑暗之女
   title?: string; // 安妮
   alias?: string; // Annie
@@ -18,7 +18,8 @@ export interface heroInfo {
 }
 
 export interface mainHeroInfo {
-  heroId?: number;
+  heroId?: string;
+  heroAlias?: string;
   instance_id?: string;
   name?: string; // 黑暗之女
   title?: string; // 安妮

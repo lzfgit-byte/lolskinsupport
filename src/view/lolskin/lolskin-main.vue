@@ -24,14 +24,15 @@
   import bus from '@/utils/bus';
 
   const mainIMg = ref<mainHeroInfo[]>();
-  let heros: mainHeroInfo[] = [];
-  const { heroId, autoChose } = useGlobalState();
+  let heros_: mainHeroInfo[] = [];
+  const { heroId, autoChose, heros } = useGlobalState();
   let router = useRouter();
   http.axios
     .get('https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js')
     .then((res: any) => {
       mainIMg.value = res.hero;
-      heros = res.hero;
+      heros_ = res.hero;
+      heros.value = res.hero;
     });
   const handlerClickHero = (heroId_: string) => {
     heroId.value = heroId_;
@@ -40,7 +41,7 @@
   const searchValue = ref();
   watchEffect(() => {
     console.log(searchValue.value);
-    mainIMg.value = heros.filter((item) => item.keywords.indexOf(searchValue.value) > -1);
+    mainIMg.value = heros_.filter((item) => item.keywords.indexOf(searchValue.value) > -1);
   });
   onMounted(() => {
     bus.off('champion-selected');

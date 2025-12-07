@@ -118,7 +118,7 @@ export const confirmHtml = `
   <div class="notification-content">
     <div class="title">$title</div>
     <div class="message">$message</div>
-    <img width="250px" src="$imageSrc" id="hImg">
+    <img  style="max-height: 80%;max-width: 100%" src="$imageSrc" id="hImg">
   </div>
   <div class="progress-bar" id="progress-bar">
     <div class="progress-fill" id="progress-fill"></div>
