@@ -24,6 +24,7 @@ export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFun
     show: false,
     frame: false,
     alwaysOnTop: true,
+    skipTaskbar: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
