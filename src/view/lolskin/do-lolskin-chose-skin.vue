@@ -73,6 +73,7 @@
   let router = useRouter();
   const { heroId, autoChose, heros } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
+  let skinIdImg = {};
   const allSkins = ref<skinInfo[]>();
   const choseSkinId = ref('');
   const choseSkin = computed(() => {
@@ -99,7 +100,9 @@
   }) as any;
 
   const getSkinChromaUrl = (item: skinInfo) => {
-    return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-chroma-images/${heroId.value}/${item.skinId}.png`;
+    const a = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-chroma-images/${heroId.value}/${item.skinId}.png`;
+    skinIdImg[item.skinId] = a;
+    return a;
   };
   const getSkins = () => {
     const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId.value}.js`;
@@ -152,7 +155,10 @@
       message.warn('请先下载英雄皮肤');
       return;
     }
-    f_loadSkin(heroId.value, choseSkin.value.skinId);
+    f_loadSkin(heroId.value, choseSkin.value.skinId, getSkinImage());
+  };
+  const getSkinImage = () => {
+    return skinIdImg[choseSkin.value.skinId] || choseSkin.value.mainImg;
   };
   const preChose = async () => {
     const res = await f_checkHasSkins(heroId.value, choseSkinId.value);

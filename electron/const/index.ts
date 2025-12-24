@@ -22,3 +22,4 @@ export const defaultOverlayPath = path.join(temp_dir, 'overlays');
 export const defaultGamePath = 'E:\\game\\Riot Games\\League of Legends\\Game';
 export const defaultModToolsPath = path.join(temp_dir, 'mod-tools\\mod-tools.exe');
 export const defaultInstalledPath = path.join(temp_dir, 'installed');
+export const SKIN_IMAGE_KEY = 'SKIN_IMAGE';

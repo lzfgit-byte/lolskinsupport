@@ -37,8 +37,8 @@ export const f_getModToolsPath = async (): Promise<string> => {
 /**
  * export const loadSkin = async (...args: string[]) => {
  */
-export const f_loadSkin = async (heroId: string, skinId: string) => {
-  return executeFunction('loadSkin', heroId, skinId);
+export const f_loadSkin = async (heroId: string, skinId: string, skinImage: string) => {
+  return executeFunction('loadSkin', heroId, skinId, skinImage);
 };
 /**
  * export const getInstalledPath = () => {
@@ -141,4 +141,22 @@ export const f_selectPathOrFile = async (
   defaultPath: string
 ) => {
   return executeFunction('selectPathOrFile', properties, defaultPath);
+};
+/**
+ * export const loadSkins = async () => {
+ */
+export const f_loadSkins = async () => {
+  return executeFunction('loadSkins');
+};
+/**
+ * export const getSkinImage = (skinId: string) => {
+ */
+export const f_getSkinImage = async (skinId: string) => {
+  return executeFunction('getSkinImage', skinId);
+};
+/**
+ * export const getAllLoadSkins = () => {
+ */
+export const f_getAllLoadSkins = async () => {
+  return executeFunction('getAllLoadSkins');
 };

@@ -15,6 +15,7 @@ import {
 
 import type { ShowSliderConfirmType } from '@ghs/constant';
 import {
+  SKIN_IMAGE_KEY,
   configPath,
   defaultGamePath,
   defaultInstalledPath,
@@ -83,6 +84,17 @@ export const getHeroChoseSkin = (heroId: string) => {
   const d = JSON.parse(data);
   return d[heroId] || '';
 };
+export const setSkinImage = (skinId: string, skinImage: string) => {
+  const data = readConfigOrDefault(SKIN_IMAGE_KEY, '{}');
+  const d = JSON.parse(data);
+  d[skinId] = skinImage;
+  setConfig(SKIN_IMAGE_KEY, JSON.stringify(d, null, 2));
+};
+export const getSkinImage = (skinId: string) => {
+  const data = readConfigOrDefault(SKIN_IMAGE_KEY, '{}');
+  const d = JSON.parse(data);
+  return d[skinId] || '';
+};
 export const getModToolsPath = () => {
   return readConfigOrDefault(MOD_TOOLS_PATH, defaultModToolsPath);
 };
@@ -146,7 +158,7 @@ export const checkHasSkins = (heroId: string, skinId: string) => {
  * @param heroId
  * @param skinId
  */
-export const loadSkin = async (heroId: string, skinId: string) => {
+export const loadSkin = async (heroId: string, skinId: string, skinImage: string) => {
   const command = getModToolsPath();
   if (!existsSync(command)) {
     MessageUtil.error(`${command} not exists`);
@@ -158,6 +170,7 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     return;
   }
   setHeroChoseSkin(heroId, skinId);
+  setSkinImage(skinId, skinImage);
   const uniqueId = `${heroId}_${skinId}`;
   const overlayPath = `${getOverlayPath()}\\${uniqueId}`;
   const overlayPathConfig = `${getOverlayConfigPath()}`;
@@ -221,6 +234,98 @@ export const loadSkin = async (heroId: string, skinId: string) => {
     });
   showToast(`runoverlay --${uniqueId}--成功`);
 };
+function copyRecursive(src: string, dest: string) {
+  const stat = fs.statSync(src);
+
+  // 如果是文件，直接复制到 dest
+  if (stat.isFile()) {
+    const destFile = path.join(dest, path.basename(src));
+    fs.copyFileSync(src, destFile);
+    return;
+  }
+
+  // 如果是文件夹，复制其内部内容（不复制 src 目录本身）
+  if (stat.isDirectory()) {
+    const items = fs.readdirSync(src);
+
+    for (const item of items) {
+      const itemSrc = path.join(src, item);
+      const itemStat = fs.statSync(itemSrc);
+
+      if (itemStat.isFile()) {
+        // 文件 → 直接复制到 dest
+        const destFile = path.join(dest, item);
+        fs.copyFileSync(itemSrc, destFile);
+      } else if (itemStat.isDirectory()) {
+        // 子目录 → 在 dest 下创建同名目录
+        const newDestDir = path.join(dest, item);
+        if (!fs.existsSync(newDestDir)) {
+          fs.mkdirSync(newDestDir);
+        }
+        // 递归复制子目录内容
+        copyRecursive(itemSrc, newDestDir);
+      }
+    }
+  }
+}
+
+export const loadSkins = async () => {
+  const command = getModToolsPath();
+  const overlayPath = getOverlayPath();
+  const overlayPathAll = path.join(overlayPath, 'all');
+  const overlayPathConfig = getOverlayConfigPath();
+  const gamePath = getGamePath();
+
+  // 确保 all 是目录，而不是文件
+  if (!fs.existsSync(overlayPathAll)) {
+    fs.mkdirSync(overlayPathAll, { recursive: true });
+  }
+
+  // 清空 all 目录
+  emptyDir(overlayPathAll);
+  // 获取同级目录（排除 all）
+  const folders = fs
+    .readdirSync(overlayPath, { withFileTypes: true })
+    .filter((dirent) => dirent.isDirectory() && dirent.name !== 'all')
+    .map((dirent) => dirent.name);
+
+  // 提取 skinId
+  const skinIds = folders.map((name) => name.split('_')[1]);
+  // 复制每个文件夹内容到 all
+  folders.forEach((folder) => {
+    const folderPath = path.join(overlayPath, folder);
+    copyRecursive(folderPath, overlayPathAll);
+  });
+
+  // 写入配置
+  fs.writeFileSync(overlayPathConfig, JSON.stringify(skinIds), {
+    encoding: 'utf-8',
+    flag: 'w',
+  });
+
+  await modToolsWrapper.forceKillModTools();
+  await modToolsWrapper
+    .runOverlay(command, [
+      'runoverlay',
+      Path.normalize(overlayPathAll),
+      Path.normalize(overlayPathConfig),
+      `--game:${Path.normalize(gamePath)}`,
+      '--opts:none',
+    ])
+    .catch((msg) => {
+      MessageUtil.error(msg);
+    });
+};
+export const getAllLoadSkins = () => {
+  const overlayPath = getOverlayPath();
+  const folders = fs
+    .readdirSync(overlayPath, { withFileTypes: true })
+    .filter((dirent) => dirent.isDirectory() && dirent.name !== 'all')
+    .map((dirent) => dirent.name);
+
+  // 提取 skinId
+  return folders.map((name) => name.split('_')[1]);
+};
 export const checkCanAutoConfirm = (opt: ShowSliderConfirmType) => {
   return new Promise((resolve) => {
     showSliderConfirm(
@@ -270,9 +375,17 @@ export const removePath = (path_: string) => {
 export const openUrl = (url: string) => {
   shell.openExternal(url);
 };
-export const emptyPah = (path_: string) => {
-  modToolsWrapper.ensureCleanDirectoryWithRetry(path_);
-};
+function emptyDir(dir: string) {
+  if (!fs.existsSync(dir)) {
+    return;
+  }
+
+  for (const item of fs.readdirSync(dir)) {
+    const full = path.join(dir, item);
+    fs.rmSync(full, { recursive: true, force: true });
+  }
+}
+
 export const confirmChoseSkin = async (msg: string, imageSrc: string) => {
   return checkCanAutoConfirm({
     title: '提示',
@@ -307,22 +420,4 @@ export const selectPathOrFile = async (
 
   const selectedPath = result.filePaths[0];
   return selectedPath;
-  // const stats = fs.statSync(selectedPath);
-  //
-  // if (stats.isDirectory()) {
-  //   // 如果是文件夹，读取内容
-  //   const files = fs.readdirSync(selectedPath);
-  //   return {
-  //     type: 'directory',
-  //     path: selectedPath,
-  //     files,
-  //   };
-  // } else {
-  //   // 如果是文件，返回文件信息
-  //   return {
-  //     type: 'file',
-  //     path: selectedPath,
-  //     name: path.basename(selectedPath),
-  //   };
-  // }
 };

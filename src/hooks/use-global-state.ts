@@ -16,6 +16,7 @@ const installedPath = ref('');
 const autoChose = ref(true);
 const lcuState = ref(false);
 const heros = ref<mainHeroInfo[]>();
+const loadSkinIds = ref([]);
 
 export default () => ({
   loading,
@@ -33,4 +34,5 @@ export default () => ({
   lcuState,
   heroAlias,
   heros,
+  loadSkinIds,
 });

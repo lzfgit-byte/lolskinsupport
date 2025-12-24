@@ -79,6 +79,16 @@
         <br /><br />
         <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
         <br /><br />
+        <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
+        {{ loadSkinIds }}
+        <img
+          v-for="item in skinImages"
+          :key="item"
+          width="200px"
+          style="margin: 10px"
+          :src="item"
+        />
+        <br /><br />
       </transition-group>
     </div>
   </a-drawer>
@@ -95,12 +105,16 @@
     OVERLAY_PATH,
     SKIN_PATH,
   } from '@ghs/constant';
+  import { watch, watchEffect } from 'vue-demi';
   import FloatButtonGroup from '@/view/components/float-button-group.vue';
   import useFeature from '@/view/hook/use-feature';
   import LolskinMain from '@/view/lolskin/lolskin-main.vue';
   import useGlobalState from '@/hooks/use-global-state';
   import {
     f_checkCanAutoConfirm,
+    f_getAllLoadSkins,
+    f_getSkinImage,
+    f_loadSkins,
     f_openPath,
     f_openUrl,
     f_removePath,
@@ -113,8 +127,16 @@
 
   const route = useRoute();
   const updateData = ref('');
-  const { skinPath, gamePath, toolsPath, overlayPath, overlayConfigPath, installedPath, lcuState } =
-    useGlobalState();
+  const {
+    skinPath,
+    gamePath,
+    toolsPath,
+    overlayPath,
+    overlayConfigPath,
+    installedPath,
+    lcuState,
+    loadSkinIds,
+  } = useGlobalState();
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const testSlideWin = () => {
     f_checkCanAutoConfirm({
@@ -154,7 +176,22 @@
   const deleteSkinCache = () => {
     f_removePath(installedPath.value);
     f_removePath(overlayPath.value);
+    getAllChoseSkin();
   };
+  const skinImages = ref([]);
+  const getAllChoseSkin = async () => {
+    loadSkinIds.value = await f_getAllLoadSkins();
+    loadSkinIds.value.forEach((item) => {
+      f_getSkinImage(item).then((res) => {
+        skinImages.value.push(res);
+      });
+    });
+  };
+  watchEffect(() => {
+    if (drawerOpen.value) {
+      getAllChoseSkin();
+    }
+  });
   onMounted(() => {
     getSkinUpdate();
   });
