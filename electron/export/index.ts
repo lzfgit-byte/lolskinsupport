@@ -90,6 +90,9 @@ export const setSkinImage = (skinId: string, skinImage: string) => {
   d[skinId] = skinImage;
   setConfig(SKIN_IMAGE_KEY, JSON.stringify(d, null, 2));
 };
+export const clearSkinImage = () => {
+  setConfig(SKIN_IMAGE_KEY, '{}');
+};
 export const getSkinImage = (skinId: string) => {
   const data = readConfigOrDefault(SKIN_IMAGE_KEY, '{}');
   const d = JSON.parse(data);

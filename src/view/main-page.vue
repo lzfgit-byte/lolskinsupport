@@ -112,6 +112,7 @@
   import useGlobalState from '@/hooks/use-global-state';
   import {
     f_checkCanAutoConfirm,
+    f_clearSkinImage,
     f_getAllLoadSkins,
     f_getSkinImage,
     f_loadSkins,
@@ -176,6 +177,7 @@
   const deleteSkinCache = () => {
     f_removePath(installedPath.value);
     f_removePath(overlayPath.value);
+    f_clearSkinImage();
     getAllChoseSkin();
   };
   const skinImages = ref([]);

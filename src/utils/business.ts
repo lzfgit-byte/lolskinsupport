@@ -160,3 +160,9 @@ export const f_getSkinImage = async (skinId: string) => {
 export const f_getAllLoadSkins = async () => {
   return executeFunction('getAllLoadSkins');
 };
+/**
+ * export const clearSkinImage = () => {
+ */
+export const f_clearSkinImage = async () => {
+  return executeFunction('clearSkinImage');
+};
