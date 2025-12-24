@@ -223,7 +223,7 @@ export const loadSkin = async (heroId: string, skinId: string, skinImage: string
   } else {
     showToast(`mkoverlay --${uniqueId}--成功`);
   }
-
+  fs.writeFileSync(overlayPathConfig, JSON.stringify([skinId]), { flag: 'w', encoding: 'utf-8' });
   await modToolsWrapper
     .runOverlay(command, [
       'runoverlay',
