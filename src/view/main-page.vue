@@ -80,7 +80,6 @@
         <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
         <br /><br />
         <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
-        {{ loadSkinIds }}
         <img
           v-for="item in skinImages"
           :key="item"

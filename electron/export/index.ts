@@ -134,6 +134,15 @@ export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);
   return existsSync(skinPath);
 };
+const useConstData = (heroId: string, skinId: string) => {
+  const command = getModToolsPath();
+  const uniqueId = `${heroId}_${skinId}`;
+  const overlayPath = `${getOverlayPath()}\\${uniqueId}`;
+  const overlayPathConfig = `${getOverlayConfigPath()}`;
+  const gamePath = getGamePath();
+  const installedPath = `${getInstalledPath()}\\${uniqueId}`;
+  return { command, uniqueId, overlayPath, overlayPathConfig, gamePath, installedPath };
+};
 /**
  * mod-tools.exe
  * import
@@ -158,11 +167,30 @@ export const checkHasSkins = (heroId: string, skinId: string) => {
  * "C:\\Users\\18074\\AppData\\Roaming\\bocchi\\presets.json"
  * --game:"E:\\game\\Riot Games\\League of Legends\\Game"
  * --opts:none
- * @param heroId
- * @param skinId
  */
 export const loadSkin = async (heroId: string, skinId: string, skinImage: string) => {
-  const command = getModToolsPath();
+  await mkOverlay(heroId, skinId, skinImage);
+  const { command, uniqueId, overlayPath, overlayPathConfig, gamePath } = useConstData(
+    heroId,
+    skinId
+  );
+  fs.writeFileSync(overlayPathConfig, JSON.stringify([skinId]), { flag: 'w', encoding: 'utf-8' });
+  await modToolsWrapper
+    .runOverlay(command, [
+      'runoverlay',
+      Path.normalize(overlayPath),
+      Path.normalize(overlayPathConfig),
+      `--game:${Path.normalize(gamePath)}`,
+      '--opts:none',
+    ])
+    .catch((msg) => {
+      MessageUtil.error(msg);
+    });
+  showToast(`runoverlay --${uniqueId}--成功`);
+};
+
+export const mkOverlay = async (heroId: string, skinId: string, skinImage: string) => {
+  const { command, uniqueId, overlayPath, gamePath, installedPath } = useConstData(heroId, skinId);
   if (!existsSync(command)) {
     MessageUtil.error(`${command} not exists`);
     return;
@@ -174,11 +202,6 @@ export const loadSkin = async (heroId: string, skinId: string, skinImage: string
   }
   setHeroChoseSkin(heroId, skinId);
   setSkinImage(skinId, skinImage);
-  const uniqueId = `${heroId}_${skinId}`;
-  const overlayPath = `${getOverlayPath()}\\${uniqueId}`;
-  const overlayPathConfig = `${getOverlayConfigPath()}`;
-  const gamePath = getGamePath();
-  const installedPath = `${getInstalledPath()}\\${uniqueId}`;
   await modToolsWrapper.forceKillModTools();
   if (!existsSync(installedPath)) {
     await modToolsWrapper
@@ -223,19 +246,6 @@ export const loadSkin = async (heroId: string, skinId: string, skinImage: string
   } else {
     showToast(`mkoverlay --${uniqueId}--成功`);
   }
-  fs.writeFileSync(overlayPathConfig, JSON.stringify([skinId]), { flag: 'w', encoding: 'utf-8' });
-  await modToolsWrapper
-    .runOverlay(command, [
-      'runoverlay',
-      Path.normalize(overlayPath),
-      Path.normalize(overlayPathConfig),
-      `--game:${Path.normalize(gamePath)}`,
-      '--opts:none',
-    ])
-    .catch((msg) => {
-      MessageUtil.error(msg);
-    });
-  showToast(`runoverlay --${uniqueId}--成功`);
 };
 function copyRecursive(src: string, dest: string) {
   const stat = fs.statSync(src);

@@ -9,6 +9,9 @@
     <div class="confirm" style="top: 50px" @click="preChose">
       <span>提前选择[{{ choseSkin?.name }}]</span>
     </div>
+    <div class="confirm" style="top: 88px" @click="doMkOverlay">
+      <span>mkoverlay[{{ choseSkin?.name }}]</span>
+    </div>
     <div class="skin-container" h-full w-full pos-relative box-border>
       <div class="skin-more">
         <div h-full style="width: 430px">
@@ -66,6 +69,7 @@
     f_confirmChoseSkin,
     f_getHeroChoseSkin,
     f_loadSkin,
+    f_mkOverlay,
     f_setHeroChoseSkin,
   } from '@/utils/business';
 
@@ -147,7 +151,7 @@
     if (!res) {
       message.warn('请先下载英雄皮肤');
     }
-    preChose();
+    await preChose();
   };
   const confirm_ = async () => {
     const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
@@ -155,7 +159,15 @@
       message.warn('请先下载英雄皮肤');
       return;
     }
-    f_loadSkin(heroId.value, choseSkin.value.skinId, getSkinImage());
+    await f_loadSkin(heroId.value, choseSkin.value.skinId, getSkinImage());
+  };
+  const doMkOverlay = async () => {
+    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
+    if (!res) {
+      message.warn('请先下载英雄皮肤');
+      return;
+    }
+    await f_mkOverlay(heroId.value, choseSkin.value.skinId, getSkinImage());
   };
   const getSkinImage = () => {
     return skinIdImg[choseSkin.value.skinId] || choseSkin.value.mainImg;
