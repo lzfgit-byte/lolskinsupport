@@ -342,6 +342,7 @@ export const loadSkins = async () => {
     .catch((msg) => {
       MessageUtil.error(msg);
     });
+  showToast(`runoverlay --all--成功`);
 };
 export const getAllLoadSkins = () => {
   const overlayPath = getOverlayPath();
