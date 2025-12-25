@@ -72,14 +72,13 @@
         </a-space>
         <br /><br />
         lcuState：{{ lcuState }}<br /><br />
-
-        <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
-        <br /><br />
-        <a-button size="small" @click="testNotify">测试通知</a-button>
-        <br /><br />
-        <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
-        <br /><br />
-        <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
+        <a-space>
+          <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
+          <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
+          <a-button size="small" @click="testNotify">测试通知</a-button>
+          <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
+        </a-space>
+        <br />
         <img
           v-for="item in skinImages"
           :key="item"
@@ -181,6 +180,8 @@
   };
   const skinImages = ref([]);
   const getAllChoseSkin = async () => {
+    skinImages.value = [];
+    loadSkinIds.value = [];
     loadSkinIds.value = await f_getAllLoadSkins();
     loadSkinIds.value.forEach((item) => {
       f_getSkinImage(item).then((res) => {

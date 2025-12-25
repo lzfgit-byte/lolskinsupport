@@ -90,8 +90,9 @@ export const setSkinImage = (skinId: string, skinImage: string) => {
   d[skinId] = skinImage;
   setConfig(SKIN_IMAGE_KEY, JSON.stringify(d, null, 2));
 };
-export const clearSkinImage = () => {
+export const clearSkinImage = async () => {
   setConfig(SKIN_IMAGE_KEY, '{}');
+  await modToolsWrapper.forceKillModTools();
 };
 export const getSkinImage = (skinId: string) => {
   const data = readConfigOrDefault(SKIN_IMAGE_KEY, '{}');
@@ -303,7 +304,20 @@ export const loadSkins = async () => {
     .map((dirent) => dirent.name);
 
   // 提取 skinId
-  const skinIds = folders.map((name) => name.split('_')[1]);
+  const setHeroId = new Set();
+  const skinIds = folders.map((name) => {
+    const nArr = name.split('_');
+    setHeroId.add(nArr[0]);
+    return nArr[1];
+  });
+  if (setHeroId.size !== skinIds.length) {
+    MessageUtil.error('相同英雄皮肤重复');
+    return;
+  }
+  if (skinIds.length === 0) {
+    MessageUtil.error('没有皮肤');
+    return;
+  }
   // 复制每个文件夹内容到 all
   folders.forEach((folder) => {
     const folderPath = path.join(overlayPath, folder);
@@ -383,7 +397,7 @@ export const removePath = (path_: string) => {
     MessageUtil.error(`删除失败${err.message}`);
     return;
   }
-  MessageUtil.success('删除成功');
+  MessageUtil.success(`删除成功:${path_}`);
 };
 export const openUrl = (url: string) => {
   shell.openExternal(url);
