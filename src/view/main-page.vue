@@ -25,7 +25,7 @@
 
         <br /><br />
         皮肤最后更新时间：{{ updateData }}
-        <a-button @click="f_openUrl('https://github.com/Alban1911/LeagueSkins')">
+        <a-button size="small" @click="f_openUrl('https://github.com/Alban1911/LeagueSkins')">
           打开连接地址
         </a-button>
         <br /><br />
@@ -68,6 +68,12 @@
           <!--          <a-button size="small" @click="f_removePath(toolsPath)">删除文件路径</a-button> -->
           <a-button size="small" @click="setConfigPath(MOD_TOOLS_PATH, toolsPath)">
             设置文件地址
+          </a-button>
+          <a-button
+            size="small"
+            @click="f_openUrl('https://github.com/LeagueToolkit/cslol-manager')"
+          >
+            打开url地址
           </a-button>
         </a-space>
         <br /><br />
