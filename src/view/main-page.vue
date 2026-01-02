@@ -66,7 +66,7 @@
         <a-space>
           <a-button size="small" @click="f_openPath(toolsPath)">打开文进路径</a-button>
           <!--          <a-button size="small" @click="f_removePath(toolsPath)">删除文件路径</a-button> -->
-          <a-button size="small" @click="setConfigPath(MOD_TOOLS_PATH, toolsPath)">
+          <a-button size="small" @click="setConfigFilePath(MOD_TOOLS_PATH, toolsPath)">
             设置文件地址
           </a-button>
           <a-button
@@ -175,6 +175,11 @@
   };
   const setConfigPath = async (key: string, dpath) => {
     const path = await f_selectPathOrFile('openDirectory', dpath);
+    await f_setConfig(key, path);
+    await loadFilePath();
+  };
+  const setConfigFilePath = async (key: string, dpath) => {
+    const path = await f_selectPathOrFile('openFile', dpath);
     await f_setConfig(key, path);
     await loadFilePath();
   };
