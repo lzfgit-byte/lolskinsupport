@@ -1,7 +1,9 @@
 import * as Path from 'node:path';
 import path from 'node:path';
-import fs from 'node:fs';
+import fs, { appendFileSync } from 'node:fs';
+import { exec } from 'node:child_process';
 import { dialog, shell } from 'electron';
+import pidusage from 'pidusage';
 import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
 import {
   GAME_PATH,
@@ -25,7 +27,7 @@ import {
   defaultSkinPath,
   modToolsWrapper,
 } from '../const';
-import { MessageUtil } from '../utils/message';
+import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
 
@@ -449,3 +451,54 @@ export const selectPathOrFile = async (
   const selectedPath = result.filePaths[0];
   return selectedPath;
 };
+
+// 示例：监控某个进程（比如 PID=1234）
+
+// 获取所有进程 PID
+function getAllPids(callback) {
+  const platform = process.platform;
+  let cmd;
+
+  if (platform === 'win32') {
+    cmd = 'wmic process get ProcessId';
+  } else {
+    cmd = 'ps -eo pid';
+  }
+
+  exec(cmd, (err, stdout) => {
+    if (err) {
+      console.error('获取进程列表失败:', err);
+      return;
+    }
+    const pids = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^\d+$/.test(line)) // 只保留数字
+      .map(Number);
+
+    callback(pids);
+  });
+}
+
+// 监控所有进程
+function monitorAllProcesses() {
+  getAllPids(async (pids) => {
+    try {
+      const stats = await pidusage(pids);
+      for (const [pid, info] of Object.entries(stats)) {
+        // @ts-ignore
+        const cpuX = info.cpu.toFixed(2);
+        // @ts-ignore
+        const memoryX = (info.memory / 1024 / 1024).toFixed(2);
+        if (cpuX > 50) {
+          ensureFileSync('cpu.log');
+          appendFileSync('cpu.log', `PID: ${pid} CPU 使用率过高: ${cpuX}%\n`);
+        }
+      }
+    } catch (err) {
+      console.error('监控失败:', err);
+    }
+  });
+}
+
+setInterval(monitorAllProcesses, 1000);
