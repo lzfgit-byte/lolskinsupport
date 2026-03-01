@@ -3,15 +3,6 @@
     <div class="back" @click="back">
       <span>返回</span>
     </div>
-    <div class="confirm" @click="confirm_">
-      <span>确定[{{ choseSkin?.name }}]</span>
-    </div>
-    <div class="confirm" style="top: 50px" @click="preChose">
-      <span>提前选择[{{ choseSkin?.name }}]</span>
-    </div>
-    <div class="confirm" style="top: 88px" @click="doMkOverlay">
-      <span>mkoverlay[{{ choseSkin?.name }}]</span>
-    </div>
     <div class="skin-container" h-full w-full pos-relative box-border>
       <div class="skin-more">
         <div h-full style="width: 430px">
@@ -26,6 +17,7 @@
               :src="item.mainImg"
               :title="item.description"
               @click="handleChoseSkin(item)"
+              @dblclick="confirm_"
             />
             <div class="skinName" :title="item.name">{{ item.name }}</div>
           </div>
@@ -53,6 +45,17 @@
         />
       </div>
     </Modal>
+    <div pos-absolute h-20 flex style="bottom: 0; width: 100vw; justify-content: end">
+      <!--    <div class="confirm" style="top: 50px" @click="preChose"> -->
+      <!--      <span>提前选择[{{ choseSkin?.name }}]</span> -->
+      <!--    </div> -->
+      <div class="confirm" style="margin-right: 100px" @click="doMkOverlay">
+        <span>构建[{{ choseSkin?.name }}]overlay</span>
+      </div>
+      <div class="confirm" @click="confirm_">
+        <span>点击使用 [{{ choseSkin?.name }}] 皮肤</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -75,7 +78,7 @@
 
   const visible = ref(false);
   let router = useRouter();
-  const { heroId, autoChose, heros } = useGlobalState();
+  const { heroId, autoChose, heros, lcuState } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
   let skinIdImg = {};
   const allSkins = ref<skinInfo[]>();
@@ -123,7 +126,7 @@
       })
       .then((id) => {
         choseSkinId.value = id || allSkins.value[0].skinId;
-        if (autoChose.value && !choseSkinId.value?.endsWith('00')) {
+        if (lcuState.value && autoChose.value && !choseSkinId.value?.endsWith('00')) {
           f_confirmChoseSkin(
             `选择皮肤【${choseSkin.value?.name}】`,
             choseSkin.value.mainImg || getSkinChromaUrl(choseSkin.value)
@@ -179,7 +182,7 @@
       return;
     }
     await f_setHeroChoseSkin(heroId.value, choseSkinId.value);
-    message.success('已应用');
+    // message.success('已应用');
   };
   onMounted(() => {
     getSkins();
@@ -248,7 +251,9 @@
   }
 
   .confirm {
-    position: absolute;
+    display: inline;
+    position: relative;
+    margin-left: 10px;
     .btn_();
     width: auto;
     right: 20px;
