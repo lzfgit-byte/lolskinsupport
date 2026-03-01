@@ -45,11 +45,11 @@
         />
       </div>
     </Modal>
-    <div pos-absolute h-20 flex style="bottom: 0; width: 100vw; justify-content: end">
+    <div pos-absolute h-20 flex style="bottom: 0; width: auto; justify-content: end; right: 0">
       <!--    <div class="confirm" style="top: 50px" @click="preChose"> -->
       <!--      <span>提前选择[{{ choseSkin?.name }}]</span> -->
       <!--    </div> -->
-      <div class="confirm" style="margin-right: 100px" @click="doMkOverlay">
+      <div class="confirm" @click="doMkOverlay">
         <span>构建[{{ choseSkin?.name }}]overlay</span>
       </div>
       <div class="confirm" @click="confirm_">
