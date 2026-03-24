@@ -25,7 +25,7 @@
 
         <br /><br />
         皮肤最后更新时间：{{ updateData }}
-        <a-button size="small" @click="f_openUrl('https://github.com/Alban1911/LeagueSkins')">
+        <a-button size="small" @click="f_openUrl('https://github.com/Alban1911/RoseSkins')">
           打开连接地址
         </a-button>
         <br /><br />
@@ -167,7 +167,7 @@
         new Promise((resolve) => {
           resolve(document.getElementsByTagName('pre')[0].innerHTML);
         }))();`,
-      'https://api.github.com/repos/Alban1911/LeagueSkins',
+      'https://api.github.com/repos/Alban1911/RoseSkins',
       false
     ).then((res: any) => {
       updateData.value = JSON.parse(res)?.pushed_at;
