@@ -29,7 +29,8 @@ import {
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
-
+const idsPath = 'resources\\en\\skin_ids.json';
+let idsPathMap = {};
 export * from '../http';
 
 export const readConfig = () => {
@@ -126,11 +127,16 @@ export const findFile = (dir, targetFile) => {
   return null;
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
-  const foo = `${getSkinPath()}\\${heroId}\\${skinId}\\${skinId}.zip`;
-  if (existsSync(foo)) {
-    return foo;
+  if (idsPathMap[skinId]) {
+    return findFile(`${getSkinPath()}`, `${idsPathMap[skinId]}.zip`);
   }
-  return findFile(`${getSkinPath()}\\${heroId}`, `${skinId}.zip`);
+  let currentIdsPath = Path.join(getSkinPath(), idsPath);
+  if (!existsSync(currentIdsPath)) {
+    return null;
+  }
+  const idsStr = readFileSync(Path.join(getSkinPath(), idsPath), { encoding: 'utf-8' });
+  idsPathMap = JSON.parse(idsStr);
+  return findFile(`${getSkinPath()}`, `${idsPathMap[skinId]}.zip`);
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);

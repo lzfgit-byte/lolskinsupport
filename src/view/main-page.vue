@@ -167,7 +167,7 @@
         new Promise((resolve) => {
           resolve(document.getElementsByTagName('pre')[0].innerHTML);
         }))();`,
-      'https://api.github.com/repos/Alban1911/RoseSkins',
+      'https://github.com/Alban1911/LeagueSkins',
       false
     ).then((res: any) => {
       updateData.value = JSON.parse(res)?.pushed_at;
