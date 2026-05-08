@@ -32,6 +32,19 @@ import { lcuConnector } from '../http/lcuConnector';
 const idsPath = 'resources\\en\\skin_ids.json';
 let idsPathMap = {};
 export * from '../http';
+const idName = {};
+export const setIdName = (heroList: any[]) => {
+  heroList?.forEach((item) => {
+    idName[item.heroId] = item.alias;
+  });
+};
+const getNameById = (heroId: string) => {
+  if (idName[heroId]) {
+    return idName[heroId];
+  }
+  showToast('英雄名称获取失败');
+  return '';
+};
 
 export const readConfig = () => {
   if (!existsSync(configPath)) {
@@ -128,7 +141,7 @@ export const findFile = (dir, targetFile) => {
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
   if (idsPathMap[skinId]) {
-    return findFile(`${getSkinPath()}`, `${idsPathMap[skinId]}.zip`);
+    return findFile(`${getSkinPath()}\\skins\\${getNameById(heroId)}`, `${idsPathMap[skinId]}.zip`);
   }
   let currentIdsPath = Path.join(getSkinPath(), idsPath);
   if (!existsSync(currentIdsPath)) {
@@ -319,10 +332,12 @@ export const loadSkins = async () => {
   });
   if (setHeroId.size !== skinIds.length) {
     MessageUtil.error('相同英雄皮肤重复');
+    showToast('相同英雄皮肤重复');
     return;
   }
   if (skinIds.length === 0) {
     MessageUtil.error('没有皮肤');
+    showToast('没有皮肤');
     return;
   }
   // 复制每个文件夹内容到 all

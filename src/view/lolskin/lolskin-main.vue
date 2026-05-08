@@ -22,6 +22,7 @@
   import type { mainHeroInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
   import bus from '@/utils/bus';
+  import { f_setIdName } from '@/utils/business';
 
   const mainIMg = ref<mainHeroInfo[]>();
   let heros_: mainHeroInfo[] = [];
@@ -33,6 +34,7 @@
       mainIMg.value = res.hero;
       heros_ = res.hero;
       heros.value = res.hero;
+      f_setIdName(res.hero);
     });
   const handlerClickHero = (heroId_: string) => {
     heroId.value = heroId_;
