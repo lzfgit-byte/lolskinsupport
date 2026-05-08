@@ -146,8 +146,12 @@ export const findFile = (dir, targetFile) => {
   return null;
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
+  const wrapperName = (name: string) => name.replace(':', '');
   if (idsPathMap[skinId]) {
-    return findFile(`${getSkinPath()}\\skins\\${getNameById(heroId)}`, `${idsPathMap[skinId]}.zip`);
+    return findFile(
+      `${getSkinPath()}\\skins\\${getNameById(heroId)}`,
+      `${wrapperName(idsPathMap[skinId])}.zip`
+    );
   }
   let currentIdsPath = Path.join(getSkinPath(), idsPath);
   if (!existsSync(currentIdsPath)) {
@@ -155,7 +159,10 @@ const buildSkinPath = (heroId: string, skinId: string) => {
   }
   const idsStr = readFileSync(Path.join(getSkinPath(), idsPath), { encoding: 'utf-8' });
   idsPathMap = JSON.parse(idsStr);
-  return findFile(`${getSkinPath()}`, `${idsPathMap[skinId]}.zip`);
+  return findFile(
+    `${getSkinPath()}\\skins\\${getNameById(heroId)}`,
+    `${wrapperName(idsPathMap[skinId])}.zip`
+  );
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);
