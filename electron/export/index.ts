@@ -34,8 +34,11 @@ let idsPathMap = {};
 export * from '../http';
 const idName = {};
 export const setIdName = (heroList: any[]) => {
+  function splitCamelCase(str) {
+    return str.replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
   heroList?.forEach((item) => {
-    idName[item.heroId] = item.alias;
+    idName[item.heroId] = splitCamelCase(item.alias);
   });
 };
 const getNameById = (heroId: string) => {
@@ -121,6 +124,9 @@ export const getInstalledPath = () => {
   return readConfigOrDefault(INSTALLED_PATH, defaultInstalledPath);
 };
 export const findFile = (dir, targetFile) => {
+  if (!fs.existsSync(dir)) {
+    return null;
+  }
   const files = fs.readdirSync(dir);
 
   for (const file of files) {
