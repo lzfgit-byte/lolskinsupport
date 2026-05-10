@@ -34,6 +34,7 @@
     "@codemirror/theme-one-dark": "^6.1.2",
     "@ilzf/utils": "^0.0.17",
     "@vueuse/core": "^10.10.0",
+    "adm-zip": "^0.5.17",
     "animate.css": "^4.1.1",
     "ant-design-vue": "^4.2.2",
     "axios": "^1.13.2",

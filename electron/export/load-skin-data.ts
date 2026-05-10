@@ -3,6 +3,7 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import Path from 'node:path';
+import AdmZip from 'adm-zip';
 import { modToolsWrapper } from '../const';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { getInstalledPath } from './index';
@@ -98,10 +99,8 @@ const patchPyFile = (pyPath, heroName) => {
 const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
   try {
     // 构建输出的 WAD 文件路径，例如: ...\annie\skin1\1.wad.client
-    const outputWadPath = path.join(
-      OUTPUT_WAD_BASE_DIR,
-      `${heroId || heroName}_${skinId}.wad.client`
-    );
+    const wadName = `${heroId || heroName}_${skinId}`;
+    const outputWadPath = path.join(OUTPUT_WAD_BASE_DIR, `${wadName}.wad.client`);
 
     // 这里的路径结构必须严格按照 wad-make 的参数要求：
     // 参数1: 要打包的源文件夹路径
@@ -112,12 +111,61 @@ const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
     console.log(` [正在封包] 生成 WAD: ${outputWadPath}`);
     await runCommand(command, skinFolderPath, outputWadPath);
 
+    await createZipFile(wadName, outputWadPath, heroName);
     return outputWadPath;
   } catch (err) {
     console.error(` [封包失败] ${skinFolderPath}:`, err.message);
   }
 };
+export const createZipFile = async (wadName, outWadFilePath, heroName) => {
+  try {
+    // 1. 确保输出目录存在
+    if (!fs.existsSync(OUTPUT_WAD_BASE_DIR)) {
+      fs.mkdirSync(OUTPUT_WAD_BASE_DIR, { recursive: true });
+    }
 
+    const zip = new AdmZip();
+
+    // 2. 添加 info.json (直接从内存添加字符串)
+    const info = {
+      Author: 'lzf',
+      Description: 'xxxx',
+      Name: wadName,
+      Version: 'Patch 16.4.1',
+    };
+    zip.addFile('META/info.json', Buffer.from(JSON.stringify(info, null, 2), 'utf8'));
+
+    // 3. 添加 WAD 文件 (读取本地文件并指定压缩包内路径)
+    if (fs.existsSync(outWadFilePath)) {
+      // 注意：addLocalFile 第一个参数是源文件，第二个参数是压缩包内的【目录】
+      // 为了精确控制文件名，我们使用 addFile
+      const wadBuffer = fs.readFileSync(outWadFilePath);
+      zip.addFile(`WAD/${heroName}.wad.client`, wadBuffer);
+    } else {
+      throw new Error(`源文件不存在: ${outWadFilePath}`);
+    }
+
+    // 4. 写入磁盘 (writeZip 是同步的，或者提供回调)
+    const zipPath = Path.join(OUTPUT_WAD_BASE_DIR, `${wadName}.zip`);
+
+    // 我们将其包装成 Promise 确保执行流可控
+    await new Promise((resolve, reject) => {
+      zip.writeZip(zipPath, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          console.log(` [ZIP完成] ${wadName}.zip`);
+          resolve(zipPath);
+        }
+      });
+    });
+
+    return zipPath;
+  } catch (err) {
+    console.error(` [ZIP失败] ${wadName}:`, err.message);
+    throw err;
+  }
+};
 export const loadSkinData = async (idNameMap: Record<string, any>) => {
   // 1. 初始化提取目录
   emptyDir(OUTPUT_BASE_DIR);
