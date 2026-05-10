@@ -178,3 +178,9 @@ export const f_mkOverlay = async (heroId: string, skinId: string, skinImage: str
 export const f_setIdName = async (heroList: any[]) => {
   return executeFunction('setIdName', heroList);
 };
+/**
+ * export const loadSkinDataIdName = () => {
+ */
+export const f_loadSkinDataIdName = async () => {
+  return executeFunction('loadSkinDataIdName');
+};

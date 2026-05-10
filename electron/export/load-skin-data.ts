@@ -160,6 +160,7 @@ export const createZipFile = async (wadName, outWadFilePath, heroName) => {
       });
     });
 
+    deleteFile(outWadFilePath);
     return zipPath;
   } catch (err) {
     console.error(` [ZIP失败] ${wadName}:`, err.message);
@@ -188,16 +189,17 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
   for (const wadFile of wadFiles) {
     const heroName = wadFile.split('.')[0];
     const heroId = nameIdMap[heroName];
+    const fullWadPath = path.join(WAD_SOURCE_DIR, wadFile);
     logData(`\n==========================================`);
     logData(`正在解压 WAD: ${wadFile}`);
 
-    // emptyDir(EXTRACT_BASE_DIR);
+    emptyDir(EXTRACT_BASE_DIR);
     // 3. 解压当前 WAD
-    // await runCommand(
-    //   `E:\\lolsupport\\cslol-manager\\cslol-tools\\wad-extract.exe`,
-    //   fullWadPath,
-    //   EXTRACT_BASE_DIR
-    // );
+    await runCommand(
+      `E:\\lolsupport\\cslol-manager\\cslol-tools\\wad-extract.exe`,
+      fullWadPath,
+      EXTRACT_BASE_DIR
+    );
 
     // 4. 定位英雄目录 (data/characters/XXXX)
     const charactersDir = path.join(EXTRACT_BASE_DIR, 'data', 'characters');

@@ -41,6 +41,8 @@ export const setIdName = (heroList: any[]) => {
   heroList?.forEach((item) => {
     idName[item.heroId] = splitCamelCase(item.alias);
   });
+};
+export const loadSkinDataIdName = () => {
   loadSkinData(idName);
 };
 const getNameById = (heroId: string) => {
@@ -148,23 +150,8 @@ export const findFile = (dir, targetFile) => {
   return null;
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
-  const wrapperName = (name: string) => name.replace(':', '');
-  if (idsPathMap[skinId]) {
-    return findFile(
-      `${getSkinPath()}\\skins\\${getNameById(heroId)}`,
-      `${wrapperName(idsPathMap[skinId])}.zip`
-    );
-  }
-  let currentIdsPath = Path.join(getSkinPath(), idsPath);
-  if (!existsSync(currentIdsPath)) {
-    return null;
-  }
-  const idsStr = readFileSync(Path.join(getSkinPath(), idsPath), { encoding: 'utf-8' });
-  idsPathMap = JSON.parse(idsStr);
-  return findFile(
-    `${getSkinPath()}\\skins\\${getNameById(heroId)}`,
-    `${wrapperName(idsPathMap[skinId])}.zip`
-  );
+  const curSkinId = skinId.replace(heroId, '');
+  return findFile(`${getSkinPath()}`, `${heroId}_${+curSkinId}.zip`);
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);

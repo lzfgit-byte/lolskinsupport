@@ -83,6 +83,7 @@
           <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
           <a-button size="small" @click="testNotify">测试通知</a-button>
           <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
+          <a-button size="small" @click="f_loadSkinDataIdName()">加载所有皮肤</a-button>
         </a-space>
         <br />
         <img
@@ -119,6 +120,7 @@
     f_clearSkinImage,
     f_getAllLoadSkins,
     f_getSkinImage,
+    f_loadSkinDataIdName,
     f_loadSkins,
     f_openPath,
     f_openUrl,
