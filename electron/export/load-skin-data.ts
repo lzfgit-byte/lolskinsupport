@@ -188,7 +188,7 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
   });
   const keys = `${new Date().getTime()}`;
   const longLength = wadFiles?.length;
-  let current = 0;
+  let current = 1;
   const notifyMsg = (msg: string, ...args) => {
     NotifyMsgUtil.sendNotifyMsg(`${current} / ${longLength}`, msg, keys);
     logData(msg, args);
