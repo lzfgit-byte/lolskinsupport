@@ -20,7 +20,9 @@ const loadSkinIds = ref([]);
 const logDrawOpen = ref(false);
 export const LogUtil = {
   log: (msg: string) => {
-    logs.value.push(msg);
+    if (logDrawOpen.value) {
+      logs.value.push(msg);
+    }
   },
   clear: () => {
     logs.value = [];
