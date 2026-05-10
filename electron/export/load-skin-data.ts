@@ -4,19 +4,26 @@ import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import Path from 'node:path';
 import AdmZip from 'adm-zip';
-import { modToolsWrapper } from '../const';
+import { defaultGamePath, modToolsWrapper } from '../const';
 import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
 import { getInstalledPath } from './index';
 
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
+export const SKIN_DEFAULT_SUFFIX = 'wad_skins';
 // --- 配置区 ---
-const WAD_SOURCE_DIR = 'E:\\game\\Riot Games\\League of Legends\\Game\\DATA\\FINAL\\Champions';
-const EXTRACT_BASE_DIR = 'C:\\Users\\18074\\Downloads\\skins';
-const OUTPUT_BASE_DIR = 'C:\\Users\\18074\\Downloads\\skin_out';
-const OUTPUT_WAD_BASE_DIR = 'C:\\Users\\18074\\Downloads\\wad_skins';
+let WAD_SOURCE_DIR = 'E:\\game\\Riot Games\\League of Legends\\Game\\DATA\\FINAL\\Champions';
+let EXTRACT_BASE_DIR = 'C:\\Users\\18074\\Downloads\\skins';
+let OUTPUT_BASE_DIR = 'C:\\Users\\18074\\Downloads\\skin_out';
+let OUTPUT_WAD_BASE_DIR = 'C:\\Users\\18074\\Downloads\\wad_skins';
+
+export const setConfigData = (gamePath, outBasePath) => {
+  WAD_SOURCE_DIR = Path.normalize(`${gamePath}\\DATA\\FINAL\\Champions`);
+  EXTRACT_BASE_DIR = Path.normalize(`${outBasePath}\\skins`);
+  OUTPUT_BASE_DIR = Path.normalize(`${outBasePath}\\skin_out`);
+  OUTPUT_WAD_BASE_DIR = Path.normalize(`${outBasePath}\\${SKIN_DEFAULT_SUFFIX}`);
+};
 
 const logData = (msg: string, ...data: any[]) => {
   console.log(msg, data);
@@ -276,6 +283,7 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
     }
     current++;
   }
-
+  emptyDir(OUTPUT_BASE_DIR);
+  emptyDir(EXTRACT_BASE_DIR);
   notifyMsg('\n所有英雄皮肤已按 英雄名/皮肤ID 目录分类完成。');
 };

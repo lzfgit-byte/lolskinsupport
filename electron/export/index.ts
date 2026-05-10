@@ -25,13 +25,11 @@ import {
   defaultSkinPath,
   modToolsWrapper,
 } from '../const';
-import { LogMsgUtil, MessageUtil } from '../utils/message';
+import { MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
-import { loadSkinData } from './load-skin-data';
+import { SKIN_DEFAULT_SUFFIX, loadSkinData, setConfigData } from './load-skin-data';
 
-const idsPath = 'resources\\en\\skin_ids.json';
-let idsPathMap = {};
 export * from '../http';
 const idName = {};
 export const setIdName = (heroList: any[]) => {
@@ -43,6 +41,7 @@ export const setIdName = (heroList: any[]) => {
   });
 };
 export const loadSkinDataIdName = async () => {
+  setConfigData(getGamePath(), getSkinPath());
   loadSkinData(idName);
 };
 
@@ -144,7 +143,7 @@ export const findFile = (dir, targetFile) => {
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
   const curSkinId = skinId.replace(heroId, '');
-  return findFile(`${getSkinPath()}`, `${heroId}_${+curSkinId}.zip`);
+  return findFile(Path.join(getSkinPath(), SKIN_DEFAULT_SUFFIX), `${heroId}_${+curSkinId}.zip`);
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);
