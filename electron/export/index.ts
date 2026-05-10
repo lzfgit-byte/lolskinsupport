@@ -13,7 +13,6 @@ import {
   OVERLAY_PATH,
   SKIN_PATH,
 } from '@ghs/constant';
-
 import type { ShowSliderConfirmType } from '@ghs/constant';
 import {
   SKIN_IMAGE_KEY,
@@ -29,6 +28,8 @@ import {
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
+import { loadSkinData } from './load-skin-data';
+
 const idsPath = 'resources\\en\\skin_ids.json';
 let idsPathMap = {};
 export * from '../http';
@@ -40,6 +41,7 @@ export const setIdName = (heroList: any[]) => {
   heroList?.forEach((item) => {
     idName[item.heroId] = splitCamelCase(item.alias);
   });
+  loadSkinData(idName);
 };
 const getNameById = (heroId: string) => {
   if (idName[heroId]) {
