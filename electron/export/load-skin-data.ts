@@ -235,6 +235,7 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
         // 如果找不到当前 ID 的文件，跳出循环去处理下一个英雄
         if (!fs.existsSync(sourceBinPath)) {
           flag = true;
+          break;
         }
 
         // 6. 创建两级目录结构: 英雄名 -> 皮肤ID
@@ -261,15 +262,16 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
         await runCommand(`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`, pyPath);
         deleteFile(pyPath);
       }
+      if (flag) {
+        break;
+      }
       await packToWad(
         path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`),
         heroName,
         skinId,
         heroId
       );
-      if (flag) {
-        break;
-      }
+
       ++skinId;
     }
     current++;
