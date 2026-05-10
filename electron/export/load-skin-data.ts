@@ -95,15 +95,13 @@ const patchPyFile = (pyPath, heroName) => {
   }
 };
 
-/**
- * 调用 wad-make.exe 将文件夹打包成 .wad.client
- * @param {string} skinFolderPath - 皮肤所在的文件夹路径 (例如 ...\annie\skin1)
- * @param {string} skinId - 皮肤 ID (用于生成文件名)
- */
-const packToWad = async (skinFolderPath, skinId) => {
+const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
   try {
     // 构建输出的 WAD 文件路径，例如: ...\annie\skin1\1.wad.client
-    const outputWadPath = path.join(skinFolderPath, '..', `${skinId}.wad.client`);
+    const outputWadPath = path.join(
+      OUTPUT_WAD_BASE_DIR,
+      `${heroId || heroName}_${skinId}.wad.client`
+    );
 
     // 这里的路径结构必须严格按照 wad-make 的参数要求：
     // 参数1: 要打包的源文件夹路径
@@ -120,12 +118,13 @@ const packToWad = async (skinFolderPath, skinId) => {
   }
 };
 
-export const loadSkinData = async (idNameMap) => {
+export const loadSkinData = async (idNameMap: Record<string, any>) => {
   // 1. 初始化提取目录
   emptyDir(OUTPUT_BASE_DIR);
+  emptyDir(OUTPUT_WAD_BASE_DIR);
   const nameIdMap = {};
-  idNameMap.forEach((name, id) => {
-    nameIdMap[name] = id;
+  Object.keys(idNameMap).forEach((key: string) => {
+    nameIdMap[idNameMap[key]] = key;
   });
 
   // 2. 读取所有 WAD 文件
@@ -141,7 +140,6 @@ export const loadSkinData = async (idNameMap) => {
   for (const wadFile of wadFiles) {
     const heroName = wadFile.split('.')[0];
     const heroId = nameIdMap[heroName];
-    const fullWadPath = path.join(WAD_SOURCE_DIR, wadFile);
     logData(`\n==========================================`);
     logData(`正在解压 WAD: ${wadFile}`);
 
@@ -207,7 +205,12 @@ export const loadSkinData = async (idNameMap) => {
         await runCommand(`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`, pyPath);
         deleteFile(pyPath);
       }
-      await packToWad(path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`), skinId);
+      await packToWad(
+        path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`),
+        heroName,
+        skinId,
+        heroId
+      );
       if (flag) {
         break;
       }
