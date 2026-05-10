@@ -44,14 +44,6 @@ export const setIdName = (heroList: any[]) => {
 };
 export const loadSkinDataIdName = async () => {
   loadSkinData(idName);
-  console.log(1);
-};
-const getNameById = (heroId: string) => {
-  if (idName[heroId]) {
-    return idName[heroId];
-  }
-  showToast('英雄名称获取失败');
-  return '';
 };
 
 export const readConfig = () => {

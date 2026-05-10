@@ -1,6 +1,6 @@
 <template>
   <a-drawer
-    v-model:open="drawerOpen"
+    v-model:open="logDrawOpen"
     placement="right"
     width="90vw"
     :header-style="{ display: 'none' }"
@@ -11,7 +11,7 @@
     :force-render="true"
   >
     <div h-full w-full class="editor" relative>
-      <a-button z-30001 size="small" absolute right-5 top-1 @click="logs = []">清除日志</a-button>
+      <a-button z-30001 size="small" absolute right-5 top-1 @click="handleClear">清除日志</a-button>
       <a-switch
         v-model:checked="isQuickDelete"
         z-30001
@@ -47,15 +47,16 @@
   import { oneDark } from '@codemirror/theme-one-dark';
   import { watchEffect } from 'vue-demi';
   import useGlobalState from '@/hooks/use-global-state';
-  const { LogUtil, logDrawOpen } = useGlobalState();
+  const { LogUtil, logDrawOpen, isQuickDelete } = useGlobalState();
   const code = ref(``);
   const extensions = [javascript(), oneDark];
   const view = shallowRef();
-  const isQuickDelete = ref(false);
   const handleReady = (payload) => {
     view.value = payload.view;
   };
-
+  const handleClear = () => {
+    LogUtil.clear();
+  };
   watchEffect(() => {
     code.value = LogUtil.getLogs().join('\n');
   });

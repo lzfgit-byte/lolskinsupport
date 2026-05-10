@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import Path from 'node:path';
 import AdmZip from 'adm-zip';
 import { modToolsWrapper } from '../const';
-import { LogMsgUtil, MessageUtil } from '../utils/message';
+import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
 import { getInstalledPath } from './index';
 
 // 模拟 __dirname
@@ -186,12 +186,19 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
     const isNotLocale = !f.includes('zh_CN'); // 关键：过滤掉语言包
     return isWad && isNotLocale;
   });
+  const keys = `${new Date().getTime()}`;
+  const longLength = wadFiles?.length;
+  let current = 0;
+  const notifyMsg = (msg: string, ...args) => {
+    NotifyMsgUtil.sendNotifyMsg(`${current} / ${longLength}`, msg, keys);
+    logData(msg, args);
+  };
   for (const wadFile of wadFiles) {
     const heroName = wadFile.split('.')[0];
     const heroId = nameIdMap[heroName];
     const fullWadPath = path.join(WAD_SOURCE_DIR, wadFile);
-    logData(`\n==========================================`);
-    logData(`正在解压 WAD: ${wadFile}`);
+    notifyMsg(`\n==========================================`);
+    notifyMsg(`正在解压 WAD: ${wadFile}`);
 
     emptyDir(EXTRACT_BASE_DIR);
     // 3. 解压当前 WAD
@@ -204,7 +211,7 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
     // 4. 定位英雄目录 (data/characters/XXXX)
     const charactersDir = path.join(EXTRACT_BASE_DIR, 'data', 'characters');
     if (!fs.existsSync(charactersDir)) {
-      logData(`跳过: 内部不含 characters 目录`);
+      notifyMsg(`跳过: 内部不含 characters 目录`);
       continue;
     }
     const heroes = fs.readdirSync(charactersDir).filter((f) => {
@@ -220,8 +227,7 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
           continue;
         }
 
-        logData(`正在处理英雄: ${heroNameInLine}`);
-
+        notifyMsg(`正在处理英雄: ${heroNameInLine}`);
         // 5. 递增探测 SkinId
         const binFileName = `skin${skinId}.bin`;
         const sourceBinPath = path.join(skinsDir, binFileName);
@@ -245,7 +251,7 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
         // 7. 复制并解包
         const destBinPath = path.join(targetSkinDir, `skin0.bin`);
         fs.copyFileSync(sourceBinPath, destBinPath);
-        logData(` [提取成功] ${heroNameInLine} -> skin${skinId} -> ${binFileName}`);
+        notifyMsg(` [提取成功] ${heroNameInLine} -> skin${skinId} -> ${binFileName}`);
 
         // 调用全局 ritobin_cli 自动解出 .py
         await runCommand(`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`, destBinPath);
@@ -266,7 +272,8 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
       }
       ++skinId;
     }
+    current++;
   }
 
-  logData('\n所有英雄皮肤已按 英雄名/皮肤ID 目录分类完成。');
+  notifyMsg('\n所有英雄皮肤已按 英雄名/皮肤ID 目录分类完成。');
 };

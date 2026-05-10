@@ -18,10 +18,14 @@ const lcuState = ref(false);
 const heros = ref<mainHeroInfo[]>();
 const loadSkinIds = ref([]);
 const logDrawOpen = ref(false);
+const isQuickDelete = ref(false);
 export const LogUtil = {
   log: (msg: string) => {
     if (logDrawOpen.value) {
       logs.value.push(msg);
+    }
+    if (isQuickDelete.value && logs.value.length > 100) {
+      logs.value.splice(0, 100);
     }
   },
   clear: () => {
@@ -49,4 +53,5 @@ export default () => ({
   heros,
   loadSkinIds,
   logDrawOpen,
+  isQuickDelete,
 });
