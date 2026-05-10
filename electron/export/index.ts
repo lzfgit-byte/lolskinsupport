@@ -42,8 +42,9 @@ export const setIdName = (heroList: any[]) => {
     idName[item.heroId] = splitCamelCase(item.alias);
   });
 };
-export const loadSkinDataIdName = () => {
+export const loadSkinDataIdName = async () => {
   loadSkinData(idName);
+  console.log(1);
 };
 const getNameById = (heroId: string) => {
   if (idName[heroId]) {

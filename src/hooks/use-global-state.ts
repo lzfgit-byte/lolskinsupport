@@ -17,11 +17,22 @@ const autoChose = ref(true);
 const lcuState = ref(false);
 const heros = ref<mainHeroInfo[]>();
 const loadSkinIds = ref([]);
-
+const logDrawOpen = ref(false);
+export const LogUtil = {
+  log: (msg: string) => {
+    logs.value.push(msg);
+  },
+  clear: () => {
+    logs.value = [];
+  },
+  getLogs: () => {
+    return logs.value || [];
+  },
+};
 export default () => ({
   loading,
   drawerOpen,
-  logs,
+  LogUtil,
   skinId,
   heroId,
   skinPath,
@@ -35,4 +46,5 @@ export default () => ({
   heroAlias,
   heros,
   loadSkinIds,
+  logDrawOpen,
 });

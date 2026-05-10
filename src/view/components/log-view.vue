@@ -47,10 +47,9 @@
   import { oneDark } from '@codemirror/theme-one-dark';
   import { watchEffect } from 'vue-demi';
   import useGlobalState from '@/hooks/use-global-state';
-  const { logs } = useGlobalState();
+  const { LogUtil, logDrawOpen } = useGlobalState();
   const code = ref(``);
   const extensions = [javascript(), oneDark];
-  const drawerOpen = ref(false);
   const view = shallowRef();
   const isQuickDelete = ref(false);
   const handleReady = (payload) => {
@@ -58,20 +57,20 @@
   };
 
   watchEffect(() => {
-    code.value = logs.value.join('\n');
+    code.value = LogUtil.getLogs().join('\n');
   });
   defineExpose({
     show: () => {
-      drawerOpen.value = true;
+      logDrawOpen.value = true;
     },
   });
   onMounted(() => {
     document.addEventListener('keydown', function (event) {
       if (event.ctrlKey && event.key === 'l') {
-        drawerOpen.value = !drawerOpen.value;
+        logDrawOpen.value = !logDrawOpen.value;
       }
       if (event.ctrlKey && isQuickDelete.value && event.key === 'c') {
-        logs.value = [];
+        LogUtil.clear();
       }
     });
   });
