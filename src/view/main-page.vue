@@ -22,12 +22,6 @@
           <!--          <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button> -->
           <a-button size="small" @click="setConfigPath(SKIN_PATH, skinPath)">设置文件地址</a-button>
         </a-space>
-
-        <br /><br />
-        皮肤最后更新时间：{{ updateData }}
-        <a-button size="small" @click="f_openUrl('https://github.com/Alban1911/RoseSkins')">
-          打开连接地址
-        </a-button>
         <br /><br />
         游戏路径：{{ gamePath }}
         <a-space>
@@ -140,7 +134,6 @@
   } from '@/utils/business';
 
   const route = useRoute();
-  const updateData = ref('');
   const {
     skinPath,
     gamePath,
@@ -168,18 +161,6 @@
       msg: '是否确认删除此文件？',
       height: 80,
       delay: 3000,
-    });
-  };
-  const getSkinUpdate = () => {
-    f_winGetData(
-      ` (() =>
-        new Promise((resolve) => {
-          resolve(document.getElementsByTagName('pre')[0].innerHTML);
-        }))();`,
-      'https://github.com/Alban1911/LeagueSkins',
-      false
-    ).then((res: any) => {
-      updateData.value = JSON.parse(res)?.pushed_at;
     });
   };
   const setConfigPath = async (key: string, dpath) => {
@@ -231,9 +212,6 @@
     if (drawerOpen.value) {
       getAllChoseSkin();
     }
-  });
-  onMounted(() => {
-    getSkinUpdate();
   });
 </script>
 
