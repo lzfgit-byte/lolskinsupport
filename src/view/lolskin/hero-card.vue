@@ -9,16 +9,19 @@
 
 <script setup lang="ts">
   import { defineProps } from 'vue';
+  import { LogUtil } from '@/hooks/use-global-state';
 
   const props = defineProps({
     heroId: String,
     title: String,
     instance_id: String,
+    alias: String,
   });
   const emits = defineEmits(['clickHero']);
   const BASE_URL = 'https://game.gtimg.cn/images/lol/act/img/skinloading/';
   const handlerClick = () => {
     emits('clickHero', props?.heroId);
+    LogUtil.log(`${props.alias}_${props.heroId}`);
   };
 </script>
 

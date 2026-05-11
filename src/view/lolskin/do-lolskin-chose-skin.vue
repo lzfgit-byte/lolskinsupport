@@ -66,7 +66,7 @@
   import { useRouter } from 'vue-router';
   import http from '@/utils/http';
   import type { skinInfo } from '@/type/type';
-  import useGlobalState from '@/hooks/use-global-state';
+  import useGlobalState, { LogUtil } from '@/hooks/use-global-state';
   import {
     f_checkHasSkins,
     f_confirmChoseSkin,
@@ -148,6 +148,7 @@
     router.push({ path: '/' });
   };
   const handleChoseSkin = async (item: skinInfo) => {
+    LogUtil.log(`${item.skinId}`);
     choseSkinId.value = item.skinId;
     visible.value = false;
     const res = await f_checkHasSkins(heroId.value, item.skinId);

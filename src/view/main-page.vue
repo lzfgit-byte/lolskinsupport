@@ -80,10 +80,12 @@
         lcuState：{{ lcuState }}<br /><br />
         <a-space>
           <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
+          <a-button size="small" danger @click="f_shoutDownModTools()">杀掉modTools</a-button>
           <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
           <a-button size="small" @click="testNotify">测试通知</a-button>
           <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
-          <a-button size="small" danger @click="f_loadSkinDataIdName()">创建皮肤数据</a-button>
+          <a-button size="small" danger @click="handleLoadAllSkinData()">创建所有皮肤数据</a-button>
+          <a-button size="small" danger @click="handleLoadSkinData()">创建皮肤数据</a-button>
         </a-space>
         <br />
         <img
@@ -111,6 +113,7 @@
     SKIN_PATH,
   } from '@ghs/constant';
   import { watch, watchEffect } from 'vue-demi';
+  import { showSliderConfirm } from '../../electron/hooks/use-confirm-window';
   import FloatButtonGroup from '@/view/components/float-button-group.vue';
   import useFeature from '@/view/hook/use-feature';
   import LolskinMain from '@/view/lolskin/lolskin-main.vue';
@@ -118,8 +121,11 @@
   import {
     f_checkCanAutoConfirm,
     f_clearSkinImage,
+    f_confirmChoseSkin,
     f_getAllLoadSkins,
+    f_getGamePath,
     f_getSkinImage,
+    f_loadSkinDataByFilePath,
     f_loadSkinDataIdName,
     f_loadSkins,
     f_openPath,
@@ -129,6 +135,7 @@
     f_request_string_get,
     f_selectPathOrFile,
     f_setConfig,
+    f_shoutDownModTools,
     f_winGetData,
   } from '@/utils/business';
 
@@ -201,6 +208,24 @@
         skinImages.value.push(res);
       });
     });
+  };
+  const handleLoadAllSkinData = async () => {
+    f_checkCanAutoConfirm({
+      title: '提示',
+      msg: '是否生成全部皮肤？',
+      src: 'https://game.gtimg.cn/images/lol/act/img/skin/big_46358cd4-3f36-4987-9db8-aab046adf43f.jpg',
+      showBtn: true,
+      height: 250,
+      delay: 3000,
+    }).then((res) => {
+      if (res) {
+        f_loadSkinDataIdName();
+      }
+    });
+  };
+  const handleLoadSkinData = async () => {
+    const path = await f_selectPathOrFile('openFile', `${gamePath.value}\\DATA\\FINAL\\Champions`);
+    await f_loadSkinDataByFilePath(path);
   };
   watchEffect(() => {
     if (drawerOpen.value) {

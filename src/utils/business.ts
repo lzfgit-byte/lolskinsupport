@@ -184,3 +184,15 @@ export const f_setIdName = async (heroList: any[]) => {
 export const f_loadSkinDataIdName = async () => {
   return executeFunction('loadSkinDataIdName');
 };
+/**
+ * export const loadSkinDataByFilePath = async (fullWadPath: string) => {
+ */
+export const f_loadSkinDataByFilePath = async (fullWadPath: string) => {
+  return executeFunction('loadSkinDataByFilePath', fullWadPath);
+};
+/**
+ * export const shoutDownModTools = async () => {
+ */
+export const f_shoutDownModTools = async () => {
+  return executeFunction('shoutDownModTools');
+};

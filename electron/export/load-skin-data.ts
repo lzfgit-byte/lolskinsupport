@@ -175,6 +175,8 @@ export const createZipFile = async (wadName, outWadFilePath, heroName) => {
 };
 
 export const loadSkinDataByFile = async (idNameMap: Record<string, any>, fullWadPath: string) => {
+  emptyDir(EXTRACT_BASE_DIR);
+  emptyDir(OUTPUT_BASE_DIR);
   if (!fs.existsSync(fullWadPath)) {
     MessageUtil.error(`文件不存在: ${fullWadPath}`);
     return;
@@ -184,7 +186,7 @@ export const loadSkinDataByFile = async (idNameMap: Record<string, any>, fullWad
     nameIdMap[idNameMap[key]] = key;
   });
   const heroName = path.basename(fullWadPath, path.extname(fullWadPath));
-  const heroId = nameIdMap[heroName];
+  const heroId = nameIdMap[heroName.split('.')[0]];
   emptyDir(EXTRACT_BASE_DIR);
   // 3. 解压当前 WAD
   await runCommand(
@@ -253,10 +255,15 @@ export const loadSkinDataByFile = async (idNameMap: Record<string, any>, fullWad
       skinId,
       heroId
     );
+    skinId++;
   }
+  logData(`${fullWadPath} 封包完成`);
+  emptyDir(EXTRACT_BASE_DIR);
+  emptyDir(OUTPUT_BASE_DIR);
 };
 export const loadSkinData = async (idNameMap: Record<string, any>) => {
   // 1. 初始化提取目录
+  emptyDir(EXTRACT_BASE_DIR);
   emptyDir(OUTPUT_BASE_DIR);
   emptyDir(OUTPUT_WAD_BASE_DIR);
   const nameIdMap = {};

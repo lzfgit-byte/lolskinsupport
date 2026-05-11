@@ -8,7 +8,8 @@
       :key="item.heroId"
       :hero-id="`${item.heroId}`"
       :instance_id="item.instance_id"
-      :title="item.name"
+      :title="`${item.name}`"
+      :alias="item.alias"
       @click-hero="handlerClickHero"
     ></HeroCard>
   </div>

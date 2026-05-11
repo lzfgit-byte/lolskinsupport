@@ -38,15 +38,12 @@ import {
 export * from '../http';
 const idName = {};
 export const setIdName = (heroList: any[]) => {
-  function splitCamelCase(str) {
-    return str.replace(/([a-z])([A-Z])/g, '$1 $2');
-  }
+  setConfigData(getGamePath(), getSkinPath());
   heroList?.forEach((item) => {
-    idName[item.heroId] = splitCamelCase(item.alias);
+    idName[item.heroId] = item.alias;
   });
 };
 export const loadSkinDataIdName = async () => {
-  setConfigData(getGamePath(), getSkinPath());
   loadSkinData(idName);
 };
 export const loadSkinDataByFilePath = async (fullWadPath: string) => {
@@ -471,4 +468,9 @@ export const selectPathOrFile = async (
 
   const selectedPath = result.filePaths[0];
   return selectedPath;
+};
+
+export const shoutDownModTools = async () => {
+  await modToolsWrapper.forceKillModTools();
+  MessageUtil.success('已关闭ModTools');
 };

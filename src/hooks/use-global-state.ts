@@ -18,13 +18,13 @@ const lcuState = ref(false);
 const heros = ref<mainHeroInfo[]>();
 const loadSkinIds = ref([]);
 const logDrawOpen = ref(false);
-const isQuickDelete = ref(false);
+const isQuickDelete = ref(true);
 export const LogUtil = {
   log: (msg: string) => {
-    logs.value.push(msg);
-    if ((isQuickDelete.value || !logDrawOpen.value) && logs.value.length > 100) {
-      logs.value.splice(0, 100);
+    if ((isQuickDelete.value || !logDrawOpen.value) && logs.value.length > 38) {
+      logs.value.splice(0, 10);
     }
+    logs.value.push(msg);
   },
   clear: () => {
     logs.value = [];
