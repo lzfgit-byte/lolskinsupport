@@ -232,7 +232,7 @@ export const loadSkinDataByFile = async (
         continue;
       }
 
-      const findNextSkinId = (skinId: number, offset = 5) => {
+      const findNextSkinId = (skinId: number, offset = 30) => {
         let binFileName = `skin${skinId}.bin`;
         let sourceBinPath = path.join(skinsDir, binFileName);
         if (fs.existsSync(sourceBinPath)) {
@@ -323,7 +323,7 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
         loadSkinDataByFile(idNameMap, Path.join(WAD_SOURCE_DIR, wadFile), nameIdMap)
       )
     );
-    logData(`剩余${wadFiles.length - current * chunkSize} 个 WAD 文件待处理...`);
+    logData(`【重要】剩余${wadFiles.length - current * chunkSize} 个 WAD 文件待处理...`);
     if (wadList.length === 0) {
       break;
     }

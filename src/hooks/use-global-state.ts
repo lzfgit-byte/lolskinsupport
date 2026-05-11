@@ -1,4 +1,5 @@
 import { ref, watch } from 'vue-demi';
+import { useTitle } from '@vueuse/core';
 import type { mainHeroInfo } from '@/type/type';
 
 const drawerOpen = ref(false);
@@ -19,8 +20,12 @@ const heros = ref<mainHeroInfo[]>();
 const loadSkinIds = ref([]);
 const logDrawOpen = ref(false);
 const isQuickDelete = ref(true);
+const title = useTitle('ghs');
 export const LogUtil = {
   log: (msg: string) => {
+    if (msg.indexOf('【重要】') > -1) {
+      title.value = msg;
+    }
     if ((isQuickDelete.value || !logDrawOpen.value) && logs.value.length > 38) {
       logs.value.splice(0, 10);
     }
