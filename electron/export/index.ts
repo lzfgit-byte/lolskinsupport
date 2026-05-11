@@ -28,7 +28,12 @@ import {
 import { MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
-import { SKIN_DEFAULT_SUFFIX, loadSkinData, setConfigData } from './load-skin-data';
+import {
+  SKIN_DEFAULT_SUFFIX,
+  loadSkinData,
+  loadSkinDataByFile,
+  setConfigData,
+} from './load-skin-data';
 
 export * from '../http';
 const idName = {};
@@ -44,7 +49,9 @@ export const loadSkinDataIdName = async () => {
   setConfigData(getGamePath(), getSkinPath());
   loadSkinData(idName);
 };
-
+export const loadSkinDataByFilePath = async (fullWadPath: string) => {
+  loadSkinDataByFile(idName, fullWadPath);
+};
 export const readConfig = () => {
   if (!existsSync(configPath)) {
     ensureFileSync(configPath);

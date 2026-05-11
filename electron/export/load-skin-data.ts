@@ -4,9 +4,8 @@ import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import Path from 'node:path';
 import AdmZip from 'adm-zip';
-import { defaultGamePath, modToolsWrapper } from '../const';
+import { modToolsWrapper } from '../const';
 import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
-import { getInstalledPath } from './index';
 
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -172,6 +171,88 @@ export const createZipFile = async (wadName, outWadFilePath, heroName) => {
   } catch (err) {
     console.error(` [ZIP失败] ${wadName}:`, err.message);
     throw err;
+  }
+};
+
+export const loadSkinDataByFile = async (idNameMap: Record<string, any>, fullWadPath: string) => {
+  if (!fs.existsSync(fullWadPath)) {
+    MessageUtil.error(`文件不存在: ${fullWadPath}`);
+    return;
+  }
+  const nameIdMap = {};
+  Object.keys(idNameMap).forEach((key: string) => {
+    nameIdMap[idNameMap[key]] = key;
+  });
+  const heroName = path.basename(fullWadPath, path.extname(fullWadPath));
+  const heroId = nameIdMap[heroName];
+  emptyDir(EXTRACT_BASE_DIR);
+  // 3. 解压当前 WAD
+  await runCommand(
+    `E:\\lolsupport\\cslol-manager\\cslol-tools\\wad-extract.exe`,
+    fullWadPath,
+    EXTRACT_BASE_DIR
+  );
+  // 4. 定位英雄目录 (data/characters/XXXX)
+  const charactersDir = path.join(EXTRACT_BASE_DIR, 'data', 'characters');
+  if (!fs.existsSync(charactersDir)) {
+    logData(`跳过: 内部不含 characters 目录`);
+    return;
+  }
+  const heroes = fs.readdirSync(charactersDir).filter((f) => {
+    return fs.statSync(path.join(charactersDir, f)).isDirectory();
+  });
+  // 获取该 WAD 里的英雄名（如 annie）
+  let skinId = 0;
+  while (true) {
+    let flag = false;
+    for (const heroNameInLine of heroes) {
+      const skinsDir = path.join(charactersDir, heroNameInLine, 'skins');
+      if (!fs.existsSync(skinsDir)) {
+        continue;
+      }
+
+      // 5. 递增探测 SkinId
+      const binFileName = `skin${skinId}.bin`;
+      const sourceBinPath = path.join(skinsDir, binFileName);
+
+      // 如果找不到当前 ID 的文件，跳出循环去处理下一个英雄
+      if (!fs.existsSync(sourceBinPath)) {
+        flag = true;
+        break;
+      }
+
+      // 6. 创建两级目录结构: 英雄名 -> 皮肤ID
+      // 路径示例: C:\Users\18074\Downloads\annie\skin1\data\characters\annie\skins
+      const targetSkinDir = path.join(
+        OUTPUT_BASE_DIR,
+        heroName,
+        `skin${skinId}\\data\\characters\\${heroNameInLine}\\skins`
+      );
+      if (!fs.existsSync(targetSkinDir)) {
+        fs.mkdirSync(targetSkinDir, { recursive: true });
+      }
+
+      // 7. 复制并解包
+      const destBinPath = path.join(targetSkinDir, `skin0.bin`);
+      fs.copyFileSync(sourceBinPath, destBinPath);
+
+      // 调用全局 ritobin_cli 自动解出 .py
+      await runCommand(`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`, destBinPath);
+      const pyPath = destBinPath.replace('.bin', '.py');
+      patchPyFile(pyPath, heroNameInLine);
+      deleteFile(destBinPath);
+      await runCommand(`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`, pyPath);
+      deleteFile(pyPath);
+    }
+    if (flag) {
+      break;
+    }
+    await packToWad(
+      path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`),
+      heroName,
+      skinId,
+      heroId
+    );
   }
 };
 export const loadSkinData = async (idNameMap: Record<string, any>) => {
