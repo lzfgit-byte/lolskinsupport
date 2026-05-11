@@ -38,7 +38,7 @@ import {
 export * from '../http';
 const idName = {};
 export const setIdName = (heroList: any[]) => {
-  setConfigData(getGamePath(), getSkinPath());
+  setConfigData(getGamePath(), getSkinPath(), getModToolsPath());
   heroList?.forEach((item) => {
     idName[item.heroId] = item.alias;
   });
