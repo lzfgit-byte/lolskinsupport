@@ -39,6 +39,14 @@ const deleteFile = (filePath: string) => {
     logData(` 删除文件失败: ${filePath}`);
   }
 };
+const deleteDir = (path) => {
+  try {
+    fs.rmdirSync(path);
+    console.log('文件夹已异步删除');
+  } catch (err) {
+    console.error('删除出错:', err);
+  }
+};
 /**
  * 执行系统命令
  */
@@ -181,12 +189,15 @@ export const loadSkinDataByFile = async (
   fullWadPath: string,
   nameIdMap_?: Record<string, any>
 ) => {
-  emptyDir(EXTRACT_BASE_DIR);
-  emptyDir(OUTPUT_BASE_DIR);
   if (!fs.existsSync(fullWadPath)) {
     MessageUtil.error(`文件不存在: ${fullWadPath}`);
     return;
   }
+  const heroName = path.basename(fullWadPath, path.extname(fullWadPath)).split('.')[0];
+  const currentExtraPath = Path.join(EXTRACT_BASE_DIR, heroName);
+  const currentOutPutBaseDir = Path.join(OUTPUT_BASE_DIR, heroName);
+  emptyDir(currentExtraPath);
+  emptyDir(currentOutPutBaseDir);
   const nameIdMap = nameIdMap_ || {};
   if (!nameIdMap_) {
     Object.keys(idNameMap).forEach((key: string) => {
@@ -194,13 +205,11 @@ export const loadSkinDataByFile = async (
     });
   }
 
-  const heroName = path.basename(fullWadPath, path.extname(fullWadPath)).split('.')[0];
   const heroId = nameIdMap[heroName];
-  emptyDir(EXTRACT_BASE_DIR);
   // 3. 解压当前 WAD `E:\\lolsupport\\cslol-manager\\cslol-tools\\wad-extract.exe`,
-  await runCommand(Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'), fullWadPath, EXTRACT_BASE_DIR);
+  await runCommand(Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'), fullWadPath, currentExtraPath);
   // 4. 定位英雄目录 (data/characters/XXXX)
-  const charactersDir = path.join(EXTRACT_BASE_DIR, 'data', 'characters');
+  const charactersDir = path.join(currentExtraPath, 'data', 'characters');
   if (!fs.existsSync(charactersDir)) {
     logData(`跳过: 内部不含 characters 目录`);
     return;
@@ -274,14 +283,13 @@ export const loadSkinDataByFile = async (
     skinId++;
   }
   logData(`${fullWadPath} 封包完成`);
-  emptyDir(EXTRACT_BASE_DIR);
-  emptyDir(OUTPUT_BASE_DIR);
+  emptyDir(currentExtraPath);
+  emptyDir(path.join(OUTPUT_BASE_DIR, heroName));
+  deleteDir(currentExtraPath);
+  deleteDir(path.join(OUTPUT_BASE_DIR, heroName));
 };
 export const loadSkinData = async (idNameMap: Record<string, any>) => {
   // 1. 初始化提取目录
-  emptyDir(EXTRACT_BASE_DIR);
-  emptyDir(OUTPUT_BASE_DIR);
-  emptyDir(OUTPUT_WAD_BASE_DIR);
   const nameIdMap = {};
   Object.keys(idNameMap).forEach((key: string) => {
     nameIdMap[idNameMap[key]] = key;
@@ -297,14 +305,19 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
     const isNotLocale = !f.includes('zh_CN'); // 关键：过滤掉语言包
     return isWad && isNotLocale;
   });
-  const longLength = wadFiles?.length;
   let current = 1;
-  for (const wadFile of wadFiles) {
-    logData(`[${current} / ${longLength}] ${wadFile}`);
-    await loadSkinDataByFile(idNameMap, Path.join(WAD_SOURCE_DIR, wadFile), nameIdMap);
-    current++;
+  const chunkSize = 20;
+  while (true) {
+    const wadList = wadFiles.splice(0, wadFiles.length > chunkSize ? chunkSize : wadFiles.length);
+    await Promise.all(
+      wadList.map((wadFile) =>
+        loadSkinDataByFile(idNameMap, Path.join(WAD_SOURCE_DIR, wadFile), nameIdMap)
+      )
+    );
+    logData(`剩余${wadFiles.length - current * chunkSize} 个 WAD 文件待处理...`);
+    if (wadList.length === 0) {
+      break;
+    }
   }
-  emptyDir(OUTPUT_BASE_DIR);
-  emptyDir(EXTRACT_BASE_DIR);
   logData('所有英雄皮肤已按 英雄名/皮肤ID 目录分类完成。');
 };

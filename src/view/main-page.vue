@@ -143,6 +143,7 @@
     installedPath,
     lcuState,
     loadSkinIds,
+    logDrawOpen,
   } = useGlobalState();
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const testSlideWin = () => {
@@ -207,6 +208,7 @@
   const handleLoadSkinData = async () => {
     const path = await f_selectPathOrFile('openFile', `${gamePath.value}\\DATA\\FINAL\\Champions`);
     await f_loadSkinDataByFilePath(path);
+    logDrawOpen.value = true;
   };
   watchEffect(() => {
     if (drawerOpen.value) {
