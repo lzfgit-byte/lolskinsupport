@@ -50,8 +50,8 @@ const deleteDir = (path) => {
 /**
  * 执行系统命令
  */
-const runCommand = async (command: string, ...args: any[]) => {
-  await modToolsWrapper.execToolWithTimeout(command, args, 50000, true).catch((msg) => {
+const runCommand = async (command: string, sendPregress = true, ...args: any[]) => {
+  await modToolsWrapper.execToolWithTimeout(command, args, 50000, sendPregress).catch((msg) => {
     MessageUtil.error(msg);
   });
 };
@@ -125,7 +125,7 @@ const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
     const command = Path.join(MOD_TOOLS_PATH, 'wad-make.exe');
 
     console.log(` [正在封包] 生成 WAD: ${outputWadPath}`);
-    await runCommand(command, skinFolderPath, outputWadPath);
+    await runCommand(command, true, skinFolderPath, outputWadPath);
 
     await createZipFile(wadName, outputWadPath, heroName);
     return outputWadPath;
@@ -207,7 +207,12 @@ export const loadSkinDataByFile = async (
 
   const heroId = nameIdMap[heroName];
   // 3. 解压当前 WAD `E:\\lolsupport\\cslol-manager\\cslol-tools\\wad-extract.exe`,
-  await runCommand(Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'), fullWadPath, currentExtraPath);
+  await runCommand(
+    Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
+    false,
+    fullWadPath,
+    currentExtraPath
+  );
   // 4. 定位英雄目录 (data/characters/XXXX)
   const charactersDir = path.join(currentExtraPath, 'data', 'characters');
   if (!fs.existsSync(charactersDir)) {
@@ -264,11 +269,15 @@ export const loadSkinDataByFile = async (
       fs.copyFileSync(sourceBinPath, destBinPath);
 
       // 调用全局 ritobin_cli 自动解出 .py`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`
-      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), destBinPath);
+      await runCommand(
+        Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'),
+        true,
+        destBinPath
+      );
       const pyPath = destBinPath.replace('.bin', '.py');
       patchPyFile(pyPath, heroNameInLine);
       deleteFile(destBinPath);
-      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), pyPath);
+      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), true, pyPath);
       deleteFile(pyPath);
     }
     if (flag) {
