@@ -24,8 +24,9 @@ import {
   defaultOverlayPath,
   defaultSkinPath,
   modToolsWrapper,
+  tempPath,
 } from '../const';
-import { MessageUtil } from '../utils/message';
+import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
 import {
@@ -42,6 +43,7 @@ export const setIdName = (heroList: any[]) => {
   heroList?.forEach((item) => {
     idName[item.heroId] = item.alias;
   });
+  LogMsgUtil.sendLogMsg(tempPath);
 };
 export const loadSkinDataIdName = async () => {
   loadSkinData(idName);
