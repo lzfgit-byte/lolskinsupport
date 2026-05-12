@@ -48,8 +48,8 @@ export const setIdName = (heroList: any[]) => {
 export const loadSkinDataIdName = async () => {
   loadSkinData(idName);
 };
-export const loadSkinDataByFilePath = async (fullWadPath: string) => {
-  loadSkinDataByFile(idName, fullWadPath);
+export const loadSkinDataByFilePath = async (fullWadPath: string, current = -1) => {
+  loadSkinDataByFile(idName, fullWadPath, null, current);
 };
 export const readConfig = () => {
   if (!existsSync(configPath)) {

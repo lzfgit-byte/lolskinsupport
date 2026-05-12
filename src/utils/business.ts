@@ -185,10 +185,10 @@ export const f_loadSkinDataIdName = async () => {
   return executeFunction('loadSkinDataIdName');
 };
 /**
- * export const loadSkinDataByFilePath = async (fullWadPath: string) => {
+ * export const loadSkinDataByFilePath = async (fullWadPath: string, current = -1) => {
  */
-export const f_loadSkinDataByFilePath = async (fullWadPath: string) => {
-  return executeFunction('loadSkinDataByFilePath', fullWadPath);
+export const f_loadSkinDataByFilePath = async (fullWadPath: string, current = -1) => {
+  return executeFunction('loadSkinDataByFilePath', fullWadPath, current);
 };
 /**
  * export const shoutDownModTools = async () => {

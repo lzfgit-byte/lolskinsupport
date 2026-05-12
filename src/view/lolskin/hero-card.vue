@@ -20,7 +20,7 @@
   const emits = defineEmits(['clickHero']);
   const BASE_URL = 'https://game.gtimg.cn/images/lol/act/img/skinloading/';
   const handlerClick = () => {
-    emits('clickHero', props?.heroId);
+    emits('clickHero', props?.heroId, props.alias);
     LogUtil.log(`${props.alias}_${props.heroId}`);
   };
 </script>

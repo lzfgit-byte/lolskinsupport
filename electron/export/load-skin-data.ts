@@ -66,12 +66,8 @@ function emptyDir(dir: string) {
   }
   fs.mkdirSync(dir, { recursive: true });
 }
-/**
- * 处理反编译后的 .py 文件，进行逻辑掉包替换
- * @param {string} pyPath - .py 文件的绝对路径
- * @param {string} heroName - 英雄名称（用于路径填充）
- */
-const patchPyFile = (pyPath, heroName) => {
+
+const patchPyFile = (pyPath: string, skinId: any) => {
   if (!fs.existsSync(pyPath)) {
     return;
   }
@@ -85,22 +81,19 @@ const patchPyFile = (pyPath, heroName) => {
       // 逻辑：替换 = 号前面的内容，保留缩进
       if (line.includes('SkinCharacterDataProperties')) {
         // 正则匹配：(缩进)(任意内容)=(剩余部分)
-        return line.replace(/^(\s*).*(\s*=\s*.*)$/, `$1"Characters/${heroName}/Skins/Skin0"$2`);
+        return line.replace(`Skin${skinId}`, `Skin0`);
       }
 
       // 2. 匹配 mResourceResolver
       // 逻辑：替换 = 号后面的内容
       if (line.includes('mResourceResolver')) {
-        return line.replace(/^(.*=\s*)(.*)$/, `$1"Characters/${heroName}/Skins/Skin0/Resources"`);
+        return line.replace(`Skin${skinId}`, `Skin0`);
       }
 
       // 3. 匹配 包含 ResourceResolver 但不是 mResourceResolver 的行（或根据你要求的通用匹配）
       // 逻辑：替换 = 号前面的内容
       if (line.includes('ResourceResolver') && !line.includes('mResourceResolver')) {
-        return line.replace(
-          /^(\s*).*(\s*=\s*.*)$/,
-          `$1"Characters/${heroName}/Skins/Skin0/Resources"$2 `
-        );
+        return line.replace(`Skin${skinId}`, `Skin0`);
       }
       return line;
     });
@@ -187,7 +180,9 @@ export const createZipFile = async (wadName, outWadFilePath, heroName) => {
 export const loadSkinDataByFile = async (
   idNameMap: Record<string, any>,
   fullWadPath: string,
-  nameIdMap_?: Record<string, any>
+  nameIdMap_?: Record<string, any>,
+  currentSkinId = -1,
+  logPrefix = ''
 ) => {
   if (!fs.existsSync(fullWadPath)) {
     MessageUtil.error(`文件不存在: ${fullWadPath}`);
@@ -210,7 +205,7 @@ export const loadSkinDataByFile = async (
   logData(` [正在解压] ${fullWadPath}`);
   await runCommand(
     Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
-    false,
+    currentSkinId !== -1,
     fullWadPath,
     currentExtraPath
   );
@@ -225,7 +220,7 @@ export const loadSkinDataByFile = async (
     return fs.statSync(path.join(charactersDir, f)).isDirectory();
   });
   // 获取该 WAD 里的英雄名（如 annie）
-  let skinId = 0;
+  let skinId = Math.max(currentSkinId, 0);
   while (true) {
     let flag = false;
     for (const heroNameInLine of heroes) {
@@ -274,13 +269,13 @@ export const loadSkinDataByFile = async (
       // 调用全局 ritobin_cli 自动解出 .py`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`
       await runCommand(
         Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'),
-        false,
+        true,
         destBinPath
       );
       const pyPath = destBinPath.replace('.bin', '.py');
-      patchPyFile(pyPath, heroNameInLine);
+      patchPyFile(pyPath, skinId);
       deleteFile(destBinPath);
-      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), false, pyPath);
+      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), true, pyPath);
       deleteFile(pyPath);
     }
     if (flag) {
@@ -292,9 +287,12 @@ export const loadSkinDataByFile = async (
       skinId,
       heroId
     );
+    if (currentSkinId > -1) {
+      break;
+    }
     skinId++;
   }
-  logData(`${fullWadPath} 封包完成`);
+  logData(`${logPrefix} 封包完成`);
   emptyDir(currentExtraPath);
   emptyDir(path.join(OUTPUT_BASE_DIR, heroName));
   deleteDir(currentExtraPath);
@@ -317,16 +315,21 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
     const isNotLocale = !f.includes('zh_CN'); // 关键：过滤掉语言包
     return isWad && isNotLocale;
   });
-  let current = 1;
   const chunkSize = 20;
   while (true) {
     const wadList = wadFiles.splice(0, wadFiles.length > chunkSize ? chunkSize : wadFiles.length);
     await Promise.all(
       wadList.map((wadFile) =>
-        loadSkinDataByFile(idNameMap, Path.join(WAD_SOURCE_DIR, wadFile), nameIdMap)
+        loadSkinDataByFile(
+          idNameMap,
+          Path.join(WAD_SOURCE_DIR, wadFile),
+          nameIdMap,
+          -1,
+          `【重要】剩余文件数${wadFiles.length}`
+        )
       )
     );
-    logData(`【重要】剩余${wadFiles.length - current * chunkSize} 个 WAD 文件待处理...`);
+    logData(`【重要】剩余${wadFiles.length} 个 WAD 文件待处理...`);
     if (wadList.length === 0) {
       break;
     }

@@ -27,7 +27,7 @@
 
   const mainIMg = ref<mainHeroInfo[]>();
   let heros_: mainHeroInfo[] = [];
-  const { heroId, autoChose, heros } = useGlobalState();
+  const { heroId, autoChose, heros, heroAlias } = useGlobalState();
   let router = useRouter();
   http.axios
     .get('https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js')
@@ -37,8 +37,9 @@
       heros.value = res.hero;
       f_setIdName(res.hero);
     });
-  const handlerClickHero = (heroId_: string) => {
+  const handlerClickHero = (heroId_: string, heroAlias_) => {
     heroId.value = heroId_;
+    heroAlias.value = heroAlias_;
     router.push({ path: '/choseSkin' });
   };
   const searchValue = ref();

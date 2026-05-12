@@ -49,6 +49,9 @@
       <!--    <div class="confirm" style="top: 50px" @click="preChose"> -->
       <!--      <span>提前选择[{{ choseSkin?.name }}]</span> -->
       <!--    </div> -->
+      <div class="confirm" @click="doMkCurrentSkin">
+        <span>构建当前皮肤[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]overlay</span>
+      </div>
       <div class="confirm" @click="doMkOverlay">
         <span>构建[{{ choseSkin?.name }}]overlay</span>
       </div>
@@ -72,13 +75,15 @@
     f_confirmChoseSkin,
     f_getHeroChoseSkin,
     f_loadSkin,
+    f_loadSkinDataByFilePath,
     f_mkOverlay,
+    f_selectPathOrFile,
     f_setHeroChoseSkin,
   } from '@/utils/business';
 
   const visible = ref(false);
   let router = useRouter();
-  const { heroId, autoChose, heros, lcuState } = useGlobalState();
+  const { heroId, autoChose, heroAlias, lcuState, gamePath } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
   let skinIdImg = {};
   const allSkins = ref<skinInfo[]>();
@@ -185,6 +190,18 @@
     await f_setHeroChoseSkin(heroId.value, choseSkinId.value);
     // message.success('已应用');
   };
+  const mkSkinId = computed(() => {
+    return parseInt(choseSkinId.value?.replace(heroId.value, '')).toString();
+  });
+  const doMkCurrentSkin = async () => {
+    const path = await f_selectPathOrFile(
+      'openFile',
+      `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`
+    );
+    if (path) {
+      f_loadSkinDataByFilePath(path, +mkSkinId.value);
+    }
+  };
   onMounted(() => {
     getSkins();
   });
@@ -234,7 +251,7 @@
     position: absolute;
     border-radius: 2%;
     left: 50%;
-    bottom: 20px;
+    bottom: 80px;
     z-index: 9;
     color: white;
     cursor: pointer;
