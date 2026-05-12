@@ -83,6 +83,7 @@
     f_selectPathOrFile,
     f_setHeroChoseSkin,
   } from '@/utils/business';
+  import { showFrontendConfirm } from '@/utils/kit-utils';
 
   const visible = ref(false);
   let router = useRouter();
@@ -207,14 +208,16 @@
     }
   };
   const doMkCurrentHero = async () => {
-    const path = await f_selectPathOrFile(
-      'openFile',
-      `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`
-    );
-    if (path) {
-      f_loadSkinDataByFilePath(path);
-      logDrawOpen.value = true;
-    }
+    showFrontendConfirm('确认创建当前英雄皮肤').then(async () => {
+      const path = await f_selectPathOrFile(
+        'openFile',
+        `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`
+      );
+      if (path) {
+        f_loadSkinDataByFilePath(path);
+        logDrawOpen.value = true;
+      }
+    });
   };
   onMounted(() => {
     getSkins();
