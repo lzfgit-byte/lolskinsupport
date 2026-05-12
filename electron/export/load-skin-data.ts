@@ -238,6 +238,7 @@ export const loadSkinDataByFile = async (
       return { binFileName, sourceBinPath, skinId_: skinId };
     };
     const trueHerosDir = path.join(charactersDir, trueHeros, 'skins');
+    const allFilesLength = fs.readdirSync(trueHerosDir).length;
     const { sourceBinPath, skinId_ } = findNextSkinId(trueHerosDir, skinId, 50);
     skinId = skinId_;
     if (!fs.existsSync(sourceBinPath)) {
@@ -295,6 +296,7 @@ export const loadSkinDataByFile = async (
     if (currentSkinId > -1) {
       break;
     }
+    logData(`已处理皮肤id ：${skinId} / ${allFilesLength}`);
     skinId++;
   }
   logData(`${logPrefix} 封包完成`);
