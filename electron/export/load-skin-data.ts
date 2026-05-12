@@ -223,32 +223,38 @@ export const loadSkinDataByFile = async (
   let skinId = Math.max(currentSkinId, 0);
   while (true) {
     let flag = false;
+    const trueHeros = heroes.filter((item) => {
+      return item.toUpperCase() === heroName.toUpperCase();
+    })[0];
+    const findNextSkinId = (skinsDir: string, skinId: number, offset = 30) => {
+      let binFileName = `skin${skinId}.bin`;
+      let sourceBinPath = path.join(skinsDir, binFileName);
+      if (fs.existsSync(sourceBinPath)) {
+        return { binFileName, sourceBinPath, skinId_: skinId };
+      }
+      if (offset > 0) {
+        return findNextSkinId(skinsDir, ++skinId, offset - 1);
+      }
+      return { binFileName, sourceBinPath, skinId_: skinId };
+    };
+    const trueHerosDir = path.join(charactersDir, trueHeros, 'skins');
+    const { sourceBinPath, skinId_ } = findNextSkinId(trueHerosDir, skinId, 50);
+    skinId = skinId_;
+    if (!fs.existsSync(sourceBinPath)) {
+      break;
+    }
     for (const heroNameInLine of heroes) {
       logData(` [正在处理] 英雄名字 ${heroName} ${heroNameInLine} 皮肤id ${skinId}`);
       const skinsDir = path.join(charactersDir, heroNameInLine, 'skins');
+      let binFileName = `skin${skinId}.bin`;
+      let sourceBinPath = path.join(skinsDir, binFileName);
       if (!fs.existsSync(skinsDir)) {
         continue;
       }
-
-      const findNextSkinId = (skinId: number, offset = 30) => {
-        let binFileName = `skin${skinId}.bin`;
-        let sourceBinPath = path.join(skinsDir, binFileName);
-        if (fs.existsSync(sourceBinPath)) {
-          return { binFileName, sourceBinPath, skinId_: skinId };
-        }
-        if (offset > 0) {
-          return findNextSkinId(++skinId, offset - 1);
-        }
-        return { binFileName, sourceBinPath, skinId_: skinId };
-      };
-
       // 5. 递增探测 SkinId
-      const { sourceBinPath, skinId_ } = findNextSkinId(skinId, 50);
-      skinId = skinId_;
       // 如果找不到当前 ID 的文件，跳出循环去处理下一个英雄
       if (!fs.existsSync(sourceBinPath)) {
-        flag = true;
-        break;
+        continue;
       }
 
       // 6. 创建两级目录结构: 英雄名 -> 皮肤ID
