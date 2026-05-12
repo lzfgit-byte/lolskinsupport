@@ -136,6 +136,7 @@
     f_shoutDownModTools,
     f_winGetData,
   } from '@/utils/business';
+  import { showFrontendConfirm } from '@/utils/kit-utils';
 
   const route = useRoute();
   const {
@@ -197,18 +198,9 @@
   };
   const chuckValue = ref(20);
   const handleLoadAllSkinData = async () => {
-    f_checkCanAutoConfirm({
-      title: '提示',
-      msg: '是否生成全部皮肤？',
-      src: 'https://game.gtimg.cn/images/lol/act/img/skin/big_46358cd4-3f36-4987-9db8-aab046adf43f.jpg',
-      showBtn: true,
-      height: 250,
-      delay: 3000,
-    }).then((res) => {
-      if (res) {
-        f_loadSkinDataIdName(chuckValue.value);
-        logDrawOpen.value = true;
-      }
+    showFrontendConfirm('生成全部皮肤数据?').then(() => {
+      f_loadSkinDataIdName(chuckValue.value);
+      logDrawOpen.value = true;
     });
   };
   watchEffect(() => {
