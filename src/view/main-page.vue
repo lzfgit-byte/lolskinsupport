@@ -73,13 +73,17 @@
         <br /><br />
         lcuState：{{ lcuState }}<br /><br />
         <a-space>
+          <span>线程数：</span>
+          <a-input-number v-model:value="chuckValue" size="small" :min="1" :max="100" />
+          <a-button size="small" danger @click="handleLoadAllSkinData()">创建所有皮肤数据</a-button>
+        </a-space>
+        <br /><br />
+        <a-space>
           <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
           <a-button size="small" danger @click="f_shoutDownModTools()">杀掉modTools</a-button>
           <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
           <a-button size="small" @click="testNotify">测试通知</a-button>
           <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
-          <a-button size="small" danger @click="handleLoadAllSkinData()">创建所有皮肤数据</a-button>
-          <a-button size="small" danger @click="handleLoadSkinData()">创建皮肤数据</a-button>
         </a-space>
         <br />
         <img
@@ -191,6 +195,7 @@
       });
     });
   };
+  const chuckValue = ref(20);
   const handleLoadAllSkinData = async () => {
     f_checkCanAutoConfirm({
       title: '提示',
@@ -201,17 +206,10 @@
       delay: 3000,
     }).then((res) => {
       if (res) {
-        f_loadSkinDataIdName();
+        f_loadSkinDataIdName(chuckValue.value);
         logDrawOpen.value = true;
       }
     });
-  };
-  const handleLoadSkinData = async () => {
-    const path = await f_selectPathOrFile('openFile', `${gamePath.value}\\DATA\\FINAL\\Champions`);
-    if (path) {
-      await f_loadSkinDataByFilePath(path);
-      logDrawOpen.value = true;
-    }
   };
   watchEffect(() => {
     if (drawerOpen.value) {

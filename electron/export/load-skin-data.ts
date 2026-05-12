@@ -298,7 +298,7 @@ export const loadSkinDataByFile = async (
   deleteDir(currentExtraPath);
   deleteDir(path.join(OUTPUT_BASE_DIR, heroName));
 };
-export const loadSkinData = async (idNameMap: Record<string, any>) => {
+export const loadSkinData = async (idNameMap: Record<string, any>, chunkSize = 20) => {
   // 1. 初始化提取目录
   const nameIdMap = {};
   Object.keys(idNameMap).forEach((key: string) => {
@@ -315,7 +315,6 @@ export const loadSkinData = async (idNameMap: Record<string, any>) => {
     const isNotLocale = !f.includes('zh_CN'); // 关键：过滤掉语言包
     return isWad && isNotLocale;
   });
-  const chunkSize = 20;
   while (true) {
     const wadList = wadFiles.splice(0, wadFiles.length > chunkSize ? chunkSize : wadFiles.length);
     await Promise.all(

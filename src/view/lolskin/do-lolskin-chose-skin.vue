@@ -49,6 +49,9 @@
       <!--    <div class="confirm" style="top: 50px" @click="preChose"> -->
       <!--      <span>提前选择[{{ choseSkin?.name }}]</span> -->
       <!--    </div> -->
+      <div class="confirm" @click="doMkCurrentHero">
+        <span>构建当前英雄[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]overlay</span>
+      </div>
       <div class="confirm" @click="doMkCurrentSkin">
         <span>构建当前皮肤[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]overlay</span>
       </div>
@@ -200,6 +203,16 @@
     );
     if (path) {
       f_loadSkinDataByFilePath(path, +mkSkinId.value);
+      logDrawOpen.value = true;
+    }
+  };
+  const doMkCurrentHero = async () => {
+    const path = await f_selectPathOrFile(
+      'openFile',
+      `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`
+    );
+    if (path) {
+      f_loadSkinDataByFilePath(path);
       logDrawOpen.value = true;
     }
   };

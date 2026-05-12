@@ -45,8 +45,8 @@ export const setIdName = (heroList: any[]) => {
   });
   LogMsgUtil.sendLogMsg(tempPath);
 };
-export const loadSkinDataIdName = async () => {
-  loadSkinData(idName);
+export const loadSkinDataIdName = async (chuckSize = 20) => {
+  loadSkinData(idName, chuckSize);
 };
 export const loadSkinDataByFilePath = async (fullWadPath: string, current = -1) => {
   loadSkinDataByFile(idName, fullWadPath, null, current);

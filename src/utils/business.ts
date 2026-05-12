@@ -181,7 +181,7 @@ export const f_setIdName = async (heroList: any[]) => {
 /**
  * export const loadSkinDataIdName = () => {
  */
-export const f_loadSkinDataIdName = async () => {
+export const f_loadSkinDataIdName = async (chuckSize = 20) => {
   return executeFunction('loadSkinDataIdName');
 };
 /**
