@@ -83,7 +83,7 @@
 
   const visible = ref(false);
   let router = useRouter();
-  const { heroId, autoChose, heroAlias, lcuState, gamePath } = useGlobalState();
+  const { heroId, autoChose, heroAlias, lcuState, gamePath, logDrawOpen } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
   let skinIdImg = {};
   const allSkins = ref<skinInfo[]>();
@@ -200,6 +200,7 @@
     );
     if (path) {
       f_loadSkinDataByFilePath(path, +mkSkinId.value);
+      logDrawOpen.value = true;
     }
   };
   onMounted(() => {
