@@ -244,7 +244,6 @@ export const loadSkinDataByFile = async (
       break;
     }
     for (const heroNameInLine of heroes) {
-      logData(` [正在处理] 英雄名字 ${heroName} ${heroNameInLine} 皮肤id ${skinId}`);
       const skinsDir = path.join(charactersDir, heroNameInLine, 'skins');
       let binFileName = `skin${skinId}.bin`;
       let sourceBinPath = path.join(skinsDir, binFileName);
@@ -256,7 +255,7 @@ export const loadSkinDataByFile = async (
       if (!fs.existsSync(sourceBinPath)) {
         continue;
       }
-
+      logData(` [正在处理] 英雄名字 ${heroName} ${heroNameInLine} 皮肤id ${skinId}`);
       // 6. 创建两级目录结构: 英雄名 -> 皮肤ID
       // 路径示例: C:\Users\18074\Downloads\annie\skin1\data\characters\annie\skins
       const targetSkinDir = path.join(
