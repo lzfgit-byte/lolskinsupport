@@ -315,7 +315,9 @@ export const loadSkinData = async (idNameMap: Record<string, any>, chunkSize = 2
     const isNotLocale = !f.includes('zh_CN'); // 关键：过滤掉语言包
     return isWad && isNotLocale;
   });
+  logData(`开始构建皮肤数据...分片数：${chunkSize} 文件总数：${wadFiles.length}`);
   while (true) {
+    const sTime = Date.now();
     const wadList = wadFiles.splice(0, wadFiles.length > chunkSize ? chunkSize : wadFiles.length);
     await Promise.all(
       wadList.map((wadFile) =>
@@ -328,7 +330,12 @@ export const loadSkinData = async (idNameMap: Record<string, any>, chunkSize = 2
         )
       )
     );
-    logData(`【重要】剩余${wadFiles.length} 个 WAD 文件待处理...`);
+    const endTime = Date.now();
+    logData(
+      `【重要】已处理 ${wadList.length} 个 WAD 文件,剩余${wadFiles.length} 个 WAD，耗时 ${
+        (endTime - sTime) / 1000
+      } 秒`
+    );
     if (wadList.length === 0) {
       break;
     }
