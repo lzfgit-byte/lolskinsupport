@@ -124,13 +124,13 @@ const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
     // 注意：路径带空格时务必使用双引号包裹 `${MOD_TOOLS_PATH}\\wad-make.exe`;
     const command = Path.join(MOD_TOOLS_PATH, 'wad-make.exe');
 
-    console.log(` [正在封包] 生成 WAD: ${outputWadPath}`);
+    logData(` [正在封包] 生成 WAD: ${outputWadPath}`);
     await runCommand(command, true, skinFolderPath, outputWadPath);
 
     await createZipFile(wadName, outputWadPath, heroName);
     return outputWadPath;
   } catch (err) {
-    console.error(` [封包失败] ${skinFolderPath}:`, err.message);
+    logData(` [封包失败] ${skinFolderPath}:`, err.message);
   }
 };
 export const createZipFile = async (wadName, outWadFilePath, heroName) => {
@@ -207,12 +207,14 @@ export const loadSkinDataByFile = async (
 
   const heroId = nameIdMap[heroName];
   // 3. 解压当前 WAD `E:\\lolsupport\\cslol-manager\\cslol-tools\\wad-extract.exe`,
+  logData(` [正在解压] ${fullWadPath}`);
   await runCommand(
     Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
     false,
     fullWadPath,
     currentExtraPath
   );
+  logData(` [解压完成] ${fullWadPath}`);
   // 4. 定位英雄目录 (data/characters/XXXX)
   const charactersDir = path.join(currentExtraPath, 'data', 'characters');
   if (!fs.existsSync(charactersDir)) {
@@ -227,6 +229,7 @@ export const loadSkinDataByFile = async (
   while (true) {
     let flag = false;
     for (const heroNameInLine of heroes) {
+      logData(` [正在处理] 英雄名字 ${heroName} ${heroNameInLine} 皮肤id ${skinId}`);
       const skinsDir = path.join(charactersDir, heroNameInLine, 'skins');
       if (!fs.existsSync(skinsDir)) {
         continue;
@@ -245,7 +248,7 @@ export const loadSkinDataByFile = async (
       };
 
       // 5. 递增探测 SkinId
-      const { sourceBinPath, skinId_ } = findNextSkinId(skinId, 5);
+      const { sourceBinPath, skinId_ } = findNextSkinId(skinId, 50);
       skinId = skinId_;
       // 如果找不到当前 ID 的文件，跳出循环去处理下一个英雄
       if (!fs.existsSync(sourceBinPath)) {
@@ -271,13 +274,13 @@ export const loadSkinDataByFile = async (
       // 调用全局 ritobin_cli 自动解出 .py`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`
       await runCommand(
         Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'),
-        true,
+        false,
         destBinPath
       );
       const pyPath = destBinPath.replace('.bin', '.py');
       patchPyFile(pyPath, heroNameInLine);
       deleteFile(destBinPath);
-      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), true, pyPath);
+      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), false, pyPath);
       deleteFile(pyPath);
     }
     if (flag) {

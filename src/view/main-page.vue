@@ -202,13 +202,16 @@
     }).then((res) => {
       if (res) {
         f_loadSkinDataIdName();
+        logDrawOpen.value = true;
       }
     });
   };
   const handleLoadSkinData = async () => {
     const path = await f_selectPathOrFile('openFile', `${gamePath.value}\\DATA\\FINAL\\Champions`);
-    await f_loadSkinDataByFilePath(path);
-    logDrawOpen.value = true;
+    if (path) {
+      await f_loadSkinDataByFilePath(path);
+      logDrawOpen.value = true;
+    }
   };
   watchEffect(() => {
     if (drawerOpen.value) {
