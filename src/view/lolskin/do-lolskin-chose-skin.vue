@@ -45,21 +45,26 @@
         />
       </div>
     </Modal>
+    <a-drawer v-model:open="drawOpen">
+      <a-button m-b-10px @click="doMkCurrentHero">
+        构建当前英雄皮肤文件[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
+      </a-button>
+      <a-button m-b-10px @click="doMkCurrentSkin">
+        构建当前皮肤文件[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
+      </a-button>
+      <a-button m-b-10px @click="doUnPackWadFile">
+        解压缩当前英雄wad[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
+      </a-button>
+    </a-drawer>
     <div pos-absolute h-20 flex style="bottom: 0; width: auto; justify-content: end; right: 0">
-      <!--    <div class="confirm" style="top: 50px" @click="preChose"> -->
-      <!--      <span>提前选择[{{ choseSkin?.name }}]</span> -->
-      <!--    </div> -->
-      <div class="confirm" @click="doMkCurrentHero">
-        <span>构建当前英雄[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]overlay</span>
-      </div>
-      <div class="confirm" @click="doMkCurrentSkin">
-        <span>构建当前皮肤[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]overlay</span>
-      </div>
       <div class="confirm" @click="doMkOverlay">
         <span>构建[{{ choseSkin?.name }}]overlay</span>
       </div>
       <div class="confirm" @click="confirm_">
         <span>点击使用 [{{ choseSkin?.name }}] 皮肤</span>
+      </div>
+      <div class="confirm" @click="drawOpen = true">
+        <span>展开</span>
       </div>
     </div>
   </div>
@@ -82,6 +87,7 @@
     f_mkOverlay,
     f_selectPathOrFile,
     f_setHeroChoseSkin,
+    f_unpackWadFileTo,
   } from '@/utils/business';
   import { showFrontendConfirm } from '@/utils/kit-utils';
 
@@ -219,6 +225,18 @@
       }
     });
   };
+
+  const doUnPackWadFile = async () => {
+    const path = await f_selectPathOrFile(
+      'openFile',
+      `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`
+    );
+    if (path) {
+      f_unpackWadFileTo(path);
+      logDrawOpen.value = true;
+    }
+  };
+  const drawOpen = ref(false);
   onMounted(() => {
     getSkins();
   });

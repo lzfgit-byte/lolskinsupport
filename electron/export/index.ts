@@ -34,6 +34,7 @@ import {
   loadSkinData,
   loadSkinDataByFile,
   setConfigData,
+  unpackWadFile,
 } from './load-skin-data';
 
 export * from '../http';
@@ -475,4 +476,7 @@ export const selectPathOrFile = async (
 export const shoutDownModTools = async () => {
   await modToolsWrapper.forceKillModTools();
   MessageUtil.success('已关闭ModTools');
+};
+export const unpackWadFileTo = async (fullWadPath) => {
+  return unpackWadFile(fullWadPath);
 };

@@ -196,3 +196,9 @@ export const f_loadSkinDataByFilePath = async (fullWadPath: string, current = -1
 export const f_shoutDownModTools = async () => {
   return executeFunction('shoutDownModTools');
 };
+/**
+ * export const unpackWadFileTo = async (fullWadPath) => {
+ */
+export const f_unpackWadFileTo = async (fullWadPath) => {
+  return executeFunction('unpackWadFileTo', fullWadPath);
+};

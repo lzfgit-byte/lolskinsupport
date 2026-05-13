@@ -27,7 +27,7 @@ export const setConfigData = (gamePath, outBasePath, modToolsPath) => {
 };
 
 const logData = (msg: string, ...data: any[]) => {
-  console.log(msg, data);
+  console.log(msg, ...data);
   LogMsgUtil.sendLogMsg(msg + data?.toString());
 };
 const deleteFile = (filePath: string) => {
@@ -67,39 +67,49 @@ function emptyDir(dir: string) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-const patchPyFile = (pyPath: string, skinId: any) => {
+const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
   if (!fs.existsSync(pyPath)) {
     return;
   }
-
+  let replaceData = `"Characters/${heroName}/Skins/Skin0"`;
+  let resource = `"Characters/${heroName}/Skins/Skin0/Resources"`;
   try {
     let content = fs.readFileSync(pyPath, 'utf-8');
     const lines = content.split('\n');
-
     const processedLines = lines.map((line) => {
       // 1. 匹配 SkinCharacterDataProperties
       // 逻辑：替换 = 号前面的内容，保留缩进
-      if (line.includes('SkinCharacterDataProperties')) {
+      if (line.includes('SkinCharacterDataProperties') && line.includes('=')) {
         // 正则匹配：(缩进)(任意内容)=(剩余部分)
-        return line.replace(`Skin${skinId}`, `Skin0`);
+        const res = line.replace(line.split('=')[0].trim(), replaceData);
+        logData(`SkinCharacterDataProperties 替换 ${line} -> ${res}`);
+        return res;
       }
 
       // 2. 匹配 mResourceResolver
       // 逻辑：替换 = 号后面的内容
-      if (line.includes('mResourceResolver')) {
-        return line.replace(`Skin${skinId}`, `Skin0`);
+      if (line.includes('mResourceResolver') && line.includes('=')) {
+        const res = line.replace(line.split('=')[1].trim(), resource);
+        logData(`mResourceResolver 替换 ${line} -> ${res}`);
+        return res;
       }
 
       // 3. 匹配 包含 ResourceResolver 但不是 mResourceResolver 的行（或根据你要求的通用匹配）
       // 逻辑：替换 = 号前面的内容
-      if (line.includes('ResourceResolver') && !line.includes('mResourceResolver')) {
-        return line.replace(`Skin${skinId}`, `Skin0`);
+      if (
+        line.includes('ResourceResolver') &&
+        !line.includes('mResourceResolver') &&
+        line.includes('=')
+      ) {
+        const res = line.replace(line.split('=')[0].trim(), resource);
+        logData(`ResourceResolver 替换 ${line} -> ${res}`);
+        return res;
       }
       return line;
     });
 
     fs.writeFileSync(pyPath, processedLines.join('\n'), 'utf-8');
-    logData(` [修改成功] 已优化代码逻辑: ${path.basename(pyPath)}`);
+    logData(`${heroName}_${skinId}_${pyPath} --> 修改结束`);
   } catch (err) {
     logData(` [修改失败] 处理 ${pyPath} 时出错:`, err.message);
   }
@@ -176,7 +186,21 @@ export const createZipFile = async (wadName, outWadFilePath, heroName) => {
     throw err;
   }
 };
-
+const getHeroName = (fullWadPath: string) => {
+  return path.basename(fullWadPath, path.extname(fullWadPath)).split('.')[0];
+};
+export const unpackWadFile = async (fullWadPath) => {
+  const heroName = getHeroName(fullWadPath);
+  const currentExtraPath = Path.join(EXTRACT_BASE_DIR, heroName);
+  emptyDir(currentExtraPath);
+  await runCommand(
+    Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
+    true,
+    fullWadPath,
+    currentExtraPath
+  );
+  logData(` [解压完成] ${fullWadPath}`);
+};
 export const loadSkinDataByFile = async (
   idNameMap: Record<string, any>,
   fullWadPath: string,
@@ -188,7 +212,7 @@ export const loadSkinDataByFile = async (
     MessageUtil.error(`文件不存在: ${fullWadPath}`);
     return;
   }
-  const heroName = path.basename(fullWadPath, path.extname(fullWadPath)).split('.')[0];
+  const heroName = getHeroName(fullWadPath);
   const currentExtraPath = Path.join(EXTRACT_BASE_DIR, heroName);
   const currentOutPutBaseDir = Path.join(OUTPUT_BASE_DIR, heroName);
   emptyDir(currentExtraPath);
@@ -226,15 +250,19 @@ export const loadSkinDataByFile = async (
     const trueHeros = heroes.filter((item) => {
       return item.toUpperCase() === heroName.toUpperCase();
     })[0];
-    const findNextSkinId = (skinsDir: string, skinId: number, offset = 30) => {
+    const findNextSkinId = (skinsDir: string, skinId: number, offset = 50) => {
+      while (offset > 0) {
+        let binFileName = `skin${skinId}.bin`;
+        let sourceBinPath = path.join(skinsDir, binFileName);
+        if (fs.existsSync(sourceBinPath)) {
+          return { binFileName, sourceBinPath, skinId_: skinId };
+        }
+        logData(` [发现跨id皮肤] 一下路径，未找到 ${sourceBinPath}`);
+        offset--;
+        skinId++;
+      }
       let binFileName = `skin${skinId}.bin`;
       let sourceBinPath = path.join(skinsDir, binFileName);
-      if (fs.existsSync(sourceBinPath)) {
-        return { binFileName, sourceBinPath, skinId_: skinId };
-      }
-      if (offset > 0) {
-        return findNextSkinId(skinsDir, ++skinId, offset - 1);
-      }
       return { binFileName, sourceBinPath, skinId_: skinId };
     };
     const trueHerosDir = path.join(charactersDir, trueHeros, 'skins');
@@ -271,6 +299,7 @@ export const loadSkinDataByFile = async (
       // 7. 复制并解包
       const destBinPath = path.join(targetSkinDir, `skin0.bin`);
       fs.copyFileSync(sourceBinPath, destBinPath);
+      logData(` [复制完成] ${sourceBinPath} -> ${destBinPath}`);
 
       // 调用全局 ritobin_cli 自动解出 .py`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`
       await runCommand(
@@ -278,10 +307,13 @@ export const loadSkinDataByFile = async (
         true,
         destBinPath
       );
+      logData(` [解包完成 ritobin]  ${destBinPath}`);
       const pyPath = destBinPath.replace('.bin', '.py');
-      patchPyFile(pyPath, skinId);
+      patchPyFile(heroNameInLine, pyPath, skinId);
+      logData(` [处理完成 py文件修改] ${pyPath}`);
       deleteFile(destBinPath);
       await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), true, pyPath);
+      logData(` [封包完成 ritobin] ${pyPath}`);
       deleteFile(pyPath);
     }
     if (flag) {
