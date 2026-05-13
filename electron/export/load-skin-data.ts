@@ -82,7 +82,7 @@ const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
       if (line.includes('SkinCharacterDataProperties') && line.includes('=')) {
         // 正则匹配：(缩进)(任意内容)=(剩余部分)
         const res = line.replace(line.split('=')[0].trim(), replaceData);
-        logData(`SkinCharacterDataProperties 替换 ${line} -> ${res}`);
+        logData(`SkinCharacterDataProperties 替换 |${line}| -> |${res}|`);
         return res;
       }
 
@@ -90,7 +90,7 @@ const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
       // 逻辑：替换 = 号后面的内容
       if (line.includes('mResourceResolver') && line.includes('=')) {
         const res = line.replace(line.split('=')[1].trim(), resource);
-        logData(`mResourceResolver 替换 ${line} -> ${res}`);
+        logData(`mResourceResolver 替换 |${line}| -> |${res}|`);
         return res;
       }
 
@@ -102,7 +102,7 @@ const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
         line.includes('=')
       ) {
         const res = line.replace(line.split('=')[0].trim(), resource);
-        logData(`ResourceResolver 替换 ${line} -> ${res}`);
+        logData(`ResourceResolver 替换 |${line}| -> |${res}|`);
         return res;
       }
       return line;
@@ -229,7 +229,7 @@ export const loadSkinDataByFile = async (
   logData(` [正在解压] ${fullWadPath}`);
   await runCommand(
     Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
-    currentSkinId !== -1,
+    false,
     fullWadPath,
     currentExtraPath
   );
