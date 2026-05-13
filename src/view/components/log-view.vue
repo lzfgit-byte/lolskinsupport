@@ -16,14 +16,7 @@
         <a-input-number v-model:value="chuckValue" size="small" />
       </div>
 
-      <a-switch
-        v-model:checked="isQuickDelete"
-        z-30001
-        size="small"
-        absolute
-        right-30
-        top-2
-      ></a-switch>
+      <a-switch v-model:checked="autoRoll" z-30001 size="small" absolute right-30 top-2></a-switch>
       <Codemirror
         v-model="code"
         :autofocus="true"
@@ -49,21 +42,16 @@
   import { Codemirror } from 'vue-codemirror';
   import { javascript } from '@codemirror/lang-javascript';
   import { oneDark } from '@codemirror/theme-one-dark';
-  import { watchEffect } from 'vue-demi';
   import useGlobalState from '@/hooks/use-global-state';
-  const { LogUtil, logDrawOpen, isQuickDelete, chuckValue } = useGlobalState();
+  const { LogUtil, logDrawOpen, autoRoll, chuckValue, codeMirrorView } = useGlobalState();
   const code = ref(``);
   const extensions = [javascript(), oneDark];
-  const view = shallowRef();
   const handleReady = (payload) => {
-    view.value = payload.view;
+    codeMirrorView.value = payload.view;
   };
   const handleClear = () => {
     LogUtil.clear();
   };
-  watchEffect(() => {
-    code.value = LogUtil.getLogs().join('\n');
-  });
   defineExpose({
     show: () => {
       logDrawOpen.value = true;
