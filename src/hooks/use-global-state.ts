@@ -21,12 +21,13 @@ const loadSkinIds = ref([]);
 const logDrawOpen = ref(false);
 const isQuickDelete = ref(true);
 const title = useTitle('ghs');
+const chuckValue = ref(38);
 export const LogUtil = {
   log: (msg: string) => {
     if (msg.indexOf('【重要】') > -1) {
       title.value = msg;
     }
-    if ((isQuickDelete.value || !logDrawOpen.value) && logs.value.length > 38) {
+    if ((isQuickDelete.value || !logDrawOpen.value) && logs.value.length > chuckValue.value) {
       logs.value.splice(0, 10);
     }
     logs.value.push(msg);
@@ -57,4 +58,5 @@ export default () => ({
   loadSkinIds,
   logDrawOpen,
   isQuickDelete,
+  chuckValue,
 });

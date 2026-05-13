@@ -12,6 +12,10 @@
   >
     <div h-full w-full class="editor" relative>
       <a-button z-30001 size="small" absolute right-5 top-1 @click="handleClear">清除日志</a-button>
+      <div z-30001 absolute right-50 top-1>
+        <a-input-number v-model:value="chuckValue" size="small" />
+      </div>
+
       <a-switch
         v-model:checked="isQuickDelete"
         z-30001
@@ -47,7 +51,7 @@
   import { oneDark } from '@codemirror/theme-one-dark';
   import { watchEffect } from 'vue-demi';
   import useGlobalState from '@/hooks/use-global-state';
-  const { LogUtil, logDrawOpen, isQuickDelete } = useGlobalState();
+  const { LogUtil, logDrawOpen, isQuickDelete, chuckValue } = useGlobalState();
   const code = ref(``);
   const extensions = [javascript(), oneDark];
   const view = shallowRef();
