@@ -251,6 +251,7 @@ export const loadSkinDataByFile = async (
     const trueHeros = heroes.filter((item) => {
       return item.toUpperCase() === heroName.toUpperCase();
     })[0];
+    const notifyKey = new Date().getTime();
     const findNextSkinId = (skinsDir: string, skinId: number, offset = 50) => {
       while (offset > 0) {
         let binFileName = `skin${skinId}.bin`;
@@ -258,7 +259,7 @@ export const loadSkinDataByFile = async (
         if (fs.existsSync(sourceBinPath)) {
           return { binFileName, sourceBinPath, skinId_: skinId };
         }
-        logData(` [发现跨id皮肤] 一下路径，未找到 ${sourceBinPath}`);
+        NotifyMsgUtil.sendNotifyMsg('[发现跨id皮肤]', sourceBinPath, `${notifyKey}`);
         offset--;
         skinId++;
       }
