@@ -29,30 +29,36 @@ const append = (text: string) => {
   if (!autoRoll.value) {
     return;
   }
-  const doc = codeMirrorView.value.state.doc;
+
+  const view = codeMirrorView.value;
+  const doc = view.state.doc;
   const lines = doc.lines;
 
-  let from = doc.length;
-  let insert = (doc.length ? '\n' : '') + text;
-  // 超过 100 行，删掉最前面的
+  const insert = (doc.length ? '\n' : '') + text;
+
+  // 超过限制，删前面的
   if (lines >= chuckValue.value) {
     const removeTo = doc.line(lines - (chuckValue.value - 1)).from;
-    codeMirrorView.value.dispatch({
+
+    view.dispatch({
       changes: [
         { from: 0, to: removeTo },
         { from: doc.length, insert },
       ],
-      effects: EditorView.scrollIntoView(doc.length + insert.length - removeTo, { y: 'end' }),
     });
-
-    return;
+  } else {
+    view.dispatch({
+      changes: {
+        from: doc.length,
+        insert,
+      },
+    });
   }
-  codeMirrorView.value.dispatch({
-    changes: {
-      from,
-      insert,
-    },
-    effects: EditorView.scrollIntoView(doc.length + insert.length, { y: 'end' }),
+
+  // 只纵向滚到底，不动横向
+  requestAnimationFrame(() => {
+    const scroller = view.scrollDOM;
+    scroller.scrollTop = scroller.scrollHeight;
   });
 };
 export const LogUtil = {
