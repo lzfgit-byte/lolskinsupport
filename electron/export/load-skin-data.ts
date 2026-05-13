@@ -99,6 +99,7 @@ const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
       if (
         line.includes('ResourceResolver') &&
         !line.includes('mResourceResolver') &&
+        !line.includes('pointer') &&
         line.includes('=')
       ) {
         const res = line.replace(line.split('=')[0].trim(), resource);
