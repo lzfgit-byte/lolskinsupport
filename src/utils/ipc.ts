@@ -17,7 +17,7 @@ export const executeFunction = async (funcName: string, ...args: any[]) => {
   });
   return await ipcRenderer.invoke(funcName, ...args);
 };
-const { LogUtil, heroId, lcuState, heroIdAliasMap, heroAlias } = useGlobalState();
+const { LogUtil, heroId, lcuState, heroIdAliasMap, heroAlias, modToolsState } = useGlobalState();
 // 获取后台的消息
 ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_MESSAGE, (_event, args: MessageInfo) => {
   const { msg, type } = args;
@@ -61,4 +61,7 @@ ipcRenderer.on('champion-selected', (_event, championId: string) => {
 });
 ipcRenderer.on('notify-lcu-connect', (_event, lcuState_: boolean) => {
   lcuState.value = lcuState_;
+});
+ipcRenderer.on('notify-mod-tools-connect', (_event, flag: boolean) => {
+  modToolsState.value = flag;
 });

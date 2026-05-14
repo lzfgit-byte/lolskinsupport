@@ -18,6 +18,7 @@ const overlayConfigPath = ref('');
 const installedPath = ref('');
 const autoChose = ref(true);
 const lcuState = ref(false);
+const modToolsState = ref(false);
 const heros = ref<mainHeroInfo[]>();
 const loadSkinIds = ref([]);
 const logDrawOpen = ref(false);
@@ -101,4 +102,5 @@ export default () => ({
   chuckValue,
   codeMirrorView,
   heroIdAliasMap,
+  modToolsState,
 });

@@ -78,7 +78,9 @@
         <br /><br />
         <a-space>
           <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
-          <a-button size="small" danger @click="f_shoutDownModTools()">杀掉modTools</a-button>
+          <a-button size="small" danger @click="f_shoutDownModTools()">
+            杀掉modTools[{{ modToolsState }}]
+          </a-button>
           <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
           <a-button size="small" @click="testNotify">测试通知</a-button>
           <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
@@ -145,6 +147,7 @@
     lcuState,
     loadSkinIds,
     logDrawOpen,
+    modToolsState,
   } = useGlobalState();
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const testSlideWin = () => {
