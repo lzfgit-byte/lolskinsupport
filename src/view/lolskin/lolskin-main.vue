@@ -27,7 +27,7 @@
 
   const mainIMg = ref<mainHeroInfo[]>();
   let heros_: mainHeroInfo[] = [];
-  const { heroId, autoChose, heros, heroAlias } = useGlobalState();
+  const { heroId, autoChose, heros, heroAlias, heroIdAliasMap } = useGlobalState();
   let router = useRouter();
   http.axios
     .get('https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js')
@@ -36,6 +36,9 @@
       heros_ = res.hero;
       heros.value = res.hero;
       f_setIdName(res.hero);
+      res.hero?.forEach((item) => {
+        heroIdAliasMap[item.heroId] = item.alias;
+      });
     });
   const handlerClickHero = (heroId_: string, heroAlias_) => {
     heroId.value = heroId_;
@@ -44,7 +47,6 @@
   };
   const searchValue = ref();
   watchEffect(() => {
-    console.log(searchValue.value);
     mainIMg.value = heros_.filter((item) => item.keywords.indexOf(searchValue.value) > -1);
   });
   onMounted(() => {

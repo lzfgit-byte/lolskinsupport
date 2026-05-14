@@ -207,7 +207,7 @@ export const loadSkinDataByFile = async (
   fullWadPath: string,
   nameIdMap_?: Record<string, any>,
   currentSkinId = -1,
-  logPrefix = ''
+  cb?: Function
 ) => {
   if (!fs.existsSync(fullWadPath)) {
     MessageUtil.error(`文件不存在: ${fullWadPath}`);
@@ -333,11 +333,12 @@ export const loadSkinDataByFile = async (
     logData(`已处理皮肤id ：${skinId} / ${allFilesLength}`);
     skinId++;
   }
-  logData(`${logPrefix} 封包完成`);
+  logData(`${heroName}_${heroId} 封包完成`);
   emptyDir(currentExtraPath);
   emptyDir(path.join(OUTPUT_BASE_DIR, heroName));
   deleteDir(currentExtraPath);
   deleteDir(path.join(OUTPUT_BASE_DIR, heroName));
+  cb && cb(heroName, heroId);
 };
 export const loadSkinData = async (idNameMap: Record<string, any>, chunkSize = 20) => {
   // 1. 初始化提取目录
@@ -357,7 +358,9 @@ export const loadSkinData = async (idNameMap: Record<string, any>, chunkSize = 2
     return isWad && isNotLocale;
   });
   logData(`开始构建皮肤数据...分片数：${chunkSize} 文件总数：${wadFiles.length}`);
-  while (true) {
+  const notifyKey = new Date().getTime();
+  let count = 0;
+  while (wadFiles.length > 0) {
     const sTime = Date.now();
     const wadList = wadFiles.splice(0, wadFiles.length > chunkSize ? chunkSize : wadFiles.length);
     await Promise.all(
@@ -367,7 +370,13 @@ export const loadSkinData = async (idNameMap: Record<string, any>, chunkSize = 2
           Path.join(WAD_SOURCE_DIR, wadFile),
           nameIdMap,
           -1,
-          `【重要】剩余文件数${wadFiles.length}`
+          (heroName: string) => {
+            NotifyMsgUtil.sendNotifyMsg(
+              `[处理完成_${heroName}] ${++count} / ${wadFiles.length} `,
+              '',
+              `${notifyKey}`
+            );
+          }
         )
       )
     );
@@ -377,9 +386,6 @@ export const loadSkinData = async (idNameMap: Record<string, any>, chunkSize = 2
         (endTime - sTime) / 1000
       } 秒`
     );
-    if (wadList.length === 0) {
-      break;
-    }
   }
   logData('所有英雄皮肤已按 英雄名/皮肤ID 目录分类完成。');
 };

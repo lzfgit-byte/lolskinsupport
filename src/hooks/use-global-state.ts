@@ -25,6 +25,7 @@ const autoRoll = ref(true);
 const title = useTitle('ghs');
 const chuckValue = ref(200);
 const codeMirrorView = shallowRef();
+const heroIdAliasMap = {};
 const append = (text: string) => {
   if (!autoRoll.value) {
     return;
@@ -99,4 +100,5 @@ export default () => ({
   autoRoll,
   chuckValue,
   codeMirrorView,
+  heroIdAliasMap,
 });
