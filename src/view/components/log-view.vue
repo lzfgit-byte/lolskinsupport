@@ -62,9 +62,6 @@
       if (event.ctrlKey && event.key === 'l') {
         logDrawOpen.value = !logDrawOpen.value;
       }
-      if (event.ctrlKey && isQuickDelete.value && event.key === 'c') {
-        LogUtil.clear();
-      }
     });
   });
 </script>

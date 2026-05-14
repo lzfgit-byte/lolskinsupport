@@ -47,6 +47,7 @@
   };
   const searchValue = ref();
   watchEffect(() => {
+    console.log(searchValue.value);
     mainIMg.value = heros_.filter((item) => item.keywords.indexOf(searchValue.value) > -1);
   });
   onMounted(() => {

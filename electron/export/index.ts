@@ -1,7 +1,6 @@
-import * as Path from 'node:path';
-import path from 'node:path';
 import fs, { appendFileSync } from 'node:fs';
 import { exec } from 'node:child_process';
+import Path from 'node:path';
 import { dialog, shell } from 'electron';
 import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
 import {
@@ -133,7 +132,7 @@ export const findFile = (dir, targetFile) => {
   const files = fs.readdirSync(dir);
 
   for (const file of files) {
-    const fullPath = path.join(dir, file);
+    const fullPath = Path.join(dir, file);
     const stat = fs.statSync(fullPath);
 
     if (stat.isDirectory()) {
@@ -150,7 +149,19 @@ export const findFile = (dir, targetFile) => {
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
   const curSkinId = skinId.replace(heroId, '');
-  return findFile(Path.join(getSkinPath(), SKIN_DEFAULT_SUFFIX), `${heroId}_${+curSkinId}.zip`);
+  const skinPath = Path.join(
+    getSkinPath(),
+    SKIN_DEFAULT_SUFFIX,
+    `${heroId}`,
+    `${heroId}_${+curSkinId}.zip`
+  );
+  if (fs.existsSync(skinPath)) {
+    return skinPath;
+  }
+  return findFile(
+    Path.join(getSkinPath(), SKIN_DEFAULT_SUFFIX, heroId),
+    `${heroId}_${+curSkinId}.zip`
+  );
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);
@@ -274,7 +285,7 @@ function copyRecursive(src: string, dest: string) {
 
   // 如果是文件，直接复制到 dest
   if (stat.isFile()) {
-    const destFile = path.join(dest, path.basename(src));
+    const destFile = Path.join(dest, Path.basename(src));
     fs.copyFileSync(src, destFile);
     return;
   }
@@ -284,16 +295,16 @@ function copyRecursive(src: string, dest: string) {
     const items = fs.readdirSync(src);
 
     for (const item of items) {
-      const itemSrc = path.join(src, item);
+      const itemSrc = Path.join(src, item);
       const itemStat = fs.statSync(itemSrc);
 
       if (itemStat.isFile()) {
         // 文件 → 直接复制到 dest
-        const destFile = path.join(dest, item);
+        const destFile = Path.join(dest, item);
         fs.copyFileSync(itemSrc, destFile);
       } else if (itemStat.isDirectory()) {
         // 子目录 → 在 dest 下创建同名目录
-        const newDestDir = path.join(dest, item);
+        const newDestDir = Path.join(dest, item);
         if (!fs.existsSync(newDestDir)) {
           fs.mkdirSync(newDestDir);
         }
@@ -307,7 +318,7 @@ function copyRecursive(src: string, dest: string) {
 export const loadSkins = async () => {
   const command = getModToolsPath();
   const overlayPath = getOverlayPath();
-  const overlayPathAll = path.join(overlayPath, 'all');
+  const overlayPathAll = Path.join(overlayPath, 'all');
   const overlayPathConfig = getOverlayConfigPath();
   const gamePath = getGamePath();
 
@@ -343,7 +354,7 @@ export const loadSkins = async () => {
   }
   // 复制每个文件夹内容到 all
   folders.forEach((folder) => {
-    const folderPath = path.join(overlayPath, folder);
+    const folderPath = Path.join(overlayPath, folder);
     copyRecursive(folderPath, overlayPathAll);
   });
 
@@ -391,12 +402,12 @@ export const checkCanAutoConfirm = (opt: ShowSliderConfirmType) => {
   });
 };
 export const openPath = (path_: string) => {
-  const normalized = path.normalize(path_);
+  const normalized = Path.normalize(path_);
   try {
     const stat = fs.statSync(normalized);
     if (stat.isFile()) {
       // 如果是文件，打开父级目录
-      shell.openPath(path.dirname(normalized));
+      shell.openPath(Path.dirname(normalized));
     } else {
       // 如果是目录，直接打开
       shell.openPath(normalized);
@@ -406,12 +417,12 @@ export const openPath = (path_: string) => {
   }
 };
 export const removePath = (path_: string) => {
-  const normalized = path.normalize(path_);
+  const normalized = Path.normalize(path_);
   try {
     const stat = fs.statSync(normalized);
     if (stat.isFile()) {
       // 如果是文件，打开父级目录
-      fs.rmdirSync(path.dirname(normalized));
+      fs.rmdirSync(Path.dirname(normalized));
     } else {
       // 如果是目录，直接打开
       modToolsWrapper.ensureCleanDirectoryWithRetry(normalized);
@@ -432,7 +443,7 @@ function emptyDir(dir: string) {
   }
 
   for (const item of fs.readdirSync(dir)) {
-    const full = path.join(dir, item);
+    const full = Path.join(dir, item);
     fs.rmSync(full, { recursive: true, force: true });
   }
 }

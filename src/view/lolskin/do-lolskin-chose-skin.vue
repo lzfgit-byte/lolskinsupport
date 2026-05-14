@@ -55,6 +55,9 @@
       <a-button m-b-10px @click="doUnPackWadFile">
         解压缩当前英雄wad[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
       </a-button>
+      <a-button m-b-10px @click="openHeroSkinPath">
+        打开当前英雄皮肤路径[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
+      </a-button>
     </a-drawer>
     <div pos-absolute h-20 flex style="bottom: 0; width: auto; justify-content: end; right: 0">
       <div class="confirm" @click="doMkOverlay">
@@ -85,6 +88,7 @@
     f_loadSkin,
     f_loadSkinDataByFilePath,
     f_mkOverlay,
+    f_openPath,
     f_selectPathOrFile,
     f_setHeroChoseSkin,
     f_unpackWadFileTo,
@@ -93,7 +97,8 @@
 
   const visible = ref(false);
   let router = useRouter();
-  const { heroId, autoChose, heroAlias, lcuState, gamePath, logDrawOpen } = useGlobalState();
+  const { heroId, autoChose, heroAlias, lcuState, gamePath, logDrawOpen, skinPath } =
+    useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
   let skinIdImg = {};
   const allSkins = ref<skinInfo[]>();
@@ -235,6 +240,9 @@
       f_unpackWadFileTo(path);
       logDrawOpen.value = true;
     }
+  };
+  const openHeroSkinPath = () => {
+    f_openPath(`${skinPath.value}\\wad_skins\\${heroId.value}`);
   };
   const drawOpen = ref(false);
   onMounted(() => {

@@ -119,7 +119,7 @@ const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
 const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
   try {
     // 构建输出的 WAD 文件路径，例如: ...\annie\skin1\1.wad.client
-    const wadName = `${heroId || heroName}_${skinId}`;
+    const wadName = `${heroId}_${skinId}`;
     const outputWadPath = path.join(OUTPUT_WAD_BASE_DIR, `${wadName}.wad.client`);
 
     // 这里的路径结构必须严格按照 wad-make 的参数要求：
@@ -131,13 +131,13 @@ const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
     logData(` [正在封包] 生成 WAD: ${outputWadPath}`);
     await runCommand(command, true, skinFolderPath, outputWadPath);
 
-    await createZipFile(wadName, outputWadPath, heroName);
+    await createZipFile(wadName, outputWadPath, heroName, heroId);
     return outputWadPath;
   } catch (err) {
     logData(` [封包失败] ${skinFolderPath}:`, err.message);
   }
 };
-export const createZipFile = async (wadName, outWadFilePath, heroName) => {
+export const createZipFile = async (wadName, outWadFilePath, heroName, heroId) => {
   try {
     // 1. 确保输出目录存在
     if (!fs.existsSync(OUTPUT_WAD_BASE_DIR)) {
@@ -166,7 +166,7 @@ export const createZipFile = async (wadName, outWadFilePath, heroName) => {
     }
 
     // 4. 写入磁盘 (writeZip 是同步的，或者提供回调)
-    const zipPath = Path.join(OUTPUT_WAD_BASE_DIR, `${wadName}.zip`);
+    const zipPath = Path.join(OUTPUT_WAD_BASE_DIR, heroId, `${wadName}.zip`);
 
     // 我们将其包装成 Promise 确保执行流可控
     await new Promise((resolve, reject) => {
@@ -226,6 +226,11 @@ export const loadSkinDataByFile = async (
   }
 
   const heroId = nameIdMap[heroName];
+  if (!heroId) {
+    logData(` [错误] 找不到英雄ID: ${heroName}`);
+    MessageUtil.error(` [错误] 找不到英雄ID: ${heroName}`);
+    return;
+  }
   // 3. 解压当前 WAD `E:\\lolsupport\\cslol-manager\\cslol-tools\\wad-extract.exe`,
   logData(` [正在解压] ${fullWadPath}`);
   await runCommand(
@@ -382,9 +387,7 @@ export const loadSkinData = async (idNameMap: Record<string, any>, chunkSize = 2
     );
     const endTime = Date.now();
     logData(
-      `【重要】已处理 ${wadList.length} 个 WAD 文件,剩余${wadFiles.length} 个 WAD，耗时 ${
-        (endTime - sTime) / 1000
-      } 秒`
+      `【重要】 ${++count} / ${wadFiles.length} 个 WAD，本轮循环耗时 ${(endTime - sTime) / 1000} 秒`
     );
   }
   logData('所有英雄皮肤已按 英雄名/皮肤ID 目录分类完成。');
