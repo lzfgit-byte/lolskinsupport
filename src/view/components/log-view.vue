@@ -43,6 +43,7 @@
   import { javascript } from '@codemirror/lang-javascript';
   import { oneDark } from '@codemirror/theme-one-dark';
   import useGlobalState from '@/hooks/use-global-state';
+  import bus from '@/utils/bus';
   const { LogUtil, logDrawOpen, autoRoll, chuckValue, codeMirrorView } = useGlobalState();
   const code = ref(``);
   const extensions = [javascript(), oneDark];
@@ -59,7 +60,7 @@
   });
   onMounted(() => {
     document.addEventListener('keydown', function (event) {
-      if (event.ctrlKey && event.key === 'l') {
+      if (event.ctrlKey && event.key === 'q') {
         logDrawOpen.value = !logDrawOpen.value;
       }
     });

@@ -4,6 +4,7 @@
       <router-view></router-view>
     </MainLayout>
     <LogView ref="logRef"></LogView>
+    <ConfigPage></ConfigPage>
   </a-config-provider>
 </template>
 <script setup lang="ts">
@@ -12,6 +13,7 @@
   import LogView from '@/view/components/log-view.vue';
   import MainLayout from '@/components/main-layout.vue';
   import bus from '@/utils/bus';
+  import ConfigPage from '@/view/components/config-page.vue';
 
   const { logRef } = useGlobalRef();
   bus.on('champion-selected', (heroId) => {});
