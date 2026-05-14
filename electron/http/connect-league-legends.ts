@@ -16,7 +16,7 @@ export const getLockfile = () => {
   return { port, password, protocol, username: 'riot', address: '127.0.0.1' };
 };
 export const initLcu = async (win: BrowserWindow) => {
-  await lcuConnector.startAutoConnect();
+  lcuConnector.startAutoConnect();
   await gameflowMonitor.start();
   gameflowMonitor.on('champion-selected', (args) => {
     win?.webContents?.send('champion-selected', args?.championId);
