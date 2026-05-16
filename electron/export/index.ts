@@ -35,6 +35,7 @@ import {
   setConfigData,
   unpackWadFile,
 } from './load-skin-data';
+import { example1_GenerateSingleSkin, example3_ApplySkinToGame } from './ltk-manage-demo';
 
 export * from '../http';
 const idName = {};

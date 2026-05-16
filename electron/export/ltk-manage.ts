@@ -281,6 +281,7 @@ export async function applySkin(options: SkinApplyOptions): Promise<void> {
   try {
     // 步骤 1: 创建临时目录结构
     const tempId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // overlay 目录
     const profilePath = path.join(CONFIG.TEMP_BASE, `profile_${tempId}`);
     const stateDir = `${profilePath}.state`;
 
