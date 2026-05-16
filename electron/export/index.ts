@@ -108,12 +108,20 @@ export const getHeroChoseSkin = (heroId: string) => {
 export const setSkinImage = (skinId: string, skinImage: string) => {
   const data = readConfigOrDefault(SKIN_IMAGE_KEY, '{}');
   const d = JSON.parse(data);
-  d[skinId] = skinImage;
+  if (skinImage) {
+    d[skinId] = skinImage;
+  } else {
+    delete d[skinId];
+  }
   setConfig(SKIN_IMAGE_KEY, JSON.stringify(d, null, 2));
 };
-export const clearSkinImage = async () => {
-  setConfig(SKIN_IMAGE_KEY, '{}');
+export const clearSkinImage = async (skinId?: string) => {
+  if (skinId) {
+    setSkinImage(skinId, null);
+    return;
+  }
   await modToolsWrapper.forceKillModTools();
+  setConfig(SKIN_IMAGE_KEY, '{}');
 };
 export const getSkinImage = (skinId: string) => {
   const data = readConfigOrDefault(SKIN_IMAGE_KEY, '{}');
@@ -387,7 +395,7 @@ export const getAllLoadSkins = () => {
     .map((dirent) => dirent.name);
 
   // 提取 skinId
-  return folders.map((name) => name.split('_')[1]);
+  return folders.map((name) => name.split('_'));
 };
 export const checkCanAutoConfirm = (opt: ShowSliderConfirmType) => {
   return new Promise((resolve) => {
@@ -417,16 +425,37 @@ export const openPath = (path_: string) => {
     console.error('路径不存在或无法访问:', err);
   }
 };
-export const removePath = (path_: string) => {
+export const emptyPah = async (path_: string) => {
   const normalized = Path.normalize(path_);
   try {
+    if (!fs.existsSync(normalized)) {
+      return;
+    }
+    const stat = fs.statSync(normalized);
+    if (!stat.isFile()) {
+      // 如果是目录，直接打开
+      await modToolsWrapper.ensureCleanDirectoryWithRetry(normalized);
+    }
+  } catch (err) {
+    MessageUtil.error(`清空文件夹：${err.message}`);
+    return;
+  }
+  MessageUtil.success(`清空文件夹:${path_}`);
+};
+export const removePath = async (path_: string) => {
+  const normalized = Path.normalize(path_);
+  try {
+    if (!fs.existsSync(normalized)) {
+      return;
+    }
     const stat = fs.statSync(normalized);
     if (stat.isFile()) {
       // 如果是文件，打开父级目录
       fs.rmdirSync(Path.dirname(normalized));
     } else {
       // 如果是目录，直接打开
-      modToolsWrapper.ensureCleanDirectoryWithRetry(normalized);
+      await modToolsWrapper.ensureCleanDirectoryWithRetry(normalized);
+      fs.rmdirSync(normalized);
     }
   } catch (err) {
     console.error('路径不存在或无法访问:', err);

@@ -163,8 +163,8 @@ export const f_getAllLoadSkins = async () => {
 /**
  * export const clearSkinImage = () => {
  */
-export const f_clearSkinImage = async () => {
-  return executeFunction('clearSkinImage');
+export const f_clearSkinImage = async (skinId?: string) => {
+  return executeFunction('clearSkinImage', skinId);
 };
 /**
  * export const mkOverlay = async (heroId: string, skinId: string, skinImage: string) => {

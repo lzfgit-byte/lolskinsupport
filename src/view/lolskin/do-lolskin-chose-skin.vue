@@ -194,7 +194,7 @@
     await f_mkOverlay(heroId.value, choseSkin.value.skinId, getSkinImage());
   };
   const getSkinImage = () => {
-    return skinIdImg[choseSkin.value.skinId] || choseSkin.value.mainImg;
+    return choseSkinMainImg.value;
   };
   const preChose = async () => {
     const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
