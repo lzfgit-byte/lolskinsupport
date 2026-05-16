@@ -253,6 +253,16 @@
   const drawOpen = ref(false);
   onMounted(() => {
     getSkins();
+    /**
+     * 监听鼠标右键点击，调用back方法
+     */
+    const handler = (e) => {
+      if (e.button === 2) {
+        back();
+      }
+    };
+    document.removeEventListener('contextmenu', handler);
+    document.addEventListener('contextmenu', handler);
   });
 </script>
 <style lang="less">
