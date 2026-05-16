@@ -18,6 +18,7 @@
 <script setup lang="ts">
   import { onMounted, ref, watchEffect } from 'vue';
   import { useRouter } from 'vue-router';
+  import { nextTick } from 'vue-demi';
   import HeroCard from './hero-card.vue';
   import http from '@/utils/http';
   import type { mainHeroInfo } from '@/type/type';
@@ -53,7 +54,10 @@
   onMounted(() => {
     bus.off('champion-selected');
     bus.on('champion-selected', () => {
-      choseDrawerOpen.value = true;
+      choseDrawerOpen.value = false;
+      nextTick(() => {
+        choseDrawerOpen.value = true;
+      });
     });
   });
 </script>
