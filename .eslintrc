@@ -23,6 +23,7 @@
     "no-new-func":"off",
     "import/no-mutable-exports":"off",
     "unicorn/prefer-includes":"off",
+    "antfu/if-newline":"off",
     "prefer-const": "off"
   }
 }
