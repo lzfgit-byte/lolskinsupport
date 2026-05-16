@@ -77,7 +77,6 @@
   import type { Ref } from 'vue';
   import { computed, defineProps, onMounted, ref } from 'vue';
   import { Modal, message } from 'ant-design-vue';
-  import { useRouter } from 'vue-router';
   import http from '@/utils/http';
   import type { skinInfo } from '@/type/type';
   import useGlobalState, { LogUtil } from '@/hooks/use-global-state';
@@ -96,9 +95,16 @@
   import { showFrontendConfirm } from '@/utils/kit-utils';
 
   const visible = ref(false);
-  let router = useRouter();
-  const { heroId, autoChose, heroAlias, lcuState, gamePath, logDrawOpen, skinPath } =
-    useGlobalState();
+  const {
+    heroId,
+    autoChose,
+    heroAlias,
+    lcuState,
+    gamePath,
+    logDrawOpen,
+    skinPath,
+    choseDrawerOpen,
+  } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
   let skinIdImg = {};
   const allSkins = ref<skinInfo[]>();
@@ -165,7 +171,7 @@
     return item.skinId === choseSkin.value?.chromasBelongId;
   };
   const back = () => {
-    router.push({ path: '/' });
+    choseDrawerOpen.value = false;
   };
   const handleChoseSkin = async (item: skinInfo) => {
     LogUtil.log(`${item.skinId}`);

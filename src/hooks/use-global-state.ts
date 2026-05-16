@@ -25,6 +25,7 @@ const logDrawOpen = ref(false);
 const autoRoll = ref(true);
 const title = useTitle('ghs');
 const chuckValue = ref(200);
+const choseDrawerOpen = ref(false);
 const codeMirrorView = shallowRef();
 const heroIdAliasMap = {};
 const append = (text: string) => {
@@ -103,4 +104,5 @@ export default () => ({
   codeMirrorView,
   heroIdAliasMap,
   modToolsState,
+  choseDrawerOpen,
 });

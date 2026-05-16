@@ -27,7 +27,7 @@
 
   const mainIMg = ref<mainHeroInfo[]>();
   let heros_: mainHeroInfo[] = [];
-  const { heroId, autoChose, heros, heroAlias, heroIdAliasMap } = useGlobalState();
+  const { heroId, autoChose, heros, heroAlias, heroIdAliasMap, choseDrawerOpen } = useGlobalState();
   let router = useRouter();
   http.axios
     .get('https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js')
@@ -43,7 +43,7 @@
   const handlerClickHero = (heroId_: string, heroAlias_) => {
     heroId.value = heroId_;
     heroAlias.value = heroAlias_;
-    router.push({ path: '/choseSkin' });
+    choseDrawerOpen.value = true;
   };
   const searchValue = ref();
   watchEffect(() => {
@@ -53,7 +53,7 @@
   onMounted(() => {
     bus.off('champion-selected');
     bus.on('champion-selected', () => {
-      router.push({ path: '/choseSkin' });
+      choseDrawerOpen.value = true;
     });
   });
 </script>

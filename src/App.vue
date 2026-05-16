@@ -5,6 +5,7 @@
     </MainLayout>
     <LogView ref="logRef"></LogView>
     <ConfigPage></ConfigPage>
+    <LolskinChoseSkin></LolskinChoseSkin>
   </a-config-provider>
 </template>
 <script setup lang="ts">
@@ -12,11 +13,10 @@
   import useGlobalRef from '@/hooks/use-global-ref';
   import LogView from '@/view/components/log-view.vue';
   import MainLayout from '@/components/main-layout.vue';
-  import bus from '@/utils/bus';
   import ConfigPage from '@/view/components/config-page.vue';
+  import LolskinChoseSkin from '@/view/components/lolskin-chose-skin.vue';
 
   const { logRef } = useGlobalRef();
-  bus.on('champion-selected', (heroId) => {});
 </script>
 
 <style lang="less">
