@@ -35,13 +35,10 @@ import {
   setConfigData,
   unpackWadFile,
 } from './load-skin-data';
-import { example1_GenerateSingleSkin, example3_ApplySkinToGame } from './ltk-manage-demo';
-import { demo4_extractSkin0Bins } from './extract-wad-chunks.demo';
 
 export * from '../http';
 const idName = {};
 export const setIdName = (heroList: any[]) => {
-  demo4_extractSkin0Bins();
   setConfigData(getGamePath(), getSkinPath(), getModToolsPath());
   heroList?.forEach((item) => {
     idName[item.heroId] = item.alias;

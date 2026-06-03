@@ -29,7 +29,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
-import { ConsoleLogUtil } from '../utils/message';
+import { LogMsgUtil } from '../utils/message';
 
 // Optional dependency - gracefully handle if not installed
 let fzstd: any;
@@ -558,7 +558,7 @@ async function extractWadSkinBins(options: ExtractSkinBinsOptions): Promise<Extr
   };
   const logData = (str: string) => {
     if (logFlag) {
-      ConsoleLogUtil.sendLogMsg(str);
+      LogMsgUtil.sendLogMsg(str);
     }
   };
 
@@ -622,7 +622,6 @@ async function extractWadSkinBins(options: ExtractSkinBinsOptions): Promise<Extr
       }
 
       fs.writeFileSync(outputPath, chunkData);
-      logData(`   Saved to: ${outputPath}\n`);
 
       result.outputPath = outputPath;
       result.size = chunkData.length;
@@ -637,7 +636,7 @@ async function extractWadSkinBins(options: ExtractSkinBinsOptions): Promise<Extr
     return results;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logData(`\nFatal error: ${errorMsg}`);
+    logData(`Fatal error: ${errorMsg}`);
     results.success = false;
     return results;
   }
