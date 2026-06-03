@@ -3,6 +3,7 @@
     v-model:open="drawerOpen"
     placement="right"
     width="70vw"
+    :z-index="59999"
     :header-style="{ display: 'none' }"
   >
     <div h-85vh overflow-auto w-full m-t-4 p-t-2>
@@ -61,7 +62,9 @@
         </a-button>
       </a-space>
       <br /><br />
-      lcuState：{{ lcuState }}<br /><br />
+      lcuState：{{ lcuState }}<span m-l-4 m-r-4>isUseCommand:</span>
+      <a-switch v-model:checked="isUseCommand" @change="f_setIsUseCommand($event)"></a-switch>
+      <br /><br />
       <a-space>
         <span>线程数：</span>
         <a-input-number v-model:value="chuckValue" size="small" :min="1" :max="100" />
@@ -133,6 +136,7 @@
     f_request_string_get,
     f_selectPathOrFile,
     f_setConfig,
+    f_setIsUseCommand,
     f_shoutDownModTools,
     f_winGetData,
   } from '@/utils/business';
@@ -151,6 +155,7 @@
     loadSkinIds,
     logDrawOpen,
     modToolsState,
+    isUseCommand,
   } = useGlobalState();
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const testSlideWin = () => {

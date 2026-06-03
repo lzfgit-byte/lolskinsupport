@@ -23,3 +23,7 @@ export const defaultGamePath = 'E:\\game\\Riot Games\\League of Legends\\Game';
 export const defaultModToolsPath = path.join(temp_dir, 'mod-tools\\mod-tools.exe');
 export const defaultInstalledPath = path.join(temp_dir, 'installed');
 export const SKIN_IMAGE_KEY = 'SKIN_IMAGE';
+export let IS_USE_COMMAND = false;
+export const setUseCommand = (flag: boolean) => {
+  IS_USE_COMMAND = flag;
+};

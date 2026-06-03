@@ -4,7 +4,7 @@ import type { BrowserWindow } from 'electron';
 import { webContents } from 'electron';
 import { getGamePath } from '../export';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
-import { modToolsWrapper } from '../const';
+import { IS_USE_COMMAND, modToolsWrapper } from '../const';
 import { gameflowMonitor } from './gameflowMonitor';
 import { lcuConnector } from './lcuConnector';
 
@@ -25,5 +25,6 @@ export const initLcu = async (win: BrowserWindow) => {
   setInterval(() => {
     win?.webContents?.send('notify-lcu-connect', lcuConnector.isConnected());
     win?.webContents?.send('notify-mod-tools-connect', modToolsWrapper.isRunning());
+    win?.webContents?.send('notify-state', { IS_USE_COMMAND });
   }, 1000);
 };

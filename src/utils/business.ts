@@ -202,3 +202,9 @@ export const f_shoutDownModTools = async () => {
 export const f_unpackWadFileTo = async (fullWadPath) => {
   return executeFunction('unpackWadFileTo', fullWadPath);
 };
+/**
+ * export const setIsUseCommand = (isUseCommand: boolean) => {
+ */
+export const f_setIsUseCommand = async (isUseCommand: boolean) => {
+  return executeFunction('setIsUseCommand', isUseCommand);
+};

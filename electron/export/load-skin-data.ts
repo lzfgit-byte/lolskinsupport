@@ -4,7 +4,7 @@ import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import Path from 'node:path';
 import AdmZip from 'adm-zip';
-import { modToolsWrapper } from '../const';
+import { IS_USE_COMMAND, modToolsWrapper } from '../const';
 import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
 import { extractWadSkinBins } from './extract-wad-chunks';
 
@@ -196,18 +196,21 @@ const doUnpackWadFile = async (
   currentExtraPath: string,
   sendPregress = false
 ) => {
+  if (IS_USE_COMMAND) {
+    await runCommand(
+      Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
+      sendPregress,
+      fullWadPath,
+      currentExtraPath
+    );
+    return;
+  }
   await extractWadSkinBins({
     wadPath: fullWadPath,
     hashesPath: Path.join(MOD_TOOLS_PATH, 'hashes.game.txt'),
     outputDir: currentExtraPath,
     logFlag: sendPregress,
   });
-  // await runCommand(
-  //   Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
-  //   sendPregress,
-  //   fullWadPath,
-  //   currentExtraPath
-  // );
 };
 export const unpackWadFile = async (fullWadPath) => {
   const heroName = getHeroName(fullWadPath);

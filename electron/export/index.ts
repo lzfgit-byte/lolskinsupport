@@ -14,6 +14,7 @@ import {
 } from '@ghs/constant';
 import type { ShowSliderConfirmType } from '@ghs/constant';
 import {
+  IS_USE_COMMAND,
   SKIN_IMAGE_KEY,
   configPath,
   defaultGamePath,
@@ -23,6 +24,7 @@ import {
   defaultOverlayPath,
   defaultSkinPath,
   modToolsWrapper,
+  setUseCommand,
   tempPath,
 } from '../const';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
@@ -519,4 +521,7 @@ export const shoutDownModTools = async () => {
 };
 export const unpackWadFileTo = async (fullWadPath) => {
   return unpackWadFile(fullWadPath);
+};
+export const setIsUseCommand = (isUseCommand: boolean) => {
+  setUseCommand(isUseCommand);
 };

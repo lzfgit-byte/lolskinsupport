@@ -4,7 +4,7 @@
     placement="right"
     width="90vw"
     :header-style="{ display: 'none' }"
-    :z-index="30000"
+    :z-index="60000"
     root-class-name="ghs-video-drawer-container"
     :content-wrapper-style="{ zIndex: 30000 }"
     :body-style="{ zIndex: 30000, padding: '0' }"

@@ -81,6 +81,7 @@ export const LogUtil = {
     });
   },
 };
+const isUseCommand = ref(false);
 export default () => ({
   loading,
   drawerOpen,
@@ -105,4 +106,5 @@ export default () => ({
   heroIdAliasMap,
   modToolsState,
   choseDrawerOpen,
+  isUseCommand,
 });
