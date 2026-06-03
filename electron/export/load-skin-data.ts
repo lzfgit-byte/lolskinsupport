@@ -200,6 +200,7 @@ const doUnpackWadFile = async (
     wadPath: fullWadPath,
     hashesPath: Path.join(MOD_TOOLS_PATH, 'hashes.game.txt'),
     outputDir: currentExtraPath,
+    logFlag: sendPregress,
   });
   // await runCommand(
   //   Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
