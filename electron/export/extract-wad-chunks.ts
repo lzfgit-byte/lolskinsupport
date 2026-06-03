@@ -29,6 +29,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
+import { ConsoleLogUtil } from '../utils/message';
 
 // Optional dependency - gracefully handle if not installed
 let fzstd: any;
@@ -310,6 +311,25 @@ interface ExtractByHashResult {
   }[];
 }
 
+interface ExtractSkinBinsOptions {
+  wadPath: string;
+  hashesPath: string;
+  outputDir: string;
+  logFlag?: boolean;
+}
+
+interface ExtractSkinBinsResult {
+  success: boolean;
+  matched: number;
+  files: {
+    filePath: string;
+    hash: string;
+    outputPath?: string;
+    error?: string;
+    size?: number;
+  }[];
+}
+
 /**
  * Extract multiple files from WAD.client based on file paths
  *
@@ -522,6 +542,109 @@ async function extractWadByHash(options: ExtractByHashOptions): Promise<ExtractB
   }
 }
 
+/**
+ * Extract all skin<number>.bin files under data/characters/<character>/skins from WAD.client.
+ * Files are written to outputDir with their original relative paths preserved.
+ *
+ * @param options - WAD path, hashes.game.txt path and output directory
+ * @returns Result object with status for each matched skin<number>.bin file
+ */
+async function extractWadSkinBins(options: ExtractSkinBinsOptions): Promise<ExtractSkinBinsResult> {
+  const { wadPath, hashesPath, outputDir, logFlag = false } = options;
+  const results: ExtractSkinBinsResult = {
+    success: true,
+    matched: 0,
+    files: [],
+  };
+  const logData = (str: string) => {
+    if (logFlag) {
+      ConsoleLogUtil.sendLogMsg(str);
+    }
+  };
+
+  try {
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const hashMap = parseHashesFile(hashesPath);
+    const skinBinFiles: FileHashPair[] = [];
+
+    hashMap.forEach((filePath, hash) => {
+      const normalizedFilePath = filePath.replace(/\\/g, '/').toLowerCase();
+      if (/^data\/characters\/[^/]+\/skins\/skin\d+\.bin$/.test(normalizedFilePath)) {
+        skinBinFiles.push({
+          hash,
+          filePath: normalizedFilePath,
+        });
+      }
+    });
+
+    results.matched = skinBinFiles.length;
+    logData(`   Matched ${skinBinFiles.length} skin<number>.bin file(s)`);
+
+    logData(`Reading WAD file: ${wadPath}`);
+    const wadBuffer = fs.readFileSync(wadPath);
+    const wadParser = new WADParser(wadBuffer);
+
+    logData(`Parsing WAD header...`);
+    const header = wadParser.parseHeader();
+    logData(`   Format: v${header.versionMajor}.${header.versionMinor}`);
+    logData(`   Chunks: ${header.chunkCount}`);
+
+    logData(`Parsing ${header.chunkCount} chunks...`);
+    const chunks = wadParser.parseChunks(header);
+    const chunksByHash = new Map<string, WADChunk>();
+    for (const chunk of chunks) {
+      chunksByHash.set(chunk.hash, chunk);
+    }
+
+    logData(`\nProcessing ${skinBinFiles.length} skin<number>.bin file(s)...\n`);
+
+    for (const fileInfo of skinBinFiles) {
+      const result: ExtractSkinBinsResult['files'][number] = {
+        filePath: fileInfo.filePath,
+        hash: fileInfo.hash,
+      };
+
+      const chunk = chunksByHash.get(fileInfo.hash);
+      if (!chunk) {
+        continue;
+      }
+
+      logData(`   Found ${fileInfo.filePath} (${formatSize(chunk.decompressedSize)})`);
+      const chunkData = wadParser.extractChunk(chunk);
+      const outputPath = path.join(outputDir, ...fileInfo.filePath.split('/'));
+      const outputFileDir = path.dirname(outputPath);
+
+      if (!fs.existsSync(outputFileDir)) {
+        fs.mkdirSync(outputFileDir, { recursive: true });
+      }
+
+      fs.writeFileSync(outputPath, chunkData);
+      logData(`   Saved to: ${outputPath}\n`);
+
+      result.outputPath = outputPath;
+      result.size = chunkData.length;
+      results.files.push(result);
+    }
+
+    const succeeded = results.files.filter((f) => !f.error).length;
+    logData(
+      `\nSummary: ${succeeded}/${skinBinFiles.length} skin<number>.bin files extracted successfully`
+    );
+
+    return results;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logData(`\nFatal error: ${errorMsg}`);
+    results.success = false;
+    return results;
+  }
+}
+
+const extractWadSkin0Bins = extractWadSkinBins;
+
 // ============================================================================
 // Utilities
 // ============================================================================
@@ -533,4 +656,4 @@ function formatSize(bytes: number): string {
 }
 
 // Export for use as module
-export { extractWadChunks, extractWadByHash };
+export { extractWadChunks, extractWadByHash, extractWadSkin0Bins, extractWadSkinBins };

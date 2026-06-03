@@ -2,7 +2,7 @@
  * Demo: How to use extract-wad-chunks.ts
  */
 
-import { extractWadByHash, extractWadChunks } from './extract-wad-chunks';
+import { extractWadByHash, extractWadChunks, extractWadSkinBins } from './extract-wad-chunks';
 
 // ============================================================================
 // Demo 1: Extract using hashes.game.txt
@@ -111,6 +111,27 @@ async function demo3_errorHandling() {
 }
 
 // ============================================================================
+// Demo 4: Extract all data/characters/*/skins/skin<number>.bin files
+// ============================================================================
+
+export async function demo4_extractSkinBins() {
+  console.log('\n=== Demo 4: Extract all skin<number>.bin files ===\n');
+
+  const result = await extractWadSkinBins({
+    wadPath: 'C:\\Users\\18074\\Downloads\\Heimerdinger.wad.client',
+    hashesPath: 'C:\\Users\\18074\\AppData\\Local\\lol-skin-ll\\tools\\hashes.game.txt',
+    outputDir: 'C:\\Users\\18074\\Downloads\\extra',
+  });
+
+  console.log('Result:', result);
+  // Files are saved with original relative paths, for example:
+  // ./extracted/data/characters/aatrox/skins/skin0.bin
+  // ./extracted/data/characters/aatrox/skins/skin1.bin
+}
+
+export const demo4_extractSkin0Bins = demo4_extractSkinBins;
+
+// ============================================================================
 // Run demos
 // ============================================================================
 
@@ -120,6 +141,7 @@ async function runAllDemos() {
     // await demo1_withHashesFile()
     // await demo2_directHash()
     // await demo3_errorHandling()
+    // await demo4_extractSkinBins()
 
     console.log('\n✅ All demos completed');
   } catch (error) {

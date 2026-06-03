@@ -6,6 +6,7 @@ import Path from 'node:path';
 import AdmZip from 'adm-zip';
 import { modToolsWrapper } from '../const';
 import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
+import { extractWadSkinBins } from './extract-wad-chunks';
 
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -190,16 +191,29 @@ export const createZipFile = async (wadName, outWadFilePath, heroName, heroId) =
 const getHeroName = (fullWadPath: string) => {
   return path.basename(fullWadPath, path.extname(fullWadPath)).split('.')[0];
 };
+const doUnpackWadFile = async (
+  fullWadPath: string,
+  currentExtraPath: string,
+  sendPregress = false
+) => {
+  await extractWadSkinBins({
+    wadPath: fullWadPath,
+    hashesPath: Path.join(MOD_TOOLS_PATH, 'hashes.game.txt'),
+    outputDir: currentExtraPath,
+  });
+  // await runCommand(
+  //   Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
+  //   sendPregress,
+  //   fullWadPath,
+  //   currentExtraPath
+  // );
+};
 export const unpackWadFile = async (fullWadPath) => {
   const heroName = getHeroName(fullWadPath);
   const currentExtraPath = Path.join(EXTRACT_BASE_DIR, heroName);
   emptyDir(currentExtraPath);
-  await runCommand(
-    Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
-    true,
-    fullWadPath,
-    currentExtraPath
-  );
+  await doUnpackWadFile(fullWadPath, currentExtraPath, true);
+
   logData(` [解压完成] ${fullWadPath}`);
 };
 export const loadSkinDataByFile = async (
@@ -231,14 +245,8 @@ export const loadSkinDataByFile = async (
     MessageUtil.error(` [错误] 找不到英雄ID: ${heroName}`);
     return;
   }
-  // 3. 解压当前 WAD `E:\\lolsupport\\cslol-manager\\cslol-tools\\wad-extract.exe`,
   logData(` [正在解压] ${fullWadPath}`);
-  await runCommand(
-    Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
-    false,
-    fullWadPath,
-    currentExtraPath
-  );
+  await doUnpackWadFile(fullWadPath, currentExtraPath, false);
   logData(` [解压完成] ${fullWadPath}`);
   // 4. 定位英雄目录 (data/characters/XXXX)
   const charactersDir = path.join(currentExtraPath, 'data', 'characters');
