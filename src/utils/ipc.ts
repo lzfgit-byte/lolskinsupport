@@ -56,9 +56,9 @@ ipcRenderer.on(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, (_event, args: MessageInfo) =
   console.log(args.msg);
 });
 ipcRenderer.on('champion-selected', (_event, championId: string) => {
-  heroId.value = championId;
-  heroAlias.value = heroIdAliasMap[championId];
-  bus.emit('champion-selected', championId);
+  heroId.value = `${championId}`;
+  heroAlias.value = heroIdAliasMap[`${championId}`];
+  bus.emit('champion-selected', `${championId}`);
 });
 ipcRenderer.on('notify-lcu-connect', (_event, lcuState_: boolean) => {
   lcuState.value = lcuState_;

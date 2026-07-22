@@ -42,7 +42,7 @@ import {
 export * from '../http';
 const idName = {};
 const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
-const LEAGUE_SKINS_SUFFIX = 'leagueSkins';
+const LEAGUE_SKINS_SUFFIX = DEFAULT_SKIN_SUFFIX;
 export const setIdName = (heroList: any[]) => {
   setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   heroList?.forEach((item) => {
@@ -168,27 +168,23 @@ export const findFile = (dir, targetFile) => {
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
   const curSkinId = skinId.replace(heroId, '');
-  const skinBasePaths = Array.from(
-    new Set([getSkinDefaultSuffix(), DEFAULT_SKIN_SUFFIX, LEAGUE_SKINS_SUFFIX])
+  const skinBasePath = getSkinDefaultSuffix();
+  const skinPath = Path.join(
+    getSkinPath(),
+    skinBasePath,
+    `${heroId}`,
+    `${heroId}_${+curSkinId}.zip`
   );
-  for (const skinBasePath of skinBasePaths) {
-    const skinPath = Path.join(
-      getSkinPath(),
-      skinBasePath,
-      `${heroId}`,
-      `${heroId}_${+curSkinId}.zip`
-    );
-    if (fs.existsSync(skinPath)) {
-      return skinPath;
-    }
+  if (fs.existsSync(skinPath)) {
+    return skinPath;
+  }
 
-    const foundPath = findFile(
-      Path.join(getSkinPath(), skinBasePath, heroId),
-      `${heroId}_${+curSkinId}.zip`
-    );
-    if (foundPath) {
-      return foundPath;
-    }
+  const foundPath = findFile(
+    Path.join(getSkinPath(), skinBasePath, heroId),
+    `${heroId}_${+curSkinId}.zip`
+  );
+  if (foundPath) {
+    return foundPath;
   }
 
   return Path.join(
@@ -199,7 +195,7 @@ const buildSkinPath = (heroId: string, skinId: string) => {
   );
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
-  const skinPath = buildSkinPath(heroId, skinId);
+  const skinPath = buildSkinPath(`${heroId}`, `${skinId}`);
   return existsSync(skinPath);
 };
 const useConstData = (heroId: string, skinId: string) => {
@@ -260,12 +256,12 @@ export const loadSkin = async (heroId: string, skinId: string, skinImage: string
 export const mkOverlay = async (heroId: string, skinId: string, skinImage: string) => {
   const { command, uniqueId, overlayPath, gamePath, installedPath } = useConstData(heroId, skinId);
   if (!existsSync(command)) {
-    MessageUtil.error(`${command} not exists`);
+    showToast(`${command} not exists`);
     return;
   }
   const skinPath = buildSkinPath(heroId, skinId);
   if (!existsSync(skinPath)) {
-    MessageUtil.error(`${skinPath} not exists`);
+    showToast(`${skinPath} not exists`);
     return;
   }
   setHeroChoseSkin(heroId, skinId);
