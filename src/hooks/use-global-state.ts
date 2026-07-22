@@ -11,6 +11,7 @@ const skinId = ref('');
 const heroId = ref('');
 const heroAlias = ref('');
 const skinPath = ref('');
+const skinDefaultSuffix = ref('');
 const gamePath = ref('');
 const toolsPath = ref('');
 const overlayPath = ref('');
@@ -89,6 +90,7 @@ export default () => ({
   skinId,
   heroId,
   skinPath,
+  skinDefaultSuffix,
   gamePath,
   toolsPath,
   overlayPath,

@@ -25,6 +25,12 @@
         </a-button>
       </a-space>
       <br /><br />
+      皮肤目录名称：
+      <a-space>
+        <a-input v-model:value="skinDefaultSuffix" size="small" style="width: 180px" />
+        <a-button size="small" @click="setSkinDefaultSuffix">设置目录名称</a-button>
+      </a-space>
+      <br /><br />
       游戏路径：{{ gamePath }}
       <a-space>
         <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
@@ -113,6 +119,7 @@
 </template>
 <script setup lang="ts">
   import { useRoute } from 'vue-router';
+  import { message } from 'ant-design-vue';
   import { onMounted, ref } from 'vue';
   import {
     GAME_PATH,
@@ -153,8 +160,10 @@
   import bus from '@/utils/bus';
 
   const route = useRoute();
+  const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
   const {
     skinPath,
+    skinDefaultSuffix,
     gamePath,
     toolsPath,
     overlayPath,
@@ -195,6 +204,11 @@
     const path = await f_selectPathOrFile('openFile', dpath);
     await f_setConfig(key, path);
     await loadFilePath();
+  };
+  const setSkinDefaultSuffix = async () => {
+    await f_setConfig(SKIN_DEFAULT_SUFFIX_CONFIG_KEY, skinDefaultSuffix.value);
+    await loadFilePath();
+    message.success('设置成功');
   };
   const handleImportLeagueSkinsPackage = async () => {
     logDrawOpen.value = true;

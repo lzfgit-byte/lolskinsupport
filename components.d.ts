@@ -12,6 +12,7 @@ declare module 'vue' {
     ADrawer: typeof import('ant-design-vue/es')['Drawer']
     AFloatButton: typeof import('ant-design-vue/es')['FloatButton']
     AImage: typeof import('ant-design-vue/es')['Image']
+    AInput: typeof import('ant-design-vue/es')['Input']
     AInputNumber: typeof import('ant-design-vue/es')['InputNumber']
     ASpace: typeof import('ant-design-vue/es')['Space']
     ASwitch: typeof import('ant-design-vue/es')['Switch']

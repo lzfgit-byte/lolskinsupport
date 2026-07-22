@@ -11,6 +11,12 @@ export const f_getSkinPath = async (): Promise<string> => {
   return executeFunction('getSkinPath');
 };
 /**
+ * export const getSkinDefaultSuffix = () => {
+ */
+export const f_getSkinDefaultSuffix = async (): Promise<string> => {
+  return executeFunction('getSkinDefaultSuffix');
+};
+/**
  * export const getGamePath = () => {
  */
 export const f_getGamePath = async (): Promise<string> => {

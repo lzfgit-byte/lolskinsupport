@@ -6,6 +6,7 @@ import {
   f_getModToolsPath,
   f_getOverlayConfigPath,
   f_getOverlayPath,
+  f_getSkinDefaultSuffix,
   f_getSkinPath,
 } from '@/utils/business';
 
@@ -13,6 +14,7 @@ export default () => {
   const {
     drawerOpen,
     skinPath,
+    skinDefaultSuffix,
     gamePath,
     overlayPath,
     overlayConfigPath,
@@ -25,6 +27,7 @@ export default () => {
   };
   const loadFilePath = async () => {
     skinPath.value = await f_getSkinPath();
+    skinDefaultSuffix.value = await f_getSkinDefaultSuffix();
     gamePath.value = await f_getGamePath();
     overlayPath.value = await f_getOverlayPath();
     overlayConfigPath.value = await f_getOverlayConfigPath();

@@ -32,7 +32,7 @@ import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
 import {
-  SKIN_DEFAULT_SUFFIX,
+  DEFAULT_SKIN_SUFFIX,
   loadSkinData,
   loadSkinDataByFile,
   setConfigData,
@@ -41,18 +41,21 @@ import {
 
 export * from '../http';
 const idName = {};
-const LEAGUE_SKINS_SUFFIX = SKIN_DEFAULT_SUFFIX;
+const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
+const LEAGUE_SKINS_SUFFIX = 'leagueSkins';
 export const setIdName = (heroList: any[]) => {
-  setConfigData(getGamePath(), getSkinPath(), getModToolsPath());
+  setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   heroList?.forEach((item) => {
     idName[item.heroId] = item.alias;
   });
   LogMsgUtil.sendLogMsg(tempPath);
 };
 export const loadSkinDataIdName = async (chuckSize = 20) => {
+  setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   await loadSkinData(idName, chuckSize);
 };
 export const loadSkinDataByFilePath = async (fullWadPath: string, current = -1) => {
+  setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   await loadSkinDataByFile(idName, fullWadPath, null, current);
 };
 export const readConfig = () => {
@@ -82,6 +85,10 @@ export const readConfigOrDefault = (key: string, defaultValue: string) => {
 
 export const getSkinPath = () => {
   return readConfigOrDefault(SKIN_PATH, defaultSkinPath);
+};
+export const getSkinDefaultSuffix = () => {
+  const suffix = readConfigOrDefault(SKIN_DEFAULT_SUFFIX_CONFIG_KEY, DEFAULT_SKIN_SUFFIX);
+  return suffix?.trim() || DEFAULT_SKIN_SUFFIX;
 };
 export const getGamePath = () => {
   return readConfigOrDefault(GAME_PATH, defaultGamePath);
@@ -161,7 +168,9 @@ export const findFile = (dir, targetFile) => {
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
   const curSkinId = skinId.replace(heroId, '');
-  const skinBasePaths = [SKIN_DEFAULT_SUFFIX, LEAGUE_SKINS_SUFFIX];
+  const skinBasePaths = Array.from(
+    new Set([getSkinDefaultSuffix(), DEFAULT_SKIN_SUFFIX, LEAGUE_SKINS_SUFFIX])
+  );
   for (const skinBasePath of skinBasePaths) {
     const skinPath = Path.join(
       getSkinPath(),
@@ -182,7 +191,12 @@ const buildSkinPath = (heroId: string, skinId: string) => {
     }
   }
 
-  return Path.join(getSkinPath(), SKIN_DEFAULT_SUFFIX, `${heroId}`, `${heroId}_${+curSkinId}.zip`);
+  return Path.join(
+    getSkinPath(),
+    getSkinDefaultSuffix(),
+    `${heroId}`,
+    `${heroId}_${+curSkinId}.zip`
+  );
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);

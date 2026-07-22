@@ -103,6 +103,7 @@
     gamePath,
     logDrawOpen,
     skinPath,
+    skinDefaultSuffix,
     choseDrawerOpen,
   } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
@@ -248,7 +249,7 @@
     }
   };
   const openHeroSkinPath = () => {
-    f_openPath(`${skinPath.value}\\wad_skins\\${heroId.value}`);
+    f_openPath(`${skinPath.value}\\${skinDefaultSuffix.value}\\${heroId.value}`);
   };
   const drawOpen = ref(false);
   onMounted(() => {
