@@ -15,6 +15,14 @@
         <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
         <!--          <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button> -->
         <a-button size="small" @click="setConfigPath(SKIN_PATH, skinPath)">设置文件地址</a-button>
+        <a-button
+          size="small"
+          type="primary"
+          :loading="importLeagueSkinsLoading"
+          @click="handleImportLeagueSkinsPackage"
+        >
+          上传皮肤压缩包
+        </a-button>
       </a-space>
       <br /><br />
       游戏路径：{{ gamePath }}
@@ -126,6 +134,7 @@
     f_getAllLoadSkins,
     f_getGamePath,
     f_getSkinImage,
+    f_importLeagueSkinsPackage,
     f_loadSkinDataByFilePath,
     f_loadSkinDataIdName,
     f_loadSkins,
@@ -158,6 +167,7 @@
     isUseCommand,
   } = useGlobalState();
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
+  const importLeagueSkinsLoading = ref(false);
   const testSlideWin = () => {
     f_checkCanAutoConfirm({
       title: '提示',
@@ -185,6 +195,15 @@
     const path = await f_selectPathOrFile('openFile', dpath);
     await f_setConfig(key, path);
     await loadFilePath();
+  };
+  const handleImportLeagueSkinsPackage = async () => {
+    logDrawOpen.value = true;
+    importLeagueSkinsLoading.value = true;
+    try {
+      await f_importLeagueSkinsPackage();
+    } finally {
+      importLeagueSkinsLoading.value = false;
+    }
   };
   const deleteSkinCache = async (heroId?: string, skinId?: string) => {
     if (skinId && heroId) {

@@ -11,12 +11,12 @@ import { extractWadSkinBins } from './extract-wad-chunks';
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const SKIN_DEFAULT_SUFFIX = 'wad_skins';
+export const SKIN_DEFAULT_SUFFIX = 'leagueSkins';
 // --- 配置区 ---
 let WAD_SOURCE_DIR = 'E:\\game\\Riot Games\\League of Legends\\Game\\DATA\\FINAL\\Champions';
 let EXTRACT_BASE_DIR = 'C:\\Users\\18074\\Downloads\\skins';
 let OUTPUT_BASE_DIR = 'C:\\Users\\18074\\Downloads\\skin_out';
-let OUTPUT_WAD_BASE_DIR = 'C:\\Users\\18074\\Downloads\\wad_skins';
+let OUTPUT_WAD_BASE_DIR = `C:\\Users\\18074\\Downloads\\${SKIN_DEFAULT_SUFFIX}`;
 let MOD_TOOLS_PATH = 'E:\\lolsupport\\cslol-manager\\cslol-tools';
 
 export const setConfigData = (gamePath, outBasePath, modToolsPath) => {

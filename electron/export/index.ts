@@ -13,6 +13,7 @@ import {
   SKIN_PATH,
 } from '@ghs/constant';
 import type { ShowSliderConfirmType } from '@ghs/constant';
+import AdmZip from 'adm-zip';
 import {
   IS_USE_COMMAND,
   SKIN_IMAGE_KEY,
@@ -40,6 +41,7 @@ import {
 
 export * from '../http';
 const idName = {};
+const LEAGUE_SKINS_SUFFIX = SKIN_DEFAULT_SUFFIX;
 export const setIdName = (heroList: any[]) => {
   setConfigData(getGamePath(), getSkinPath(), getModToolsPath());
   heroList?.forEach((item) => {
@@ -159,19 +161,28 @@ export const findFile = (dir, targetFile) => {
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
   const curSkinId = skinId.replace(heroId, '');
-  const skinPath = Path.join(
-    getSkinPath(),
-    SKIN_DEFAULT_SUFFIX,
-    `${heroId}`,
-    `${heroId}_${+curSkinId}.zip`
-  );
-  if (fs.existsSync(skinPath)) {
-    return skinPath;
+  const skinBasePaths = [SKIN_DEFAULT_SUFFIX, LEAGUE_SKINS_SUFFIX];
+  for (const skinBasePath of skinBasePaths) {
+    const skinPath = Path.join(
+      getSkinPath(),
+      skinBasePath,
+      `${heroId}`,
+      `${heroId}_${+curSkinId}.zip`
+    );
+    if (fs.existsSync(skinPath)) {
+      return skinPath;
+    }
+
+    const foundPath = findFile(
+      Path.join(getSkinPath(), skinBasePath, heroId),
+      `${heroId}_${+curSkinId}.zip`
+    );
+    if (foundPath) {
+      return foundPath;
+    }
   }
-  return findFile(
-    Path.join(getSkinPath(), SKIN_DEFAULT_SUFFIX, heroId),
-    `${heroId}_${+curSkinId}.zip`
-  );
+
+  return Path.join(getSkinPath(), SKIN_DEFAULT_SUFFIX, `${heroId}`, `${heroId}_${+curSkinId}.zip`);
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(heroId, skinId);
@@ -513,6 +524,89 @@ export const selectPathOrFile = async (
 
   const selectedPath = result.filePaths[0];
   return selectedPath;
+};
+
+const parseLeagueSkinsEntry = (entryName: string) => {
+  const parts = entryName.replace(/\\/g, '/').split('/').filter(Boolean);
+  const skinsIndex = parts.findIndex((part) => part.toLowerCase() === 'skins');
+  if (skinsIndex < 0 || parts.length < skinsIndex + 4) {
+    return null;
+  }
+
+  const heroId = parts[skinsIndex + 1];
+  const skinFolderId = parts[skinsIndex + 2];
+  const fileName = parts[parts.length - 1];
+  if (!/^\d+$/.test(heroId) || !/^\d+$/.test(skinFolderId) || !fileName.endsWith('.fantome')) {
+    return null;
+  }
+
+  const skinFileId = Path.basename(fileName, '.fantome');
+  const sourceSkinId = /^\d+$/.test(skinFileId) ? skinFileId : skinFolderId;
+  const skinIndex = sourceSkinId.startsWith(heroId)
+    ? Number(sourceSkinId.slice(heroId.length) || 0)
+    : Number(sourceSkinId);
+
+  if (!Number.isFinite(skinIndex)) {
+    return null;
+  }
+
+  return { heroId, skinIndex };
+};
+
+export const importLeagueSkinsPackage = async () => {
+  LogMsgUtil.sendLogMsg('[LeagueSkins导入] 开始选择压缩包');
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    defaultPath: getSkinPath(),
+    filters: [{ name: 'Zip', extensions: ['zip'] }],
+  });
+
+  if (result.canceled || !result.filePaths[0]) {
+    LogMsgUtil.sendLogMsg('[LeagueSkins导入] 已取消');
+    return { canceled: true, count: 0, outDir: '' };
+  }
+
+  const zipPath = result.filePaths[0];
+  const outDir = Path.join(getSkinPath(), LEAGUE_SKINS_SUFFIX);
+  const zip = new AdmZip(zipPath);
+  const fantomeEntries = zip
+    .getEntries()
+    .filter((entry) => !entry.isDirectory && entry.entryName.toLowerCase().endsWith('.fantome'));
+  let count = 0;
+
+  LogMsgUtil.sendLogMsg(`[LeagueSkins导入] 压缩包: ${zipPath}`);
+  LogMsgUtil.sendLogMsg(`[LeagueSkins导入] 目标目录: ${outDir}`);
+  LogMsgUtil.sendLogMsg(`[LeagueSkins导入] 发现 fantome 文件: ${fantomeEntries.length}`);
+
+  fantomeEntries.forEach((entry, index) => {
+    const parsed = parseLeagueSkinsEntry(entry.entryName);
+    if (!parsed) {
+      LogMsgUtil.sendLogMsg(
+        `[LeagueSkins导入] [${index + 1}/${fantomeEntries.length}] 跳过: ${entry.entryName}`
+      );
+      return;
+    }
+
+    const heroDir = Path.join(outDir, parsed.heroId);
+    const targetPath = Path.join(heroDir, `${parsed.heroId}_${parsed.skinIndex}.zip`);
+    fs.mkdirSync(heroDir, { recursive: true });
+    fs.writeFileSync(targetPath, entry.getData());
+    LogMsgUtil.sendLogMsg(
+      `[LeagueSkins导入] [${index + 1}/${fantomeEntries.length}] ${
+        entry.entryName
+      } -> ${targetPath}`
+    );
+    count++;
+  });
+
+  if (count === 0) {
+    MessageUtil.error('未找到可导入的 LeagueSkins 皮肤文件');
+  } else {
+    MessageUtil.success(`导入 LeagueSkins 皮肤成功：${count} 个`);
+  }
+  LogMsgUtil.sendLogMsg(`[LeagueSkins导入] 完成: ${count}/${fantomeEntries.length}`);
+
+  return { canceled: false, count, outDir };
 };
 
 export const shoutDownModTools = async () => {
