@@ -4,6 +4,9 @@
     placement="right"
     width="70vw"
     :z-index="59999"
+    :mask-style="{ zIndex: 59998 }"
+    :content-wrapper-style="{ zIndex: 59999 }"
+    :body-style="{ zIndex: 59999 }"
     :header-style="{ display: 'none' }"
   >
     <div h-85vh overflow-auto w-full m-t-4 p-t-2>

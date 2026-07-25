@@ -4,6 +4,9 @@
     placement="right"
     width="95vw"
     :header-style="{ display: 'none' }"
+    :z-index="1000"
+    :mask-style="{ zIndex: 999 }"
+    :content-wrapper-style="{ zIndex: 1000 }"
     style="background-color: #1b2128"
     root-class-name="custom-no-padding-drawer"
     destroy-on-close
