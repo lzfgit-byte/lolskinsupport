@@ -31,18 +31,12 @@ import {
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
-import {
-  DEFAULT_SKIN_SUFFIX,
-  loadSkinData,
-  loadSkinDataByFile,
-  setConfigData,
-  unpackWadFile,
-} from './load-skin-data';
+import { loadSkinData, loadSkinDataByFile, setConfigData, unpackWadFile } from './load-skin-data';
 
 export * from '../http';
 const idName = {};
 const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
-const LEAGUE_SKINS_SUFFIX = DEFAULT_SKIN_SUFFIX;
+const defaultSkinSuffix = 'leagueSkins';
 export const setIdName = (heroList: any[]) => {
   setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   heroList?.forEach((item) => {
@@ -87,8 +81,8 @@ export const getSkinPath = () => {
   return readConfigOrDefault(SKIN_PATH, defaultSkinPath);
 };
 export const getSkinDefaultSuffix = () => {
-  const suffix = readConfigOrDefault(SKIN_DEFAULT_SUFFIX_CONFIG_KEY, DEFAULT_SKIN_SUFFIX);
-  return suffix?.trim() || DEFAULT_SKIN_SUFFIX;
+  const suffix = readConfigOrDefault(SKIN_DEFAULT_SUFFIX_CONFIG_KEY, defaultSkinSuffix);
+  return suffix?.trim() || defaultSkinSuffix;
 };
 export const getGamePath = () => {
   return readConfigOrDefault(GAME_PATH, defaultGamePath);
@@ -577,7 +571,8 @@ export const importLeagueSkinsPackage = async () => {
   }
 
   const zipPath = result.filePaths[0];
-  const outDir = Path.join(getSkinPath(), LEAGUE_SKINS_SUFFIX);
+  const skinSuffix = getSkinDefaultSuffix();
+  const outDir = Path.join(getSkinPath(), skinSuffix);
   const zip = new AdmZip(zipPath);
   const fantomeEntries = zip
     .getEntries()
