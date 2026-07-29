@@ -20,7 +20,7 @@ let execFuncOnClose = [];
 async function createWindow() {
   win = new BrowserWindow({
     title: 'ghs',
-    width: 1450,
+    width: 1550,
     height: 788,
     icon: resolvePublic('favicon.ico'),
     webPreferences: {
