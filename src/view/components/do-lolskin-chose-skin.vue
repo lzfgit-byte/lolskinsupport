@@ -47,10 +47,10 @@
     </Modal>
     <a-drawer v-model:open="drawOpen">
       <a-button m-b-10px @click="doMkCurrentHero">
-        构建当前英雄皮肤文件[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
+        （多个）全部皮肤文件[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
       </a-button>
       <a-button m-b-10px @click="doMkCurrentSkin">
-        构建当前皮肤文件[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
+        （一个）当前皮肤文件[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
       </a-button>
       <a-button m-b-10px @click="doUnPackWadFile">
         解压缩当前英雄wad[{{ `${heroId}_${mkSkinId}_${heroAlias}` }}]
