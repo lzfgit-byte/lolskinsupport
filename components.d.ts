@@ -16,6 +16,7 @@ declare module 'vue' {
     AInputNumber: typeof import('ant-design-vue/es')['InputNumber']
     ASpace: typeof import('ant-design-vue/es')['Space']
     ASwitch: typeof import('ant-design-vue/es')['Switch']
+    ATooltip: typeof import('ant-design-vue/es')['Tooltip']
     GhsDialog: typeof import('./src/components/dialog/ghs-dialog.vue')['default']
     MainLayout: typeof import('./src/components/main-layout.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

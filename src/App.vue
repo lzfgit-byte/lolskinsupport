@@ -5,7 +5,6 @@
     </MainLayout>
     <LogView ref="logRef"></LogView>
     <ConfigPage></ConfigPage>
-    <LolskinChoseSkin></LolskinChoseSkin>
   </a-config-provider>
 </template>
 <script setup lang="ts">
@@ -14,7 +13,6 @@
   import LogView from '@/view/components/log-view.vue';
   import MainLayout from '@/components/main-layout.vue';
   import ConfigPage from '@/view/components/config-page.vue';
-  import LolskinChoseSkin from '@/view/components/lolskin-chose-skin.vue';
 
   const { logRef } = useGlobalRef();
 </script>

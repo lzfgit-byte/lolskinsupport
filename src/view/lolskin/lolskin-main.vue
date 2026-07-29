@@ -1,33 +1,31 @@
 <template>
-  <div class="searchInput">
-    <input v-model="searchValue" placeholder="搜索英雄..." />
-  </div>
+  <div class="hero-browser">
+    <div class="searchInput">
+      <input v-model="searchValue" placeholder="搜索英雄..." />
+    </div>
 
-  <!-- 调整了高度计算，为底部翻页留出 50px 的空间 -->
-  <div style="padding-top: 38px; overflow-y: auto; height: calc(100vh - 88px)">
-    <HeroCard
-      v-for="item in pagedImg"
-      :key="item.heroId"
-      :hero-id="`${item.heroId}`"
-      :instance_id="item.instance_id"
-      :title="`${item.name}`"
-      :alias="item.alias"
-      @click-hero="handlerClickHero"
-    ></HeroCard>
-  </div>
+    <div class="hero-grid">
+      <HeroCard
+        v-for="item in pagedImg"
+        :key="item.heroId"
+        :hero-id="`${item.heroId}`"
+        :instance_id="item.instance_id"
+        :title="`${item.name}`"
+        :alias="item.alias"
+        @click-hero="handlerClickHero"
+      ></HeroCard>
+    </div>
 
-  <!-- 底部翻页控制区 -->
-  <div class="pagination-bar">
-    <button :disabled="currentPage === 1" @click="currentPage--">上一页</button>
-    <span class="page-info">第 {{ currentPage }} / {{ totalPages || 1 }} 页</span>
-    <button :disabled="currentPage >= totalPages" @click="currentPage++">下一页</button>
+    <div class="pagination-bar">
+      <button :disabled="currentPage === 1" @click="currentPage--">上一页</button>
+      <span class="page-info">第 {{ currentPage }} / {{ totalPages || 1 }} 页</span>
+      <button :disabled="currentPage >= totalPages" @click="currentPage++">下一页</button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
   import { computed, onMounted, ref, watchEffect } from 'vue';
-  import { useRouter } from 'vue-router';
-  import { nextTick } from 'vue-demi';
   import HeroCard from './hero-card.vue';
   import http from '@/utils/http';
   import type { mainHeroInfo } from '@/type/type';
@@ -37,8 +35,7 @@
 
   const mainIMg = ref<mainHeroInfo[]>([]);
   let heros_: mainHeroInfo[] = [];
-  const { heroId, autoChose, heros, heroAlias, heroIdAliasMap, choseDrawerOpen } = useGlobalState();
-  let router = useRouter();
+  const { heroId, heros, heroAlias, heroIdAliasMap } = useGlobalState();
 
   // 分页相关变量
   const currentPage = ref(1);
@@ -71,7 +68,6 @@
   const handlerClickHero = (heroId_: string, heroAlias_) => {
     heroId.value = heroId_;
     heroAlias.value = heroAlias_;
-    choseDrawerOpen.value = true;
   };
 
   const searchValue = ref('');
@@ -91,61 +87,89 @@
 
   onMounted(() => {
     bus.off('champion-selected');
-    bus.on('champion-selected', () => {
-      choseDrawerOpen.value = false;
-      nextTick(() => {
-        choseDrawerOpen.value = true;
-      });
+    bus.on('champion-selected', (championId: string) => {
+      currentPage.value = Math.max(
+        1,
+        Math.ceil(
+          (mainIMg.value.findIndex((item) => `${item.heroId}` === championId) + 1) / pageSize
+        )
+      );
     });
   });
 </script>
 
 <style scoped lang="less">
+  .hero-browser {
+    display: grid;
+    grid-template-rows: 46px minmax(0, 1fr) 48px;
+    height: 100%;
+    min-height: 0;
+    background: #141b22;
+  }
+
   .searchInput {
-    position: fixed;
-    left: 10px;
+    display: flex;
+    align-items: center;
     width: 100%;
-    height: 38px;
-    z-index: 3;
-    border: 1px solid #313537;
-    background-color: #191d24;
+    height: 46px;
+    border-bottom: 1px solid #27313b;
+    background-color: #121820;
     box-sizing: border-box;
-    -webkit-transition: border-color 0.3s;
-    -moz-transition: border-color 0.3s;
-    -o-transition: border-color 0.3s;
-    transition: border-color 0.3s;
+    padding: 8px;
 
     input {
-      height: 38px;
+      height: 30px;
       width: 100%;
-      background-color: transparent;
-      border: none;
-      font-size: 16px;
-      color: #ae9156;
+      background-color: #0f141b;
+      border: 1px solid #2d3a45;
+      font-size: 14px;
+      color: #f1e5bf;
       box-sizing: border-box;
       outline: unset;
-      padding: 0 10px;
+      padding: 0 12px;
+
+      &:focus {
+        border-color: #6d9f43;
+      }
     }
   }
 
-  /* 新增底部翻页栏样式 */
+  .hero-grid {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .hero-grid::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .hero-grid::-webkit-scrollbar-track {
+    background: #0c1117;
+  }
+
+  .hero-grid::-webkit-scrollbar-thumb {
+    border: 2px solid #0c1117;
+    background: #43505c;
+  }
+
+  .hero-grid::-webkit-scrollbar-thumb:hover {
+    background: #657380;
+  }
+
   .pagination-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
     width: 100%;
-    height: 50px;
-    background-color: #191d24;
-    border-top: 1px solid #313537;
+    height: 48px;
+    background-color: #121820;
+    border-top: 1px solid #27313b;
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 3;
 
     button {
-      background-color: #313537;
-      color: #ae9156;
-      border: 1px solid #4a4f52;
+      background-color: #1c2530;
+      color: #d8c99b;
+      border: 1px solid #344452;
       padding: 6px 14px;
       cursor: pointer;
       font-size: 14px;
@@ -159,14 +183,14 @@
       }
 
       &:not(:disabled):hover {
-        background-color: #ae9156;
+        background-color: #d8c99b;
         color: #191d24;
       }
     }
 
     .page-info {
-      color: #ae9156;
-      margin: 0 20px;
+      color: #d8c99b;
+      margin: 0 14px;
       font-size: 14px;
     }
   }
