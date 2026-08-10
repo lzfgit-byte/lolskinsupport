@@ -11,7 +11,10 @@
     <!-- 悬浮搜索窗 -->
     <div class="floating-search-window">
       <div class="search-body">
-        <input v-model="searchValue" placeholder="输入英雄名字..." class="search-input" />
+        <div class="search-input-wrapper">
+          <input v-model="searchValue" placeholder="输入英雄名字..." class="search-input" />
+          <button v-if="searchValue" class="clear-btn" @click="searchValue = ''" title="清空">✕</button>
+        </div>
       </div>
     </div>
 
@@ -87,6 +90,8 @@
   const handlerClickHero = (heroId_: string, heroAlias_: string) => {
     heroId.value = heroId_;
     heroAlias.value = heroAlias_;
+    // 清除搜索框
+    searchValue.value = '';
   };
 
   const searchValue = ref('');
@@ -193,6 +198,12 @@
     border-radius: 0 0 8px 8px;
   }
 
+  .search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
   .search-input {
     width: 100%;
     height: 32px;
@@ -202,6 +213,7 @@
     font-size: 12px;
     color: #f1e5bf;
     padding: 0 10px;
+    padding-right: 30px;
     outline: none;
     box-sizing: border-box;
     transition: border-color 0.2s ease;
@@ -213,6 +225,25 @@
     &:focus {
       border-color: #6d9f43;
       box-shadow: 0 0 8px rgba(109, 159, 67, 0.3);
+    }
+  }
+
+  .clear-btn {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    color: #82909d;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px 6px;
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      color: #6d9f43;
     }
   }
 
