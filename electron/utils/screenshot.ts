@@ -3,9 +3,20 @@ import { join } from 'node:path';
 import { app, desktopCapturer, screen } from 'electron';
 
 /**
+ * 获取当前 UTC/本地时间的 YYYY-MM-DD 格式字符串
+ */
+function getFormattedDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * 截取当前屏幕并保存
  * @param prefix 文件名前缀，默认 'screenshot'
- * @param subDir 可选的子目录名称（例如 'quadrakill', 'pentakill'），会将截图放置在 Pictures/lolskinsupport/<subDir> 中
+ * @param subDir 可选的子目录名称（例如 'quadrakill', 'pentakill'），会将截图放置在 Pictures/lolskinsupport/<subDir>/<YYYY-MM-DD> 中
  */
 export async function captureAppScreenshot(
   prefix = 'screenshot',
@@ -84,9 +95,14 @@ export async function captureAppScreenshot(
 
     console.log(`[Screenshot] Final image: ${finalSize.width}x${finalSize.height}`);
 
-    // 保存到 Pictures/lolskinsupport / [subDir]
+    // 获取当前年月日字符串 (例如 "2026-08-16")
+    const dateStr = getFormattedDate();
+
+    // 保存路径结构：
+    // 如果有 subDir： Pictures/lolskinsupport / <subDir> / <YYYY-MM-DD>
+    // 如果无 subDir： Pictures/lolskinsupport / <YYYY-MM-DD>
     const baseDir = join(app.getPath('pictures'), 'lolskinsupport');
-    const dir = subDir ? join(baseDir, subDir) : baseDir;
+    const dir = subDir ? join(baseDir, subDir, dateStr) : join(baseDir, dateStr);
 
     await fs.mkdir(dir, {
       recursive: true,
