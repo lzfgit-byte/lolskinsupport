@@ -2,7 +2,15 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { app, desktopCapturer, screen } from 'electron';
 
-export async function captureAppScreenshot(prefix = 'screenshot'): Promise<string | null> {
+/**
+ * 截取当前屏幕并保存
+ * @param prefix 文件名前缀，默认 'screenshot'
+ * @param subDir 可选的子目录名称（例如 'quadrakill', 'pentakill'），会将截图放置在 Pictures/lolskinsupport/<subDir> 中
+ */
+export async function captureAppScreenshot(
+  prefix = 'screenshot',
+  subDir = ''
+): Promise<string | null> {
   try {
     const primaryDisplay = screen.getPrimaryDisplay();
 
@@ -11,12 +19,10 @@ export async function captureAppScreenshot(prefix = 'screenshot'): Promise<strin
     const scaleFactor = primaryDisplay.scaleFactor || 1;
 
     const targetWidth = Math.max(1, Math.round(primaryDisplay.size.width * scaleFactor));
-
     const targetHeight = Math.max(1, Math.round(primaryDisplay.size.height * scaleFactor));
 
     console.log(`[Screenshot] Display: ${targetWidth}x${targetHeight} @ ${scaleFactor}x`);
 
-    // 关键：
     // 直接要求 desktopCapturer 获取目标分辨率的 thumbnail，
     // 不要先拿低分辨率图片再 resize。
     const sources = await desktopCapturer.getSources({
@@ -37,7 +43,6 @@ export async function captureAppScreenshot(prefix = 'screenshot'): Promise<strin
     const targetSource =
       sources.find((source) => {
         const displayId = Number((source as any).display_id ?? (source as any).displayId ?? -1);
-
         return displayId === primaryDisplay.id;
       }) ?? sources[0];
 
@@ -79,8 +84,9 @@ export async function captureAppScreenshot(prefix = 'screenshot'): Promise<strin
 
     console.log(`[Screenshot] Final image: ${finalSize.width}x${finalSize.height}`);
 
-    // 保存到 Pictures/lolskinsupport
-    const dir = join(app.getPath('pictures'), 'lolskinsupport');
+    // 保存到 Pictures/lolskinsupport / [subDir]
+    const baseDir = join(app.getPath('pictures'), 'lolskinsupport');
+    const dir = subDir ? join(baseDir, subDir) : baseDir;
 
     await fs.mkdir(dir, {
       recursive: true,
@@ -98,7 +104,6 @@ export async function captureAppScreenshot(prefix = 'screenshot'): Promise<strin
     return filePath;
   } catch (error) {
     console.error('[Screenshot] Failed to capture current screen:', error);
-
     return null;
   }
 }

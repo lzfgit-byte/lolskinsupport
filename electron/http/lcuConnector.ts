@@ -8,6 +8,7 @@ import WebSocket from 'ws';
 import { app } from 'electron';
 import axios from 'axios';
 import { captureAppScreenshot } from '../utils/screenshot';
+import { LogMsgUtil } from '../utils/message';
 import { getLockfile } from './connect-league-legends';
 
 const execAsync = promisify(exec);
@@ -442,47 +443,45 @@ export class LCUConnector extends EventEmitter {
     this.lastMultiKillKey = key;
     this.emit('multikill', event);
 
-    const file = await captureAppScreenshot(`multikill-${Date.now()}`);
+    // 根据连杀数量划分目录：2->doublekill, 3->triplekill, 4->quadrakill, 5->pentakill
+    const killDirMap: Record<number, string> = {
+      2: 'doublekill',
+      3: 'triplekill',
+      4: 'quadrakill',
+      5: 'pentakill',
+    };
+
+    const subDir = killDirMap[killStreak] || 'multikill';
+    const prefix = `${subDir}-${killStreak}kills`;
+
+    // 传入 prefix 和对应的子目录名称
+    const file = await captureAppScreenshot(prefix, subDir);
     if (file) {
       this.emit('screenshot-created', file);
     }
   }
 
-  /**
-   * 动态提取 Live Client Data API 运行端口 (League of Legends.exe 进程参数中的 --app-port)
-   */
-  private async getLiveClientPort(): Promise<number> {
-    if (this.cachedLiveClientPort) {
-      return this.cachedLiveClientPort;
-    }
-
-    try {
-      // 优先方式：尝试通过系统进程获取 League of Legends.exe 命令行中的 --app-port 动态端口
-      const cmd =
-        process.platform === 'win32'
-          ? 'wmic process where "name=\'League of Legends.exe\'" get CommandLine'
-          : 'ps aux | grep "League of Legends"';
-
-      const { stdout } = await execAsync(cmd);
-      const match = stdout.match(/--app-port=(\d+)/);
-
-      if (match && match[1]) {
-        const port = parseInt(match[1], 10);
-        this.cachedLiveClientPort = port;
-        return port;
-      }
-    } catch {
-      // 获取失败或进程查不到时降级
-    }
-
-    // 备用方式：默认回退到标准 2999 端口
-    this.cachedLiveClientPort = 2999;
-    return 2999;
-  }
-
   private async requestLiveClientAPI(endpoint: string): Promise<any> {
-    const primaryPort = await this.getLiveClientPort();
-    const candidatePorts = [primaryPort, 2999, 3000, 3001, 3002].filter(
+    // 1. 如果已有缓存端口，优先尝试缓存端口
+    if (this.cachedLiveClientPort !== null) {
+      try {
+        const res = await axios.get(`https://127.0.0.1:${this.cachedLiveClientPort}${endpoint}`, {
+          httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+          timeout: 1000,
+        });
+        return res.data;
+      } catch (err: any) {
+        // 缓存端口失效（端口变更或拒绝连接），清空缓存降级到端口扫描逻辑
+        if (err.code === 'ECONNREFUSED' || err.response?.status === 404) {
+          this.cachedLiveClientPort = null;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // 2. 缓存为空或缓存端口请求失败，扫描候选端口
+    const candidatePorts = [2999, 3000, 3001, 3002].filter(
       (p, idx, self) => self.indexOf(p) === idx
     );
 
@@ -494,6 +493,7 @@ export class LCUConnector extends EventEmitter {
         });
         // 成功获取后，更新缓存的可用端口
         this.cachedLiveClientPort = port;
+        LogMsgUtil.sendLogMsg(`LCU port${port}`);
         return res.data;
       } catch (err: any) {
         // 如果此端口无法连接或未准备好，重试下一个候选端口
@@ -503,6 +503,7 @@ export class LCUConnector extends EventEmitter {
         throw err;
       }
     }
+
     throw new Error('Live Client API connection refused on candidate ports');
   }
 
@@ -538,10 +539,15 @@ export class LCUConnector extends EventEmitter {
       // 游戏仍处于载入画面或未初始化完毕时抛错，属于正常等待过程
       const httpStatus = error?.httpStatus ?? error?.response?.status;
       if (httpStatus === 404 || error.code === 'ECONNREFUSED') {
+        LogMsgUtil.sendLogMsg('404 ECONNREFUSED');
         return;
       }
 
       console.warn('[LCUConnector] Failed to poll live client event data:', error.message || error);
+      LogMsgUtil.sendLogMsg(
+        '[LCUConnector] Failed to poll live client event data:',
+        error.message || error
+      );
     }
   }
 
