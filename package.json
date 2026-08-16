@@ -1,6 +1,6 @@
 {
   "name": "lolsupport",
-  "version": "4.0.55",
+  "version": "4.0.56",
   "main": "dist-electron/main/index.js",
   "license": "MIT",
   "servicePort": 13356,
