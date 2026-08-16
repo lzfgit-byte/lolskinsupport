@@ -7,7 +7,10 @@ import { promisify } from 'node:util';
 import WebSocket from 'ws';
 import { app } from 'electron';
 import axios from 'axios';
+import { captureAppScreenshot } from '../utils/screenshot';
 import { getLockfile } from './connect-league-legends';
+
+const execAsync = promisify(exec);
 
 interface LCUCredentials {
   protocol?: string;
@@ -27,9 +30,14 @@ export class LCUConnector extends EventEmitter {
   private ws: WebSocket | null = null;
   private connected = false;
   private pollInterval: NodeJS.Timeout | null = null;
+  private multikillMonitorInterval: NodeJS.Timeout | null = null;
   private subscriptions: Set<string> = new Set();
   private axiosInstance: any = null;
   private readonly lockfileCacheDuration = 30000; // 30 seconds
+  private multikillEventCursor = 0;
+  private lastMultiKillKey: string | null = null;
+  private multikillMonitoringActive = false;
+  private cachedLiveClientPort: number | null = null;
 
   constructor(options: LCUConnectionOptions = {}) {
     super();
@@ -83,6 +91,9 @@ export class LCUConnector extends EventEmitter {
       // Start monitoring for client disconnection
       this.startPolling();
 
+      const currentPhase = await this.getGameflowPhase();
+      await this.handleGameflowPhase(currentPhase);
+
       return true;
     } catch {
       // Only emit error if not auto-connecting
@@ -95,6 +106,7 @@ export class LCUConnector extends EventEmitter {
 
   disconnect(): void {
     this.stopPolling();
+    this.stopMultiKillMonitoring();
 
     if (this.ws) {
       this.ws.close();
@@ -148,15 +160,14 @@ export class LCUConnector extends EventEmitter {
       return response.data;
     } catch (error: any) {
       if (error.response) {
-        // Suppress 404 errors for champ-select endpoint as they're expected when not in champ select
         const isChampSelectEndpoint = endpoint.includes('/lol-champ-select/');
+        const isLiveClientEndpoint = endpoint.includes('/liveclientdata/');
         const is404Error = error.response.status === 404;
 
-        if (!isChampSelectEndpoint || !is404Error) {
+        if ((!isChampSelectEndpoint && !isLiveClientEndpoint) || !is404Error) {
           console.error(`LCU: HTTP ${error.response.status} for ${endpoint}:`, error.response.data);
         }
 
-        // Include httpStatus in the error for easier handling
         const err: any = new Error(`LCU request failed: ${error.response.status}`);
         err.httpStatus = error.response.status;
         throw err;
@@ -310,7 +321,9 @@ export class LCUConnector extends EventEmitter {
 
               // Emit specific events
               if (eventName === 'OnJsonApiEvent_lol-gameflow_v1_gameflow-phase') {
-                this.emit('gameflow-phase', eventData?.data);
+                const phase = eventData?.data;
+                this.emit('gameflow-phase', phase);
+                void this.handleGameflowPhase(phase);
               } else if (eventName === 'OnJsonApiEvent_lol-champ-select_v1_session') {
                 this.emit('champ-select-session', eventData?.data);
               } else if (eventName === 'OnJsonApiEvent_lol-lobby_v2_lobby') {
@@ -363,6 +376,173 @@ export class LCUConnector extends EventEmitter {
         }
       }
     }, 5000); // Check every 5s, but only HTTP call if stale
+  }
+
+  private async handleGameflowPhase(phase: string | null | undefined): Promise<void> {
+    const normalizedPhase = phase || 'None';
+    if (normalizedPhase === 'InProgress') {
+      await this.startMultiKillMonitoring();
+    } else {
+      this.stopMultiKillMonitoring();
+    }
+  }
+
+  private async startMultiKillMonitoring(): Promise<void> {
+    if (!this.connected || this.multikillMonitoringActive) {
+      return;
+    }
+
+    this.multikillMonitoringActive = true;
+    this.multikillEventCursor = 0;
+    this.lastMultiKillKey = null;
+
+    const poll = async () => {
+      await this.pollMultiKillEvents();
+    };
+
+    await poll();
+    this.multikillMonitorInterval = setInterval(poll, 500);
+  }
+
+  private stopMultiKillMonitoring(): void {
+    this.multikillMonitoringActive = false;
+    this.cachedLiveClientPort = null;
+    if (this.multikillMonitorInterval) {
+      clearInterval(this.multikillMonitorInterval);
+      this.multikillMonitorInterval = null;
+    }
+  }
+
+  private isMultiKillEvent(event: any): boolean {
+    if (!event || typeof event !== 'object') {
+      return false;
+    }
+
+    const eventName = String(event.EventName ?? event.eventName ?? event.name ?? '').trim();
+    const killStreak = Number(event.KillStreak ?? event.killStreak ?? event.killstreak ?? 0);
+
+    if (!eventName || !/^multikill$/i.test(eventName)) {
+      return false;
+    }
+
+    return killStreak >= 2 && killStreak <= 5;
+  }
+
+  private async handleMultiKillEvent(event: any): Promise<void> {
+    const eventName = String(event?.EventName ?? event?.eventName ?? 'multikill');
+    const killStreak = Number(event?.KillStreak ?? event?.killStreak ?? 0);
+    const key = `${eventName}:${killStreak}:${event?.KillerName ?? event?.killerName ?? ''}:${
+      event?.EventTime ?? event?.eventTime ?? ''
+    }`;
+
+    if (this.lastMultiKillKey === key) {
+      return;
+    }
+
+    this.lastMultiKillKey = key;
+    this.emit('multikill', event);
+
+    const file = await captureAppScreenshot(`multikill-${Date.now()}`);
+    if (file) {
+      this.emit('screenshot-created', file);
+    }
+  }
+
+  /**
+   * 动态提取 Live Client Data API 运行端口 (League of Legends.exe 进程参数中的 --app-port)
+   */
+  private async getLiveClientPort(): Promise<number> {
+    if (this.cachedLiveClientPort) {
+      return this.cachedLiveClientPort;
+    }
+
+    try {
+      // 优先方式：尝试通过系统进程获取 League of Legends.exe 命令行中的 --app-port 动态端口
+      const cmd =
+        process.platform === 'win32'
+          ? 'wmic process where "name=\'League of Legends.exe\'" get CommandLine'
+          : 'ps aux | grep "League of Legends"';
+
+      const { stdout } = await execAsync(cmd);
+      const match = stdout.match(/--app-port=(\d+)/);
+
+      if (match && match[1]) {
+        const port = parseInt(match[1], 10);
+        this.cachedLiveClientPort = port;
+        return port;
+      }
+    } catch {
+      // 获取失败或进程查不到时降级
+    }
+
+    // 备用方式：默认回退到标准 2999 端口
+    this.cachedLiveClientPort = 2999;
+    return 2999;
+  }
+
+  private async requestLiveClientAPI(endpoint: string): Promise<any> {
+    const primaryPort = await this.getLiveClientPort();
+    const candidatePorts = [primaryPort, 2999, 3000, 3001, 3002].filter(
+      (p, idx, self) => self.indexOf(p) === idx
+    );
+
+    for (const port of candidatePorts) {
+      try {
+        const res = await axios.get(`https://127.0.0.1:${port}${endpoint}`, {
+          httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+          timeout: 1000,
+        });
+        // 成功获取后，更新缓存的可用端口
+        this.cachedLiveClientPort = port;
+        return res.data;
+      } catch (err: any) {
+        // 如果此端口无法连接或未准备好，重试下一个候选端口
+        if (err.code === 'ECONNREFUSED' || err.response?.status === 404) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('Live Client API connection refused on candidate ports');
+  }
+
+  private async pollMultiKillEvents(): Promise<void> {
+    if (!this.connected || !this.multikillMonitoringActive) {
+      return;
+    }
+
+    try {
+      // 请求固定/动态映射的 2999 机制下的 Live Client API，避开 LCU 端口 404 问题
+      const response = await this.requestLiveClientAPI('/liveclientdata/eventdata');
+      const events = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.Events)
+        ? response.Events
+        : Array.isArray(response?.events)
+        ? response.events
+        : [];
+
+      if (!Array.isArray(events) || events.length === 0) {
+        return;
+      }
+
+      for (const event of events.slice(this.multikillEventCursor)) {
+        if (this.isMultiKillEvent(event)) {
+          await this.handleMultiKillEvent(event);
+          break;
+        }
+      }
+
+      this.multikillEventCursor = events.length;
+    } catch (error: any) {
+      // 游戏仍处于载入画面或未初始化完毕时抛错，属于正常等待过程
+      const httpStatus = error?.httpStatus ?? error?.response?.status;
+      if (httpStatus === 404 || error.code === 'ECONNREFUSED') {
+        return;
+      }
+
+      console.warn('[LCUConnector] Failed to poll live client event data:', error.message || error);
+    }
   }
 
   private stopPolling(): void {
