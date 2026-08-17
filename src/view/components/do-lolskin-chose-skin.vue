@@ -50,10 +50,14 @@
             <div class="info-id">ID: {{ choseSkinId }}</div>
           </div>
 
-          <!-- 悬浮炫彩选择面板（精简小巧，向下紧贴底部） -->
-          <div v-if="skinChild?.length > 0" class="chroma-overlay-panel">
+          <!-- 悬浮炫彩选择面板：收起时小，展开时变大（一行三列） -->
+          <div
+            v-if="skinChild?.length > 0"
+            class="chroma-overlay-panel"
+            :class="{ expanded: showChromas }"
+          >
             <div class="chroma-header" @click="showChromas = !showChromas">
-              <span class="chroma-title">炫彩皮肤 ({{ skinChild.length }} 个可选)</span>
+              <span class="chroma-title">炫彩皮肤 ({{ skinChild.length }} 个)</span>
               <div class="chroma-toggle-btn" :class="{ expanded: showChromas }">
                 <span class="toggle-text">{{ showChromas ? '收起' : '展开' }}</span>
                 <span class="toggle-icon">{{ showChromas ? '▼' : '▲' }}</span>
@@ -404,6 +408,7 @@
     gap: 10px;
     padding: 10px;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     border: 1px solid @border-color;
     background: @panel-bg;
 
@@ -427,12 +432,13 @@
     border: 1px solid #273541;
     background: #151d25;
     cursor: pointer;
-    transition: border-color 0.16s, transform 0.16s, background-color 0.16s;
+    transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+    will-change: border-color;
 
     &:hover {
-      transform: translateY(-1px);
       border-color: #6a844d;
       background: #19232b;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
 
     &.active {
@@ -518,52 +524,56 @@
     }
   }
 
-  /* 悬浮在主图右下角：炫彩选项面板（精简小巧，贴近底部） */
+  /* 悬浮在主图右下角：炫彩选项面板 */
   .chroma-overlay-panel {
     position: absolute;
-    bottom: 8px; /* 贴近舞台底部 */
+    bottom: 8px;
     right: 12px;
-    width: auto;
-    min-width: 200px;
-    max-width: 380px;
-    background: rgba(16, 22, 29, 0.88);
+    width: 150px; /* 收起状态下：极简精致小巧外框 */
+    background: rgba(16, 22, 29, 0.92);
     backdrop-filter: blur(8px);
     border: 1px solid #2e3e4d;
     border-radius: 4px;
-    padding: 6px 10px; /* 紧凑边距 */
+    padding: 5px 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-    transition: all 0.2s ease-in-out;
+    transition: width 0.2s ease-in-out; /* 展开/收起过渡 */
+    backface-visibility: hidden;
+
+    &.expanded {
+      width: 400px; /* 展开状态下：面板扩大放宽 */
+    }
   }
 
   .chroma-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 6px;
     cursor: pointer;
     user-select: none;
 
     .chroma-title {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       color: #e5d8b4;
+      white-space: nowrap;
     }
 
     .chroma-toggle-btn {
       display: flex;
       align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
+      gap: 2px;
+      padding: 1px 6px;
       border-radius: 3px;
       background: #18232e;
       border: 1px solid #334657;
       color: #8fc85d;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       transition: all 0.16s ease;
 
       .toggle-icon {
-        font-size: 9px;
+        font-size: 8px;
       }
 
       &:hover {
@@ -580,18 +590,20 @@
     }
   }
 
-  /* 展开后的炫彩选择列表 */
+  /* 展开后的炫彩选择列表：一行三列大图 */
   .chroma-list {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr); /* 一行三列 */
     gap: 8px;
-    margin-top: 10px;
-    max-height: 260px;
+    margin-top: 8px;
+    max-height: 460px;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     padding-right: 2px;
-
+    scrollbar-width: none; /* Firefox 隐藏滚动条 */
+    -ms-overflow-style: none; /* IE / Edge 隐藏滚动条 */
     &::-webkit-scrollbar {
-      width: 5px;
+      width: 4px;
     }
     &::-webkit-scrollbar-track {
       background: #0f151c;
@@ -607,13 +619,13 @@
     background: #151d25;
     padding: 0;
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: 4px;
     overflow: hidden;
-    transition: transform 0.14s, border-color 0.14s;
+    transition: border-color 0.14s ease, box-shadow 0.14s ease;
 
     &:hover {
-      transform: scale(1.05);
       border-color: #8fc85d;
+      box-shadow: 0 0 6px rgba(143, 200, 93, 0.4);
     }
 
     &.active {
