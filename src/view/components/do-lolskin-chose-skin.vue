@@ -20,7 +20,7 @@
     </header>
 
     <div class="skin-content">
-      <!-- 左侧：皮肤列表（完整保留原本的图片+下方皮肤名字结构） -->
+      <!-- 左侧：皮肤列表（保留图片与下方的皮肤名字节点） -->
       <aside class="skin-list">
         <div
           v-for="item in allSkins"
@@ -50,11 +50,14 @@
             <div class="info-id">ID: {{ choseSkinId }}</div>
           </div>
 
-          <!-- 悬浮炫彩选择面板（包含展开/收起） -->
+          <!-- 悬浮炫彩选择面板（精简小巧，向下紧贴底部） -->
           <div v-if="skinChild?.length > 0" class="chroma-overlay-panel">
             <div class="chroma-header" @click="showChromas = !showChromas">
               <span class="chroma-title">炫彩皮肤 ({{ skinChild.length }} 个可选)</span>
-              <span class="chroma-toggle-text">{{ showChromas ? '收起 ▲' : '展开炫彩 ▼' }}</span>
+              <div class="chroma-toggle-btn" :class="{ expanded: showChromas }">
+                <span class="toggle-text">{{ showChromas ? '收起' : '展开' }}</span>
+                <span class="toggle-icon">{{ showChromas ? '▼' : '▲' }}</span>
+              </div>
             </div>
 
             <div v-if="showChromas" class="chroma-list">
@@ -393,7 +396,7 @@
     min-height: 0;
   }
 
-  /* 左侧皮肤列表（保持完全一致的样式） */
+  /* 左侧皮肤列表 */
   .skin-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -515,58 +518,107 @@
     }
   }
 
-  /* 悬浮在主图右下角：炫彩选项面板 */
+  /* 悬浮在主图右下角：炫彩选项面板（精简小巧，贴近底部） */
   .chroma-overlay-panel {
     position: absolute;
-    bottom: 16px;
-    right: 16px;
+    bottom: 8px; /* 贴近舞台底部 */
+    right: 12px;
+    width: auto;
     min-width: 200px;
-    max-width: 300px;
-    background: rgba(16, 22, 29, 0.9);
+    max-width: 380px;
+    background: rgba(16, 22, 29, 0.88);
     backdrop-filter: blur(8px);
-    border: 1px solid #2b3743;
+    border: 1px solid #2e3e4d;
     border-radius: 4px;
-    padding: 10px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    padding: 6px 10px; /* 紧凑边距 */
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+    transition: all 0.2s ease-in-out;
   }
 
   .chroma-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     cursor: pointer;
     user-select: none;
 
     .chroma-title {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
-      color: #fff2c7;
+      color: #e5d8b4;
     }
 
-    .chroma-toggle-text {
-      font-size: 12px;
+    .chroma-toggle-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: #18232e;
+      border: 1px solid #334657;
       color: #8fc85d;
+      font-size: 11px;
+      font-weight: 700;
+      transition: all 0.16s ease;
+
+      .toggle-icon {
+        font-size: 9px;
+      }
+
+      &:hover {
+        background: #223242;
+        border-color: #8fc85d;
+        color: #ffffff;
+      }
+
+      &.expanded {
+        background: #203325;
+        border-color: #5e8d3a;
+        color: #a3e070;
+      }
     }
   }
 
+  /* 展开后的炫彩选择列表 */
   .chroma-list {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
     margin-top: 10px;
-    max-height: 160px;
+    max-height: 260px;
     overflow-y: auto;
+    padding-right: 2px;
+
+    &::-webkit-scrollbar {
+      width: 5px;
+    }
+    &::-webkit-scrollbar-track {
+      background: #0f151c;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #384755;
+      border-radius: 3px;
+    }
   }
 
   .chroma-item {
-    border: 1px solid #2f3d49;
+    border: 1.5px solid #2f3d49;
     background: #151d25;
     padding: 0;
     cursor: pointer;
+    border-radius: 3px;
+    overflow: hidden;
+    transition: transform 0.14s, border-color 0.14s;
+
+    &:hover {
+      transform: scale(1.05);
+      border-color: #8fc85d;
+    }
 
     &.active {
       border-color: @border-active;
+      box-shadow: 0 0 0 2px rgba(119, 178, 75, 0.6);
     }
 
     img {
