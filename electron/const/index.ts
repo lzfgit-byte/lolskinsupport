@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { app } from 'electron';
 import { ModToolsWrapper } from '../export/modToolsWrapper';
 
 let temp_dir = `${process.env.LOCALAPPDATA}\\lol-skin-ll`; // aka C:\Users\用户名\AppData\Local\ghs4.0
@@ -22,6 +23,7 @@ export const defaultOverlayPath = path.join(temp_dir, 'overlays');
 export const defaultGamePath = 'E:\\game\\Riot Games\\League of Legends\\Game';
 export const defaultModToolsPath = path.join(temp_dir, 'mod-tools\\mod-tools.exe');
 export const defaultInstalledPath = path.join(temp_dir, 'installed');
+export const defaultScreenshotPath = path.join(app.getPath('pictures'), 'lolskinsupport');
 export const SKIN_IMAGE_KEY = 'SKIN_IMAGE';
 export let IS_USE_COMMAND = false;
 export const setUseCommand = (flag: boolean) => {

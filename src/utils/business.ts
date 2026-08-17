@@ -11,6 +11,12 @@ export const f_getSkinPath = async (): Promise<string> => {
   return executeFunction('getSkinPath');
 };
 /**
+ * export const getScreenshotPath = () => {
+ */
+export const f_getScreenshotPath = async (): Promise<string> => {
+  return executeFunction('getScreenshotPath');
+};
+/**
  * export const getSkinDefaultSuffix = () => {
  */
 export const f_getSkinDefaultSuffix = async (): Promise<string> => {

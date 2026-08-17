@@ -34,6 +34,12 @@
         <a-button size="small" @click="setSkinDefaultSuffix">设置目录名称</a-button>
       </a-space>
       <br /><br />
+      截图保存路径：{{ screenshotPath }}
+      <a-space>
+        <a-button size="small" @click="f_openPath(screenshotPath)">打开文件路径</a-button>
+        <a-button size="small" @click="setScreenshotPath">设置文件地址</a-button>
+      </a-space>
+      <br /><br />
       游戏路径：{{ gamePath }}
       <a-space>
         <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
@@ -131,6 +137,7 @@
     MOD_TOOLS_PATH,
     OVERLAY_CONFIG_PATH,
     OVERLAY_PATH,
+    SCREENSHOT_PATH,
     SKIN_PATH,
   } from '@ghs/constant';
   import { watch, watchEffect } from 'vue-demi';
@@ -167,6 +174,7 @@
   const {
     skinPath,
     skinDefaultSuffix,
+    screenshotPath,
     gamePath,
     toolsPath,
     overlayPath,
@@ -212,6 +220,15 @@
     await f_setConfig(SKIN_DEFAULT_SUFFIX_CONFIG_KEY, skinDefaultSuffix.value);
     await loadFilePath();
     message.success('设置成功');
+  };
+  const setScreenshotPath = async () => {
+    const path = await f_selectPathOrFile('openDirectory', screenshotPath.value);
+    if (!path) {
+      return;
+    }
+    await f_setConfig(SCREENSHOT_PATH, path);
+    await loadFilePath();
+    message.success('截图保存路径设置成功');
   };
   const handleImportLeagueSkinsPackage = async () => {
     logDrawOpen.value = true;

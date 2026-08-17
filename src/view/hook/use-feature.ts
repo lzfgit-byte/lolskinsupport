@@ -8,6 +8,7 @@ import {
   f_getOverlayPath,
   f_getSkinDefaultSuffix,
   f_getSkinPath,
+  f_getScreenshotPath,
 } from '@/utils/business';
 
 export default () => {
@@ -15,6 +16,7 @@ export default () => {
     drawerOpen,
     skinPath,
     skinDefaultSuffix,
+    screenshotPath,
     gamePath,
     overlayPath,
     overlayConfigPath,
@@ -28,6 +30,7 @@ export default () => {
   const loadFilePath = async () => {
     skinPath.value = await f_getSkinPath();
     skinDefaultSuffix.value = await f_getSkinDefaultSuffix();
+    screenshotPath.value = await f_getScreenshotPath();
     gamePath.value = await f_getGamePath();
     overlayPath.value = await f_getOverlayPath();
     overlayConfigPath.value = await f_getOverlayConfigPath();

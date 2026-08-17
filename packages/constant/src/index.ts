@@ -9,6 +9,7 @@ export const OVERLAY_CONFIG_PATH = 'OVERLAY_CONFIG_PATH';
 export const MOD_TOOLS_PATH = 'MOD_TOOLS_PATH';
 export const INSTALLED_PATH = 'INSTALLED_PATH';
 export const HERO_SKIN = 'HERO_SKIN';
+export const SCREENSHOT_PATH = 'SCREENSHOT_PATH';
 export interface ShowSliderConfirmType {
   title?: string;
   msg?: string;

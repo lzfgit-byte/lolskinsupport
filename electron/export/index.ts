@@ -10,6 +10,7 @@ import {
   MOD_TOOLS_PATH,
   OVERLAY_CONFIG_PATH,
   OVERLAY_PATH,
+  SCREENSHOT_PATH,
   SKIN_PATH,
 } from '@ghs/constant';
 import type { ShowSliderConfirmType } from '@ghs/constant';
@@ -23,6 +24,7 @@ import {
   defaultModToolsPath,
   defaultOverlayConfigPath,
   defaultOverlayPath,
+  defaultScreenshotPath,
   defaultSkinPath,
   modToolsWrapper,
   setUseCommand,
@@ -79,6 +81,12 @@ export const readConfigOrDefault = (key: string, defaultValue: string) => {
 
 export const getSkinPath = () => {
   return readConfigOrDefault(SKIN_PATH, defaultSkinPath);
+};
+export const getScreenshotPath = () => {
+  return readConfigOrDefault(SCREENSHOT_PATH, defaultScreenshotPath);
+};
+export const setScreenshotPath = (path_: string) => {
+  setConfig(SCREENSHOT_PATH, path_);
 };
 export const getSkinDefaultSuffix = () => {
   const suffix = readConfigOrDefault(SKIN_DEFAULT_SUFFIX_CONFIG_KEY, defaultSkinSuffix);

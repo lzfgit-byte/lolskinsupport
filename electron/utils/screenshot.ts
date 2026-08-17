@@ -1,6 +1,8 @@
-import { promises as fs } from 'node:fs';
+import { promises as fs, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { app, desktopCapturer, screen } from 'electron';
+import { desktopCapturer, screen } from 'electron';
+import { SCREENSHOT_PATH } from '@ghs/constant';
+import { configPath, defaultScreenshotPath } from '../const';
 
 /**
  * 获取当前本地时间的 YYYY-MM-DD 格式字符串
@@ -22,6 +24,19 @@ function getFormattedTime(): string {
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
   return `${hours}时${minutes}分${seconds}秒`;
+}
+
+/**
+ * 读取配置中设置的截图保存根目录，未设置时回退到默认目录
+ */
+function getScreenshotBaseDir(): string {
+  try {
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    const configured = config[SCREENSHOT_PATH];
+    return configured || defaultScreenshotPath;
+  } catch {
+    return defaultScreenshotPath;
+  }
 }
 
 /**
@@ -109,10 +124,10 @@ export async function captureAppScreenshot(
     // 获取当前年月日字符串 (例如 "2026-08-16")
     const dateStr = getFormattedDate();
 
-    // 保存路径结构：
-    // 如果有 subDir： Pictures/lolskinsupport / <subDir> / <YYYY-MM-DD>
-    // 如果无 subDir： Pictures/lolskinsupport / <YYYY-MM-DD>
-    const baseDir = join(app.getPath('pictures'), 'lolskinsupport');
+    // 保存路径结构（根目录为配置的截图保存路径，默认 Pictures/lolskinsupport）：
+    // 如果有 subDir： <baseDir> / <subDir> / <YYYY-MM-DD>
+    // 如果无 subDir： <baseDir> / <YYYY-MM-DD>
+    const baseDir = getScreenshotBaseDir();
     const dir = subDir ? join(baseDir, subDir, dateStr) : join(baseDir, dateStr);
 
     await fs.mkdir(dir, {
