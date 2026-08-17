@@ -1,10 +1,13 @@
 <template>
   <div class="skin-page-view">
+    <!-- 顶栏 -->
     <header class="skin-header">
-      <button class="back-button" @click="back">返回</button>
-      <div class="hero-title">
-        <span class="hero-name">{{ heroAlias }}</span>
-        <span class="hero-id">{{ heroId }}_{{ mkSkinId }}</span>
+      <div class="header-left">
+        <button class="back-button" @click="back"> <span class="back-icon">‹</span> 返回 </button>
+        <div class="hero-title">
+          <span class="hero-name">{{ heroAlias }}</span>
+          <span class="hero-id">ID: {{ heroId }}_{{ mkSkinId }}</span>
+        </div>
       </div>
       <div class="header-actions">
         <a-button class="header-action-btn" size="small" @click="openHeroSkinPath">
@@ -17,6 +20,7 @@
     </header>
 
     <div class="skin-content">
+      <!-- 左侧：皮肤列表（完整保留原本的图片+下方皮肤名字结构） -->
       <aside class="skin-list">
         <div
           v-for="item in allSkins"
@@ -27,65 +31,59 @@
           @click="handleChoseSkin(item)"
           @dblclick="confirm_"
         >
-          <img :src="item.mainImg" />
+          <img :src="item.mainImg" loading="lazy" />
           <div class="skin-name" :title="item.name">{{ item.name }}</div>
         </div>
       </aside>
 
-      <section class="preview-panel">
-        <img v-if="choseSkinMainImg" class="preview-img" :src="choseSkinMainImg" />
-        <div v-else class="preview-empty">暂无预览</div>
-      </section>
+      <!-- 右侧主体：大图展示区 + 悬浮信息/炫彩 + 底部平铺按钮 -->
+      <main class="main-preview-container">
+        <!-- 大图展示舞台 -->
+        <section class="preview-stage">
+          <img v-if="choseSkinMainImg" class="preview-img" :src="choseSkinMainImg" />
+          <div v-else class="preview-empty">暂无预览</div>
 
-      <aside class="detail-panel">
-        <div class="detail-summary">
-          <div class="detail-block">
-            <div class="detail-label">当前皮肤</div>
-            <div class="detail-title">{{ choseSkin?.name || '未选择' }}</div>
-            <div class="detail-id">{{ choseSkinId }}</div>
+          <!-- 左上角：悬浮当前皮肤信息 -->
+          <div class="skin-overlay-info">
+            <div class="info-label">CURRENT SKIN</div>
+            <div class="info-title">{{ choseSkin?.name || '未选择皮肤' }}</div>
+            <div class="info-id">ID: {{ choseSkinId }}</div>
           </div>
 
-          <div v-if="skinChild?.length > 0" class="detail-block chroma-summary">
-            <div class="detail-title-row">
-              <div>
-                <div class="detail-label">炫彩</div>
-                <div class="detail-id">{{ skinChild.length }} 个可选</div>
-              </div>
-              <button class="chroma-toggle" @click="showChromas = !showChromas">
-                {{ showChromas ? '收起' : '显示' }}
+          <!-- 悬浮炫彩选择面板（包含展开/收起） -->
+          <div v-if="skinChild?.length > 0" class="chroma-overlay-panel">
+            <div class="chroma-header" @click="showChromas = !showChromas">
+              <span class="chroma-title">炫彩皮肤 ({{ skinChild.length }} 个可选)</span>
+              <span class="chroma-toggle-text">{{ showChromas ? '收起 ▲' : '展开炫彩 ▼' }}</span>
+            </div>
+
+            <div v-if="showChromas" class="chroma-list">
+              <button
+                v-for="item in skinChild"
+                :key="item.skinId"
+                class="chroma-item"
+                :class="{ active: item.skinId === choseSkinId }"
+                :title="item.name"
+                @click="handleChoseSkin(item)"
+              >
+                <img :src="getSkinChromaUrl(item)" />
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="detail-scroll">
-          <div v-if="showChromas && skinChild?.length > 0" class="chroma-grid">
-            <button
-              v-for="item in skinChild"
-              :key="item.skinId"
-              class="chroma-item"
-              :class="{ active: item.skinId === choseSkinId }"
-              :title="item.name"
-              @click="handleChoseSkin(item)"
-            >
-              <img :src="getSkinChromaUrl(item)" />
-            </button>
-          </div>
-        </div>
-
-        <div class="detail-actions">
-          <a-button class="action-btn" block @click="doMkCurrentHero">
+        <!-- 底部平铺操作按钮栏 -->
+        <footer class="bottom-actions-bar">
+          <a-button class="action-btn-ghost" @click="doMkCurrentHero">
             （多个）全部皮肤文件
           </a-button>
-          <a-button class="action-btn" block @click="doMkCurrentSkin">
+          <a-button class="action-btn-ghost" @click="doMkCurrentSkin">
             （一个）当前皮肤文件
           </a-button>
-          <a-button class="action-btn" block @click="doMkOverlay">构建 overlay</a-button>
-          <a-button class="action-btn primary-action" block @click="confirm_"
-            >点击使用皮肤</a-button
-          >
-        </div>
-      </aside>
+          <a-button class="action-btn-secondary" @click="doMkOverlay"> 构建 overlay </a-button>
+          <a-button class="action-btn-primary" @click="confirm_"> 点击使用皮肤 </a-button>
+        </footer>
+      </main>
     </div>
   </div>
 </template>
@@ -127,6 +125,7 @@
   const allSkins = ref<skinInfo[]>([]);
   const choseSkinId = ref('');
   const showChromas = ref(false);
+
   const choseSkin = computed(() => {
     if (choseSkinId.value) {
       const f = skins_.value.filter((item) => item.skinId === choseSkinId.value);
@@ -136,6 +135,7 @@
     }
     return {};
   });
+
   const choseSkinMainImg = computed(() => {
     if (choseSkin.value?.chromasBelongId === '0') {
       return choseSkin.value.mainImg;
@@ -146,11 +146,13 @@
     }
     return '';
   });
+
   const activeParentSkinId = computed(() => {
     return choseSkin.value?.chromasBelongId === '0'
       ? choseSkinId.value
       : choseSkin.value?.chromasBelongId;
   });
+
   const skinChild: Ref<skinInfo[]> = computed(() => {
     return skins_.value.filter((item_) => activeParentSkinId.value === item_.chromasBelongId);
   }) as any;
@@ -160,6 +162,7 @@
     skinIdImg[item.skinId] = a;
     return a;
   };
+
   const getSkins = () => {
     const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId.value}.js`;
     if (!heroId.value) {
@@ -190,17 +193,20 @@
         }
       });
   };
+
   const isChose = (item: skinInfo) => {
     if (choseSkin.value?.chromasBelongId === '0') {
       return item.skinId === choseSkinId.value;
     }
     return item.skinId === choseSkin.value?.chromasBelongId;
   };
+
   const back = () => {
     heroId.value = '';
     heroAlias.value = '';
     choseDrawerOpen.value = false;
   };
+
   const handleChoseSkin = async (item: skinInfo) => {
     LogUtil.log(`${item.skinId}`);
     choseSkinId.value = item.skinId;
@@ -213,6 +219,7 @@
     }
     await preChose();
   };
+
   const confirm_ = async () => {
     const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
     if (!res) {
@@ -221,6 +228,7 @@
     }
     await f_loadSkin(heroId.value, choseSkin.value.skinId, getSkinImage());
   };
+
   const doMkOverlay = async () => {
     const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
     if (!res) {
@@ -229,9 +237,11 @@
     }
     await f_mkOverlay(heroId.value, choseSkin.value.skinId, getSkinImage());
   };
+
   const getSkinImage = () => {
     return choseSkinMainImg.value;
   };
+
   const preChose = async () => {
     const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
     if (!res) {
@@ -239,14 +249,15 @@
       return;
     }
     await f_setHeroChoseSkin(heroId.value, choseSkinId.value);
-    // message.success('已应用');
   };
+
   const mkSkinId = computed(() => {
     if (!choseSkinId.value) {
       return '';
     }
     return parseInt(choseSkinId.value?.replace(heroId.value, '')).toString();
   });
+
   const doMkCurrentSkin = async () => {
     const path = await f_selectPathOrFile(
       'openFile',
@@ -257,6 +268,7 @@
       logDrawOpen.value = true;
     }
   };
+
   const doMkCurrentHero = async () => {
     showFrontendConfirm('确认创建当前英雄皮肤').then(async () => {
       const path = await f_selectPathOrFile(
@@ -280,34 +292,51 @@
       logDrawOpen.value = true;
     }
   };
+
   const openHeroSkinPath = () => {
     f_openPath(`${skinPath.value}\\${skinDefaultSuffix.value}\\${heroId.value}`);
   };
+
   onMounted(() => {
     getSkins();
   });
 </script>
+
 <style scoped lang="less">
+  @bg-dark: #151c24;
+  @panel-bg: #10161d;
+  @border-color: #2b3743;
+  @border-active: #77b24b;
+
   .skin-page-view {
     display: grid;
     grid-template-rows: 58px minmax(0, 1fr);
     height: 100%;
     min-height: 0;
-    background: #151c24;
+    background: @bg-dark;
     color: #f7edcf;
   }
 
+  /* 顶栏 */
   .skin-header {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    background: #121820;
+    border-bottom: 1px solid @border-color;
+  }
+
+  .header-left {
+    display: flex;
     align-items: center;
     gap: 14px;
-    border-bottom: 1px solid #2b3743;
-    background: #121820;
-    padding: 10px 14px;
   }
 
   .back-button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     height: 34px;
     padding: 0 18px;
     border: 1px solid #5e8d3a;
@@ -322,19 +351,15 @@
   }
 
   .hero-title {
-    min-width: 0;
     display: flex;
     align-items: baseline;
     gap: 10px;
   }
 
   .hero-name {
-    overflow: hidden;
     color: #fff3c7;
     font-size: 22px;
     font-weight: 700;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .hero-id {
@@ -352,62 +377,50 @@
     background: #18222c;
     color: #e7d9ad;
 
-    &:hover,
-    &:focus {
+    &:hover {
       border-color: #78a85a;
       background: #1d2a21;
       color: #ffffff;
     }
   }
 
+  /* 页面主体：左右布局 */
   .skin-content {
     display: grid;
-    grid-template-columns: 392px minmax(360px, 1fr) 280px;
+    grid-template-columns: 392px minmax(0, 1fr);
     gap: 14px;
-    min-height: 0;
     padding: 14px;
-  }
-
-  .skin-list,
-  .detail-panel {
     min-height: 0;
-    border: 1px solid #2b3743;
-    background: #10161d;
   }
 
+  /* 左侧皮肤列表（保持完全一致的样式） */
   .skin-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
     gap: 10px;
-    overflow-y: auto;
     padding: 10px;
-  }
+    overflow-y: auto;
+    border: 1px solid @border-color;
+    background: @panel-bg;
 
-  .skin-list::-webkit-scrollbar,
-  .detail-scroll::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .skin-list::-webkit-scrollbar-track,
-  .detail-scroll::-webkit-scrollbar-track {
-    background: #0c1117;
-  }
-
-  .skin-list::-webkit-scrollbar-thumb,
-  .detail-scroll::-webkit-scrollbar-thumb {
-    border: 2px solid #0c1117;
-    background: #43505c;
-  }
-
-  .skin-list::-webkit-scrollbar-thumb:hover,
-  .detail-scroll::-webkit-scrollbar-thumb:hover {
-    background: #657380;
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    &::-webkit-scrollbar-track {
+      background: #0c1117;
+    }
+    &::-webkit-scrollbar-thumb {
+      border: 2px solid #0c1117;
+      background: #43505c;
+    }
+    &::-webkit-scrollbar-thumb:hover {
+      background: #657380;
+    }
   }
 
   .skin-card {
     position: relative;
-    min-width: 0;
     border: 1px solid #273541;
     background: #151d25;
     cursor: pointer;
@@ -420,7 +433,7 @@
     }
 
     &.active {
-      border-color: #77b24b;
+      border-color: @border-active;
       box-shadow: inset 0 0 0 2px rgba(119, 178, 75, 0.5);
     }
 
@@ -442,20 +455,28 @@
     white-space: nowrap;
   }
 
-  .preview-panel {
-    display: flex;
-    min-width: 0;
+  /* 右侧容器：大图展示 + 底部按钮 */
+  .main-preview-container {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 14px;
     min-height: 0;
+  }
+
+  /* 主图舞台 */
+  .preview-stage {
+    position: relative;
+    display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
-    border: 1px solid #2b3743;
+    border: 1px solid @border-color;
     background: #0e141b;
+    overflow: hidden;
   }
 
   .preview-img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
   }
 
@@ -463,91 +484,89 @@
     color: #7f8b97;
   }
 
-  .detail-panel {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    overflow: hidden;
-  }
+  /* 悬浮在主图左上角：皮肤名字和 ID */
+  .skin-overlay-info {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    padding: 10px 14px;
+    background: rgba(16, 22, 29, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid #2b3743;
+    border-radius: 4px;
+    pointer-events: none;
 
-  .detail-summary {
-    border-bottom: 1px solid #25313c;
-    padding: 14px 14px 0;
-  }
+    .info-label {
+      font-size: 11px;
+      color: @border-active;
+    }
 
-  .detail-scroll {
-    min-height: 0;
-    overflow-y: auto;
-    padding: 12px 14px;
-  }
+    .info-title {
+      margin-top: 2px;
+      color: #fff2c7;
+      font-size: 18px;
+      font-weight: 700;
+    }
 
-  .detail-scroll:empty {
-    padding: 0 14px;
-  }
-
-  .detail-block {
-    margin-bottom: 14px;
-    padding-bottom: 14px;
-  }
-
-  .chroma-summary {
-    margin-bottom: 0;
-  }
-
-  .detail-label {
-    color: #7f8b97;
-    font-size: 12px;
-  }
-
-  .detail-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .detail-title {
-    margin-top: 6px;
-    color: #fff2c7;
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 24px;
-  }
-
-  .detail-id {
-    margin-top: 4px;
-    color: #8fa0ad;
-  }
-
-  .chroma-toggle {
-    height: 30px;
-    min-width: 58px;
-    border: 1px solid #3d5a2f;
-    background: #17241a;
-    color: #d8f0c2;
-    cursor: pointer;
-
-    &:hover {
-      border-color: #78b755;
-      color: #ffffff;
+    .info-id {
+      margin-top: 2px;
+      color: #8fa0ad;
+      font-size: 12px;
     }
   }
 
-  .chroma-grid {
+  /* 悬浮在主图右下角：炫彩选项面板 */
+  .chroma-overlay-panel {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    min-width: 200px;
+    max-width: 300px;
+    background: rgba(16, 22, 29, 0.9);
+    backdrop-filter: blur(8px);
+    border: 1px solid #2b3743;
+    border-radius: 4px;
+    padding: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+
+  .chroma-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+
+    .chroma-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff2c7;
+    }
+
+    .chroma-toggle-text {
+      font-size: 12px;
+      color: #8fc85d;
+    }
+  }
+
+  .chroma-list {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 8px;
     margin-top: 10px;
+    max-height: 160px;
+    overflow-y: auto;
   }
 
   .chroma-item {
-    overflow: hidden;
     border: 1px solid #2f3d49;
     background: #151d25;
     padding: 0;
     cursor: pointer;
 
     &.active {
-      border-color: #77b24b;
+      border-color: @border-active;
     }
 
     img {
@@ -558,39 +577,55 @@
     }
   }
 
-  .detail-actions {
+  /* 底部平铺按钮区域 */
+  .bottom-actions-bar {
     display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
-    border-top: 1px solid #25313c;
-    background: #10161d;
-    padding: 14px;
+    padding: 12px;
+    border: 1px solid @border-color;
+    background: @panel-bg;
   }
 
-  .action-btn {
-    height: 36px;
+  .action-btn-ghost,
+  .action-btn-secondary,
+  .action-btn-primary {
+    height: 38px;
+    font-weight: 700;
+    width: 100%;
+  }
+
+  .action-btn-ghost {
     border-color: #324553;
     background: #17212a;
     color: #efe3bc;
-    font-weight: 700;
 
-    &:hover,
-    &:focus {
+    &:hover {
       border-color: #76a85a;
       background: #1c2a22;
       color: #ffffff;
     }
   }
 
-  .primary-action {
+  .action-btn-secondary {
+    border-color: #3f5567;
+    background: #202d38;
+    color: #ffffff;
+
+    &:hover {
+      border-color: #6da2cb;
+      background: #293a48;
+    }
+  }
+
+  .action-btn-primary {
     border-color: #3d7b4a;
     background: #2d6f45;
     color: #ffffff;
 
-    &:hover,
-    &:focus {
+    &:hover {
       border-color: #68c577;
       background: #388554;
-      color: #ffffff;
     }
   }
 </style>
