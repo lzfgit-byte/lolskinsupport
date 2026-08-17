@@ -39,6 +39,7 @@ export class LCUConnector extends EventEmitter {
   private lastMultiKillKey: string | null = null;
   private multikillMonitoringActive = false;
   private cachedLiveClientPort: number | null = null;
+  private activePlayerName: string | null = null;
 
   constructor(options: LCUConnectionOptions = {}) {
     super();
@@ -117,6 +118,7 @@ export class LCUConnector extends EventEmitter {
     this.connected = false;
     this.credentials = null;
     this.axiosInstance = null;
+    this.activePlayerName = null;
     this.subscriptions.clear();
 
     this.emit('disconnected');
@@ -396,18 +398,20 @@ export class LCUConnector extends EventEmitter {
     this.multikillMonitoringActive = true;
     this.multikillEventCursor = 0;
     this.lastMultiKillKey = null;
+    this.activePlayerName = null;
 
     const poll = async () => {
       await this.pollMultiKillEvents();
     };
 
     await poll();
-    this.multikillMonitorInterval = setInterval(poll, 500);
+    this.multikillMonitorInterval = setInterval(poll, 300);
   }
 
   private stopMultiKillMonitoring(): void {
     this.multikillMonitoringActive = false;
     this.cachedLiveClientPort = null;
+    this.activePlayerName = null;
     if (this.multikillMonitorInterval) {
       clearInterval(this.multikillMonitorInterval);
       this.multikillMonitorInterval = null;
@@ -429,10 +433,49 @@ export class LCUConnector extends EventEmitter {
     return killStreak >= 2 && killStreak <= 5;
   }
 
+  /**
+   * 获取当前控制的玩家名称 (Active Player)
+   */
+  private async getActivePlayerName(): Promise<string | null> {
+    if (this.activePlayerName) {
+      return this.activePlayerName;
+    }
+
+    try {
+      const nameData = await this.requestLiveClientAPI('/liveclientdata/activeplayername');
+      if (typeof nameData === 'string' && nameData.trim()) {
+        // 清理双引号与多余空格
+        this.activePlayerName = nameData.replace(/^"|"$/g, '').split('#')[0].trim();
+        console.log(`[LCUConnector] Identified active player: "${this.activePlayerName}"`);
+        LogMsgUtil.sendLogMsg(
+          `[LCUConnector] Identified active player: "${this.activePlayerName}"`
+        );
+        return this.activePlayerName;
+      }
+    } catch (err: any) {
+      // 可以在载入对局初期重试
+    }
+    return null;
+  }
+
   private async handleMultiKillEvent(event: any): Promise<void> {
-    const eventName = String(event?.EventName ?? event?.eventName ?? 'multikill');
+    const killerName = String(event?.KillerName ?? event?.killerName ?? '').trim();
     const killStreak = Number(event?.KillStreak ?? event?.killStreak ?? 0);
-    const key = `${eventName}:${killStreak}:${event?.KillerName ?? event?.killerName ?? ''}:${
+
+    // 1. 获取当前玩家名字，并校验击杀者是否为当前玩家
+    const myPlayerName = await this.getActivePlayerName();
+    if (!myPlayerName || !killerName) {
+      return;
+    }
+
+    if (killerName.toLowerCase() !== myPlayerName.toLowerCase()) {
+      LogMsgUtil.sendLogMsg(killerName.toLowerCase());
+      return;
+    }
+
+    // 2. 防重复处理校验
+    const eventName = String(event?.EventName ?? event?.eventName ?? 'multikill');
+    const key = `${eventName}:${killStreak}:${killerName}:${
       event?.EventTime ?? event?.eventTime ?? ''
     }`;
 
@@ -453,6 +496,10 @@ export class LCUConnector extends EventEmitter {
 
     const subDir = killDirMap[killStreak] || 'multikill';
     const prefix = `${subDir}-${killStreak}kills`;
+
+    // 连杀数越高，等待 UI 横幅完全展开并覆盖旧播报的时间越长（如 3 杀及以上等待 300ms）
+    const uiRenderDelay = killStreak > 2 ? (killStreak > 4 ? 500 : 300) : 150;
+    await new Promise((resolve) => setTimeout(resolve, uiRenderDelay));
 
     // 传入 prefix 和对应的子目录名称
     const file = await captureAppScreenshot(prefix, subDir);
