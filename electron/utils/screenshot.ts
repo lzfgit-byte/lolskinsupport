@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { app, desktopCapturer, screen } from 'electron';
 
 /**
- * 获取当前 UTC/本地时间的 YYYY-MM-DD 格式字符串
+ * 获取当前本地时间的 YYYY-MM-DD 格式字符串
  */
 function getFormattedDate(): string {
   const now = new Date();
@@ -11,6 +11,17 @@ function getFormattedDate(): string {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * 获取当前本地时间的 xx时xx分xx秒 格式字符串（用于文件名后缀）
+ */
+function getFormattedTime(): string {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  return `${hours}时${minutes}分${seconds}秒`;
 }
 
 /**
@@ -108,7 +119,7 @@ export async function captureAppScreenshot(
       recursive: true,
     });
 
-    const filePath = join(dir, `${prefix}-${Date.now()}.png`);
+    const filePath = join(dir, `${prefix}-${getFormattedTime()}.png`);
 
     // PNG 无损，不会因为 JPEG 压缩导致文字、血条等变糊
     const pngBuffer = finalImage.toPNG();
