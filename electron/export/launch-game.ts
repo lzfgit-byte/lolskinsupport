@@ -116,27 +116,37 @@ export const launchLeagueOfLegendsAt = async (
   }
 };
 
-/**
- * 判断英雄联盟游戏进程是否正在运行（已启动）
- * 通过 tasklist 检查 League of Legends.exe 进程
- */
-export const isGameRunning = (): Promise<boolean> => {
+/** 通过 tasklist 判断指定进程是否正在运行 */
+const isProcessRunning = (imageName: string): Promise<boolean> => {
   return new Promise((resolve) => {
     try {
       execFile(
         'tasklist',
-        ['/FI', 'ImageName eq League of Legends.exe', '/FO', 'CSV', '/NH'],
+        ['/FI', `ImageName eq ${imageName}`, '/FO', 'CSV', '/NH'],
         (error, stdout) => {
           if (error) {
             // tasklist 找不到匹配进程时也可能返回非 0，此时视为未运行
             resolve(false);
             return;
           }
-          resolve(stdout.toLowerCase().includes('league of legends.exe'));
+          resolve(stdout.toLowerCase().includes(imageName.toLowerCase()));
         }
       );
     } catch {
       resolve(false);
     }
   });
+};
+
+/**
+ * 判断“英雄联盟是否已启动”：只要 Riot 客户端（RiotClientServices.exe）已打开，
+ * 或游戏本体（League of Legends.exe）正在运行，即视为已启动。
+ * 用于在主界面隐藏“英雄联盟，启动！”按钮。
+ */
+export const isGameRunning = async (): Promise<boolean> => {
+  const [clientRunning, gameRunning] = await Promise.all([
+    isProcessRunning('RiotClientServices.exe'),
+    isProcessRunning('League of Legends.exe'),
+  ]);
+  return clientRunning || gameRunning;
 };
