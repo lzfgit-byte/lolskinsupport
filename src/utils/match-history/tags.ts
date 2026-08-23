@@ -24,6 +24,7 @@ export interface TeamStats {
   maxKillParticipation: number;
   maxCs: number;
   maxTimeCCingOthers: number;
+  maxDamageGoldEfficiency: number;
 }
 
 /** 全场汇总统计（用于计算"全场最高"类评级） */
@@ -37,6 +38,7 @@ export interface AllTeamStats {
   maxCs: number;
   maxKillParticipation: number;
   maxTimeCCingOthers: number;
+  maxDamageGoldEfficiency: number;
 }
 
 export interface PlayerTag {
@@ -64,7 +66,8 @@ function emptyTeamStats(): TeamStats {
     maxKills: 0,
     maxKillParticipation: 0,
     maxCs: 0,
-    maxTimeCCingOthers: 0
+    maxTimeCCingOthers: 0,
+    maxDamageGoldEfficiency: 0
   };
 }
 
@@ -95,6 +98,7 @@ export function computeTeamStatsMap(participants: MatchParticipant[]): {
     t.maxKillParticipation = Math.max(t.maxKillParticipation, p.killParticipation);
     t.maxCs = Math.max(t.maxCs, p.cs);
     t.maxTimeCCingOthers = Math.max(t.maxTimeCCingOthers, p.timeCCingOthers);
+    t.maxDamageGoldEfficiency = Math.max(t.maxDamageGoldEfficiency, p.damageGoldEfficiency);
   }
 
   const allTeamStats: AllTeamStats = {
@@ -106,7 +110,8 @@ export function computeTeamStatsMap(participants: MatchParticipant[]): {
     maxKills: 0,
     maxCs: 0,
     maxKillParticipation: 0,
-    maxTimeCCingOthers: 0
+    maxTimeCCingOthers: 0,
+    maxDamageGoldEfficiency: 0
   };
 
   for (const t of Object.values(teams)) {
@@ -130,6 +135,10 @@ export function computeTeamStatsMap(participants: MatchParticipant[]): {
     allTeamStats.maxTimeCCingOthers = Math.max(
       allTeamStats.maxTimeCCingOthers,
       t.maxTimeCCingOthers
+    );
+    allTeamStats.maxDamageGoldEfficiency = Math.max(
+      allTeamStats.maxDamageGoldEfficiency,
+      t.maxDamageGoldEfficiency
     );
   }
 
@@ -414,6 +423,33 @@ function pushCcTags(
   }
 }
 
+function pushDamageGoldEfficiencyTags(
+  tags: PlayerTag[],
+  participant: MatchParticipant,
+  team: TeamStats,
+  allTeamStats: AllTeamStats
+): void {
+  if (!participant.damageGoldEfficiency) {
+    return;
+  }
+  const rate = (participant.damageGoldEfficiency * 100).toFixed(1);
+  if (participant.damageGoldEfficiency === allTeamStats.maxDamageGoldEfficiency) {
+    tags.push({
+      label: '★ 伤转率',
+      color: 'lime',
+      content: `最高伤转率：${rate}%`,
+      priority: 1800
+    });
+  } else if (participant.damageGoldEfficiency === team.maxDamageGoldEfficiency) {
+    tags.push({
+      label: '伤转率',
+      color: 'lime',
+      content: `队内最高伤转率：${rate}%`,
+      priority: 930
+    });
+  }
+}
+
 /**
  * 计算某个选手在一局中的评级标签（按 priority 从高到低排序）。
  * 注意：传入的 participants 应为完整对局（含全员），否则"最高"类标签会失真。
@@ -436,6 +472,7 @@ export function computeMatchTags(
   pushKpTags(tags, participant, team, allTeamStats);
   pushCsTags(tags, participant, allTeamStats);
   pushCcTags(tags, participant, team, allTeamStats);
+  pushDamageGoldEfficiencyTags(tags, participant, team, allTeamStats);
 
   return tags.sort((a, b) => b.priority - a.priority);
 }

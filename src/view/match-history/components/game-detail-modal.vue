@@ -26,7 +26,18 @@
           <div class="gd-stat">{{ Math.round(p.goldEarned / 100) / 10 }}k 经济</div>
           <div class="gd-stat">{{ p.visionScore }} 视野</div>
           <div class="gd-items">
-            <a-tooltip v-for="(itemId, i) in p.items" :key="i" :title="getItemNameText(itemId)">
+            <a-tooltip v-for="(itemId, i) in p.items" :key="i">
+              <template #title>
+                <div class="item-tooltip">
+                  <div class="item-tooltip-name">{{ getItemNameText(itemId) }}</div>
+                  <div v-if="getItemPriceText(itemId)" class="item-tooltip-price">
+                    {{ getItemPriceText(itemId) }}
+                  </div>
+                  <div v-if="getItemDescText(itemId)" class="item-tooltip-desc">
+                    {{ getItemDescText(itemId) }}
+                  </div>
+                </div>
+              </template>
               <img class="gd-item" :src="getItemIcon(itemId)" loading="lazy" />
             </a-tooltip>
           </div>
@@ -44,9 +55,12 @@
     getChampionAlias,
     getChampionSquareIcon,
     getItemIcon,
+    getItemInfo,
     getItemName,
     loadItemMap,
-    type ChampionMeta
+    stripItemHtml,
+    type ChampionMeta,
+    type ItemInfo
   } from '@/utils/match-history/images';
   import { getQueueName } from '@/utils/match-history/queue-names';
   import type { Game } from '@/utils/match-history/types';
@@ -59,7 +73,7 @@
 
   defineEmits<{ (e: 'close'): void }>();
 
-  const itemMap = ref<Map<number, string>>(new Map());
+  const itemMap = ref<Map<number, ItemInfo>>(new Map());
 
   onMounted(async () => {
     itemMap.value = await loadItemMap();
@@ -67,6 +81,25 @@
 
   const getItemNameText = (itemId: number): string => {
     return getItemName(itemId, itemMap.value) || `装备 ${itemId}`;
+  };
+
+  const getItemPriceText = (itemId: number): string => {
+    const info = getItemInfo(itemId, itemMap.value);
+    if (!info) {
+      return '';
+    }
+    const { goldTotal, goldBase } = info;
+    return goldBase > 0 && goldBase !== goldTotal
+      ? `${goldTotal} G（合成价 ${goldBase} G）`
+      : `${goldTotal} G`;
+  };
+
+  const getItemDescText = (itemId: number): string => {
+    const info = getItemInfo(itemId, itemMap.value);
+    if (!info) {
+      return '';
+    }
+    return stripItemHtml(info.description || info.plaintext);
   };
 
   const formatDuration = (seconds: number) => {
@@ -211,6 +244,23 @@
       border-radius: 4px;
       background: #2d3342;
       object-fit: cover;
+    }
+  }
+
+  .item-tooltip {
+    max-width: 280px;
+    .item-tooltip-name {
+      font-weight: 600;
+    }
+    .item-tooltip-price {
+      font-size: 12px;
+      color: #fcd34d;
+      margin: 4px 0;
+    }
+    .item-tooltip-desc {
+      font-size: 12px;
+      opacity: 0.8;
+      white-space: normal;
     }
   }
 </style>

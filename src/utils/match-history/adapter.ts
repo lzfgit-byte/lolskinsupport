@@ -65,6 +65,8 @@ export type MatchParticipant = {
   tripleKills: number;
   quadraKills: number;
   pentaKills: number;
+  /** 伤转率：总输出 / 总经济 */
+  damageGoldEfficiency: number;
   // LCU 不提供这些字段，统一置空以兼容分析逻辑
   totalDamageShieldedOnTeammates: number | null;
 };
@@ -171,6 +173,7 @@ function mapStatsToParticipant(
     tripleKills: stats.tripleKills,
     quadraKills: stats.quadraKills,
     pentaKills: stats.pentaKills,
+    damageGoldEfficiency: stats.totalDamageDealtToChampions / noZero(stats.goldEarned),
     totalDamageShieldedOnTeammates: null
   };
 }

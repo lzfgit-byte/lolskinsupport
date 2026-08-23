@@ -48,7 +48,20 @@
 
       <!-- 装备 -->
       <div class="mh-col mh-items">
-        <a-tooltip v-for="(itemId, i) in participantItems" :key="i" :title="getItemNameText(itemId)">
+        <a-tooltip v-for="(itemId, i) in participantItems" :key="i">
+          <template #title>
+            <div class="item-tooltip">
+              <div class="item-tooltip-name">
+                {{ itemName(itemId) }}
+                <span class="item-tooltip-id">({{ itemId }})</span>
+              </div>
+              <div v-if="itemPrice(itemId)" class="item-tooltip-price">{{ itemPrice(itemId) }}</div>
+              <div v-if="itemFromNames(itemId).length" class="item-tooltip-from">
+                合成：{{ itemFromNames(itemId).join('、') }}
+              </div>
+              <div v-if="itemDesc(itemId)" class="item-tooltip-desc">{{ itemDesc(itemId) }}</div>
+            </div>
+          </template>
           <img class="item-icon" :src="getItemIcon(itemId)" loading="lazy" />
         </a-tooltip>
       </div>
@@ -155,6 +168,10 @@
             <template #title>
               <div class="augment-tooltip">
                 <div class="augment-tooltip-name">{{ augmentName(augmentId) }}</div>
+                <div v-if="formatRarity(augmentId)" class="augment-tooltip-rarity">
+                  <span class="rarity-indicator" :class="rarityClass(augmentId)"></span>
+                  {{ formatRarity(augmentId) }}
+                </div>
                 <div v-if="getAugmentDesc(augmentId)" class="augment-tooltip-desc">
                   {{ getAugmentDesc(augmentId) }}
                 </div>
@@ -192,11 +209,13 @@
     getChampionName,
     getChampionSquareIcon,
     getItemIcon,
-    getItemName,
+    getItemInfo,
     getKiwiAugment,
     loadItemMap,
     loadKiwiAugments,
+    stripItemHtml,
     type ChampionMeta,
+    type ItemInfo,
     type KiwiAugment
   } from '@/utils/match-history/images';
   import { getQueueName } from '@/utils/match-history/queue-names';
@@ -290,8 +309,8 @@
 
   // ===== 海克斯强化 =====
   const augmentMap = ref<Map<number, KiwiAugment>>(new Map());
-  // ===== 装备名 =====
-  const itemMap = ref<Map<number, string>>(new Map());
+  // ===== 装备信息 =====
+  const itemMap = ref<Map<number, ItemInfo>>(new Map());
 
   onMounted(async () => {
     augmentMap.value = await loadKiwiAugments();
@@ -324,8 +343,71 @@
     return getKiwiAugment(id, augmentMap.value)?.desc || '';
   };
 
-  const getItemNameText = (itemId: number): string => {
-    return getItemName(itemId, itemMap.value) || `装备 ${itemId}`;
+  const getItemInfoOf = (itemId: number): ItemInfo | undefined => {
+    return getItemInfo(itemId, itemMap.value);
+  };
+
+  const itemName = (itemId: number): string => {
+    return getItemInfoOf(itemId)?.name || `装备 ${itemId}`;
+  };
+
+  const itemPrice = (itemId: number): string => {
+    const info = getItemInfoOf(itemId);
+    if (!info) {
+      return '';
+    }
+    const { goldTotal, goldBase } = info;
+    return goldBase > 0 && goldBase !== goldTotal
+      ? `${goldTotal} G（合成价 ${goldBase} G）`
+      : `${goldTotal} G`;
+  };
+
+  const itemFromNames = (itemId: number): string[] => {
+    const info = getItemInfoOf(itemId);
+    if (!info) {
+      return [];
+    }
+    return info.from.map((id) => getItemInfoOf(id)?.name || `#${id}`);
+  };
+
+  const itemDesc = (itemId: number): string => {
+    const info = getItemInfoOf(itemId);
+    if (!info) {
+      return '';
+    }
+    return stripItemHtml(info.description || info.plaintext);
+  };
+
+  const formatRarity = (id: number): string => {
+    const level = getKiwiAugment(id, augmentMap.value)?.level;
+    switch (level) {
+      case 'kPrismatic':
+        return '棱彩';
+      case 'kGold':
+        return '金色';
+      case 'kSilver':
+        return '银色';
+      case 'kBronze':
+        return '青铜';
+      default:
+        return '';
+    }
+  };
+
+  const rarityClass = (id: number): string => {
+    const level = getKiwiAugment(id, augmentMap.value)?.level;
+    switch (level) {
+      case 'kPrismatic':
+        return 'rarity-prismatic';
+      case 'kGold':
+        return 'rarity-gold';
+      case 'kSilver':
+        return 'rarity-silver';
+      case 'kBronze':
+        return 'rarity-bronze';
+      default:
+        return '';
+    }
   };
 </script>
 
@@ -608,6 +690,9 @@
       &.tag-fuchsia {
         background: rgba(162, 28, 175, 0.9);
       }
+      &.tag-lime {
+        background: rgba(63, 98, 18, 0.95);
+      }
     }
   }
 
@@ -778,10 +863,64 @@
         font-weight: 600;
         margin-bottom: 4px;
       }
+      .augment-tooltip-rarity {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+      .rarity-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #94a3b8;
+
+        &.rarity-prismatic {
+          background: #c084fc;
+        }
+        &.rarity-gold {
+          background: #f59e0b;
+        }
+        &.rarity-silver {
+          background: #94a3b8;
+        }
+        &.rarity-bronze {
+          background: #d97706;
+        }
+      }
       .augment-tooltip-desc {
         font-size: 12px;
         opacity: 0.85;
         max-width: 260px;
+        white-space: normal;
+      }
+    }
+
+    .item-tooltip {
+      max-width: 280px;
+      .item-tooltip-name {
+        font-weight: 600;
+      }
+      .item-tooltip-id {
+        opacity: 0.6;
+        font-weight: 400;
+        margin-left: 2px;
+      }
+      .item-tooltip-price {
+        font-size: 12px;
+        color: #fcd34d;
+        margin: 4px 0;
+      }
+      .item-tooltip-from {
+        font-size: 12px;
+        opacity: 0.85;
+        margin-bottom: 4px;
+      }
+      .item-tooltip-desc {
+        font-size: 12px;
+        opacity: 0.8;
         white-space: normal;
       }
     }

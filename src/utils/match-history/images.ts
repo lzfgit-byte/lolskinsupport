@@ -129,35 +129,75 @@ export const getKiwiAugment = (
   return map?.get(id);
 };
 
-let itemNameMap: Map<number, string> | null = null;
+/** 装备信息（来自 LCU items.json） */
+export interface ItemInfo {
+  id: number;
+  name: string;
+  plaintext: string;
+  description: string;
+  goldTotal: number;
+  goldBase: number;
+  /** 合成所需部件 id */
+  from: number[];
+  /** 合成去向 id */
+  into: number[];
+}
+
+let itemMap: Map<number, ItemInfo> | null = null;
 
 /**
- * 加载装备 id → 中文名映射（来自 LCU items.json），结果会缓存
+ * 加载装备 id → 信息映射（来自 LCU items.json），结果会缓存
  */
-export async function loadItemMap(): Promise<Map<number, string>> {
-  if (itemNameMap) {
-    return itemNameMap;
+export async function loadItemMap(): Promise<Map<number, ItemInfo>> {
+  if (itemMap) {
+    return itemMap;
   }
   try {
     const res: any = await mhGetLcuJson('items.json');
-    const map = new Map<number, string>();
+    const map = new Map<number, ItemInfo>();
     (Array.isArray(res) ? res : []).forEach((item: any) => {
       const id = Number(item.id);
       if (Number.isFinite(id) && item.name) {
-        map.set(id, item.name);
+        map.set(id, {
+          id,
+          name: item.name,
+          plaintext: item.plaintext || '',
+          description: item.description || '',
+          goldTotal: Number(item.gold?.total ?? 0),
+          goldBase: Number(item.gold?.base ?? 0),
+          from: Array.isArray(item.from) ? item.from.map(Number) : [],
+          into: Array.isArray(item.into) ? item.into.map(Number) : []
+        });
       }
     });
-    itemNameMap = map;
+    itemMap = map;
     return map;
   } catch {
-    itemNameMap = new Map();
-    return itemNameMap;
+    itemMap = new Map();
+    return itemMap;
   }
 }
 
+/** 获取装备信息；未知时返回 undefined */
+export const getItemInfo = (itemId: number, map?: Map<number, ItemInfo>): ItemInfo | undefined => {
+  return map?.get(itemId);
+};
+
 /** 获取装备名；未知时返回空串 */
-export const getItemName = (itemId: number, map?: Map<number, string>): string => {
-  return map?.get(itemId) ?? '';
+export const getItemName = (itemId: number, map?: Map<number, ItemInfo>): string => {
+  return map?.get(itemId)?.name ?? '';
+};
+
+/** 去除富文本标签的纯文本描述 */
+export const stripItemHtml = (html: string): string => {
+  if (!html) {
+    return '';
+  }
+  return html
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
 /** 召唤师技能图标；未知技能返回空串 */
