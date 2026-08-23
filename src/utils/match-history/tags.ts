@@ -2,8 +2,8 @@
  * 战绩卡评级标签计算
  *
  * 迁移自 League Akari（src/renderer-shared/components/match-card/utils/tags.tsx），
- * 精简为 LCU 数据源可用的维度（多杀/伤害/承伤/治疗/塔伤/经济）。
- * LCU 不提供单杀/护盾数据，故不计算这两类标签。
+ * 文案与其 zh-CN 一致（best 标签带 ★）。LCU 数据源不提供单杀/护盾等数据，故跳过。
+ * 注意：计算"最高"类标签需要完整对局数据（含全员），应使用对局详情。
  */
 import type { MatchParticipant } from './adapter';
 
@@ -19,6 +19,11 @@ export interface TeamStats {
   maxDamageToTowers: number;
   totalGoldEarned: number;
   maxGoldEarned: number;
+  totalKills: number;
+  maxKills: number;
+  maxKillParticipation: number;
+  maxCs: number;
+  maxTimeCCingOthers: number;
 }
 
 /** 全场汇总统计（用于计算"全场最高"类评级） */
@@ -28,11 +33,15 @@ export interface AllTeamStats {
   maxHeal: number;
   maxDamageToTowers: number;
   maxGoldEarned: number;
+  maxKills: number;
+  maxCs: number;
+  maxKillParticipation: number;
+  maxTimeCCingOthers: number;
 }
 
 export interface PlayerTag {
   label: string;
-  /** 对应组件里的配色类名后缀，如 rose/slate/emerald/stone/gold */
+  /** 对应组件里的配色类名后缀，如 rose/slate/emerald/stone/gold/violet/cyan/orange/fuchsia */
   color: string;
   /** 悬停提示内容 */
   content?: string;
@@ -50,7 +59,12 @@ function emptyTeamStats(): TeamStats {
     totalDamageToTowers: 0,
     maxDamageToTowers: 0,
     totalGoldEarned: 0,
-    maxGoldEarned: 0
+    maxGoldEarned: 0,
+    totalKills: 0,
+    maxKills: 0,
+    maxKillParticipation: 0,
+    maxCs: 0,
+    maxTimeCCingOthers: 0
   };
 }
 
@@ -76,6 +90,11 @@ export function computeTeamStatsMap(participants: MatchParticipant[]): {
     t.maxDamageToTowers = Math.max(t.maxDamageToTowers, p.totalDamageToTowers);
     t.totalGoldEarned += p.goldEarned;
     t.maxGoldEarned = Math.max(t.maxGoldEarned, p.goldEarned);
+    t.totalKills += p.kills;
+    t.maxKills = Math.max(t.maxKills, p.kills);
+    t.maxKillParticipation = Math.max(t.maxKillParticipation, p.killParticipation);
+    t.maxCs = Math.max(t.maxCs, p.cs);
+    t.maxTimeCCingOthers = Math.max(t.maxTimeCCingOthers, p.timeCCingOthers);
   }
 
   const allTeamStats: AllTeamStats = {
@@ -83,7 +102,11 @@ export function computeTeamStatsMap(participants: MatchParticipant[]): {
     maxDamageTaken: 0,
     maxHeal: 0,
     maxDamageToTowers: 0,
-    maxGoldEarned: 0
+    maxGoldEarned: 0,
+    maxKills: 0,
+    maxCs: 0,
+    maxKillParticipation: 0,
+    maxTimeCCingOthers: 0
   };
 
   for (const t of Object.values(teams)) {
@@ -98,6 +121,16 @@ export function computeTeamStatsMap(participants: MatchParticipant[]): {
       t.maxDamageToTowers
     );
     allTeamStats.maxGoldEarned = Math.max(allTeamStats.maxGoldEarned, t.maxGoldEarned);
+    allTeamStats.maxKills = Math.max(allTeamStats.maxKills, t.maxKills);
+    allTeamStats.maxCs = Math.max(allTeamStats.maxCs, t.maxCs);
+    allTeamStats.maxKillParticipation = Math.max(
+      allTeamStats.maxKillParticipation,
+      t.maxKillParticipation
+    );
+    allTeamStats.maxTimeCCingOthers = Math.max(
+      allTeamStats.maxTimeCCingOthers,
+      t.maxTimeCCingOthers
+    );
   }
 
   return { teams, allTeamStats };
@@ -161,16 +194,16 @@ function pushDamageTags(
 
   if (participant.totalDamageDealtToChampions === allTeamStats.maxDamageDealtToChampions) {
     tags.push({
-      label: '全场最高伤害',
+      label: '★ 伤害',
       color: 'red',
-      content: `全场伤害 ${participant.totalDamageDealtToChampions.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `全场最高伤害：${participant.totalDamageDealtToChampions.toLocaleString()}，占队伍伤害的 ${rate}%`,
       priority: 1800
     });
   } else if (participant.totalDamageDealtToChampions === team.maxDamageDealtToChampions) {
     tags.push({
-      label: '团队伤害最高',
+      label: '伤害',
       color: 'red',
-      content: `伤害 ${participant.totalDamageDealtToChampions.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `队伍最高伤害：${participant.totalDamageDealtToChampions.toLocaleString()}，占队伍伤害的 ${rate}%`,
       priority: 1750
     });
   }
@@ -189,16 +222,16 @@ function pushTakenTags(
 
   if (participant.totalDamageTaken === allTeamStats.maxDamageTaken) {
     tags.push({
-      label: '全场承伤最高',
+      label: '★ 承伤',
       color: 'slate',
-      content: `全场承伤 ${participant.totalDamageTaken.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `全场最高承伤：${participant.totalDamageTaken.toLocaleString()}，占队伍承伤的 ${rate}%`,
       priority: 1400
     });
   } else if (participant.totalDamageTaken === team.maxDamageTaken) {
     tags.push({
-      label: '团队承伤最高',
+      label: '承伤',
       color: 'slate',
-      content: `承伤 ${participant.totalDamageTaken.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `队伍最高承伤：${participant.totalDamageTaken.toLocaleString()}，占队伍承伤的 ${rate}%`,
       priority: 1350
     });
   }
@@ -217,16 +250,16 @@ function pushHealTags(
 
   if (participant.totalHeal === allTeamStats.maxHeal) {
     tags.push({
-      label: '全场治疗最高',
+      label: '★ 治疗',
       color: 'emerald',
-      content: `全场治疗 ${participant.totalHeal.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `全场最高治疗：${participant.totalHeal.toLocaleString()}，占队伍治疗的 ${rate}%`,
       priority: 1600
     });
   } else if (participant.totalHeal === team.maxHeal) {
     tags.push({
-      label: '团队治疗最高',
+      label: '治疗',
       color: 'emerald',
-      content: `治疗 ${participant.totalHeal.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `队伍最高治疗：${participant.totalHeal.toLocaleString()}，占队伍治疗的 ${rate}%`,
       priority: 1550
     });
   }
@@ -245,16 +278,16 @@ function pushTowerTags(
 
   if (participant.totalDamageToTowers === allTeamStats.maxDamageToTowers) {
     tags.push({
-      label: '全场推塔最高',
+      label: '★ 拆塔',
       color: 'stone',
-      content: `全场塔伤 ${participant.totalDamageToTowers.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `全场最高对塔伤害：${participant.totalDamageToTowers.toLocaleString()}，占队伍对塔伤害的 ${rate}%`,
       priority: 900
     });
   } else if (participant.totalDamageToTowers === team.maxDamageToTowers) {
     tags.push({
-      label: '团队推塔最高',
+      label: '拆塔',
       color: 'stone',
-      content: `塔伤 ${participant.totalDamageToTowers.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `队伍最高对塔伤害：${participant.totalDamageToTowers.toLocaleString()}，占队伍对塔伤害的 ${rate}%`,
       priority: 850
     });
   }
@@ -273,23 +306,117 @@ function pushGoldTags(
 
   if (participant.goldEarned === allTeamStats.maxGoldEarned) {
     tags.push({
-      label: '全场经济最高',
+      label: '★ 金币',
       color: 'gold',
-      content: `全场经济 ${participant.goldEarned.toLocaleString()} · 团队占比 ${rate}%`,
-      priority: 1200
+      content: `全场最高经济：${participant.goldEarned.toLocaleString()}，占队伍经济的 ${rate}%`,
+      priority: 700
     });
   } else if (participant.goldEarned === team.maxGoldEarned) {
     tags.push({
-      label: '团队经济最高',
+      label: '金币',
       color: 'gold',
-      content: `经济 ${participant.goldEarned.toLocaleString()} · 团队占比 ${rate}%`,
+      content: `队伍最高经济：${participant.goldEarned.toLocaleString()}，占队伍经济的 ${rate}%`,
+      priority: 650
+    });
+  }
+}
+
+function pushKillsTags(
+  tags: PlayerTag[],
+  participant: MatchParticipant,
+  team: TeamStats,
+  allTeamStats: AllTeamStats
+): void {
+  if (!participant.kills) {
+    return;
+  }
+  if (participant.kills === allTeamStats.maxKills) {
+    tags.push({
+      label: '★ 击杀',
+      color: 'violet',
+      content: `全场最多击杀：${participant.kills.toLocaleString()}`,
+      priority: 1200
+    });
+  } else if (participant.kills === team.maxKills) {
+    tags.push({
+      label: '击杀',
+      color: 'violet',
+      content: `队伍最多击杀：${participant.kills.toLocaleString()}`,
       priority: 1150
     });
   }
 }
 
+function pushKpTags(
+  tags: PlayerTag[],
+  participant: MatchParticipant,
+  team: TeamStats,
+  allTeamStats: AllTeamStats
+): void {
+  if (!participant.killParticipation) {
+    return;
+  }
+  if (participant.killParticipation === allTeamStats.maxKillParticipation) {
+    tags.push({
+      label: '★ 参团',
+      color: 'cyan',
+      content: `全场最高参团率：${(participant.killParticipation * 100).toFixed(1)}%`,
+      priority: 1100
+    });
+  } else if (participant.killParticipation === team.maxKillParticipation) {
+    tags.push({
+      label: '参团',
+      color: 'cyan',
+      content: `队伍最高参团率：${(participant.killParticipation * 100).toFixed(1)}%`,
+      priority: 1050
+    });
+  }
+}
+
+function pushCsTags(
+  tags: PlayerTag[],
+  participant: MatchParticipant,
+  allTeamStats: AllTeamStats
+): void {
+  if (participant.cs && participant.cs === allTeamStats.maxCs) {
+    tags.push({
+      label: '★ 补兵',
+      color: 'orange',
+      content: `全场最高补兵：${participant.cs.toLocaleString()}`,
+      priority: 600
+    });
+  }
+}
+
+function pushCcTags(
+  tags: PlayerTag[],
+  participant: MatchParticipant,
+  team: TeamStats,
+  allTeamStats: AllTeamStats
+): void {
+  if (!participant.timeCCingOthers) {
+    return;
+  }
+  if (participant.timeCCingOthers === allTeamStats.maxTimeCCingOthers) {
+    tags.push({
+      label: '★ 控制',
+      color: 'fuchsia',
+      content: `全场最久控制，控制了敌方英雄 ${participant.timeCCingOthers.toLocaleString()} 秒`,
+      priority: 1750
+    });
+  } else if (participant.timeCCingOthers === team.maxTimeCCingOthers) {
+    tags.push({
+      label: '控制',
+      color: 'fuchsia',
+      content: `队伍最久控制，控制了敌方英雄 ${participant.timeCCingOthers.toLocaleString()} 秒`,
+      priority: 1700
+    });
+  }
+}
+
 /**
- * 计算某个选手在一局中的评级标签（按 priority 从高到低排序）
+ * 计算某个选手在一局中的评级标签（按 priority 从高到低排序）。
+ * 注意：传入的 participants 应为完整对局（含全员），否则"最高"类标签会失真。
  */
 export function computeMatchTags(
   participant: MatchParticipant,
@@ -305,6 +432,11 @@ export function computeMatchTags(
   pushHealTags(tags, participant, team, allTeamStats);
   pushTowerTags(tags, participant, team, allTeamStats);
   pushGoldTags(tags, participant, team, allTeamStats);
+  pushKillsTags(tags, participant, team, allTeamStats);
+  pushKpTags(tags, participant, team, allTeamStats);
+  pushCsTags(tags, participant, allTeamStats);
+  pushCcTags(tags, participant, team, allTeamStats);
 
   return tags.sort((a, b) => b.priority - a.priority);
 }
+

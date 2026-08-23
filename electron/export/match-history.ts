@@ -92,3 +92,14 @@ export const mhGetLcuImage = async (assetPath: string): Promise<string | null> =
     return null;
   }
 };
+
+/**
+ * 通过 LCU 代理获取客户端本地 JSON 资源（如 items.json），失败返回 null
+ */
+export const mhGetLcuJson = async (assetPath: string): Promise<any | null> => {
+  try {
+    return await lcuConnector.request('GET', `/lol-game-data/assets/v1/${assetPath}`);
+  } catch {
+    return null;
+  }
+};

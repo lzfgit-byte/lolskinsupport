@@ -37,30 +37,26 @@
       <!-- 伤害（含团队占比） -->
       <div class="mh-col mh-stats">
         <div class="stat-row">{{ formatExtremeNumber(participant?.totalDamageDealtToChampions || 0) }}</div>
-        <div class="stat-row sub">{{ toFixed((summary?.summary.championDamagePercentageOfTeam ?? 0) * 100) }}% 伤害</div>
+        <div class="stat-row sub">{{ shareText(summary?.summary.championDamagePercentageOfTeam) }} 伤害</div>
       </div>
 
       <!-- 承伤（含团队占比） -->
       <div class="mh-col mh-stats">
         <div class="stat-row">{{ formatExtremeNumber(participant?.totalDamageTaken || 0) }}</div>
-        <div class="stat-row sub">{{ toFixed((summary?.summary.damageTakenPercentageOfTeam ?? 0) * 100) }}% 承伤</div>
+        <div class="stat-row sub">{{ shareText(summary?.summary.damageTakenPercentageOfTeam) }} 承伤</div>
       </div>
 
       <!-- 装备 -->
       <div class="mh-col mh-items">
-        <img
-          v-for="(itemId, i) in participantItems"
-          :key="i"
-          class="item-icon"
-          :src="getItemIcon(itemId)"
-          loading="lazy"
-        />
+        <a-tooltip v-for="(itemId, i) in participantItems" :key="i" :title="getItemNameText(itemId)">
+          <img class="item-icon" :src="getItemIcon(itemId)" loading="lazy" />
+        </a-tooltip>
       </div>
 
       <!-- Akari 评分 -->
       <div class="mh-col mh-akari">
-        <span class="akari-score" :class="{ good: akariTotal >= 6.5 }">
-          {{ toFixed(akariTotal) }}
+        <span class="akari-score" :class="{ good: (akariTotal ?? 0) >= 6.5 }">
+          {{ akariText }}
         </span>
       </div>
 
@@ -98,17 +94,17 @@
           <div class="ov-item">
             <div class="ov-label">伤害</div>
             <div class="ov-value">{{ formatExtremeNumber(participant?.totalDamageDealtToChampions || 0) }}</div>
-            <div class="ov-sub">团队占比 {{ toFixed((summary?.summary.championDamagePercentageOfTeam ?? 0) * 100) }}%</div>
+            <div class="ov-sub">团队占比 {{ shareText(summary?.summary.championDamagePercentageOfTeam) }}</div>
           </div>
           <div class="ov-item">
             <div class="ov-label">承伤</div>
             <div class="ov-value">{{ formatExtremeNumber(participant?.totalDamageTaken || 0) }}</div>
-            <div class="ov-sub">团队占比 {{ toFixed((summary?.summary.damageTakenPercentageOfTeam ?? 0) * 100) }}%</div>
+            <div class="ov-sub">团队占比 {{ shareText(summary?.summary.damageTakenPercentageOfTeam) }}</div>
           </div>
           <div class="ov-item">
             <div class="ov-label">经济</div>
             <div class="ov-value">{{ Math.round((participant?.goldEarned ?? 0) / 100) / 10 }}k</div>
-            <div class="ov-sub">团队占比 {{ toFixed((summary?.summary.goldPercentageOfTeam ?? 0) * 100) }}%</div>
+            <div class="ov-sub">团队占比 {{ shareText(summary?.summary.goldPercentageOfTeam) }}</div>
           </div>
           <div class="ov-item">
             <div class="ov-label">补刀</div>
@@ -118,7 +114,7 @@
           <div class="ov-item">
             <div class="ov-label">视野</div>
             <div class="ov-value">{{ participant?.visionScore ?? 0 }}</div>
-            <div class="ov-sub">团队占比 {{ toFixed((summary?.summary.visionScorePercentageOfTeam ?? 0) * 100) }}%</div>
+            <div class="ov-sub">团队占比 {{ shareText(summary?.summary.visionScorePercentageOfTeam) }}</div>
           </div>
           <div class="ov-item">
             <div class="ov-label">推塔伤害</div>
@@ -127,7 +123,7 @@
           </div>
           <div class="ov-item">
             <div class="ov-label">参团率</div>
-            <div class="ov-value">{{ toFixed((participant?.killParticipation ?? 0) * 100) }}%</div>
+            <div class="ov-value">{{ shareText(summary?.summary.killParticipation) }}</div>
             <div class="ov-sub">KDA {{ toFixed(kda) }}</div>
           </div>
           <div class="ov-item">
@@ -155,21 +151,26 @@
       <div v-if="augments.length" class="expand-section">
         <div class="section-title">海克斯强化</div>
         <div class="augment-row">
-          <div
-            v-for="augmentId in augments"
-            :key="augmentId"
-            class="augment-item"
-            :title="augmentName(augmentId)"
-          >
-            <img
-              v-if="getAugmentIcon(augmentId)"
-              class="augment-icon"
-              :class="augmentLevelClass(augmentId)"
-              :src="getAugmentIcon(augmentId)"
-              loading="lazy"
-            />
-            <span v-else class="augment-chip">⬡ {{ augmentId }}</span>
-          </div>
+          <a-tooltip v-for="augmentId in augments" :key="augmentId">
+            <template #title>
+              <div class="augment-tooltip">
+                <div class="augment-tooltip-name">{{ augmentName(augmentId) }}</div>
+                <div v-if="getAugmentDesc(augmentId)" class="augment-tooltip-desc">
+                  {{ getAugmentDesc(augmentId) }}
+                </div>
+              </div>
+            </template>
+            <div class="augment-item">
+              <img
+                v-if="getAugmentIcon(augmentId)"
+                class="augment-icon"
+                :class="augmentLevelClass(augmentId)"
+                :src="getAugmentIcon(augmentId)"
+                loading="lazy"
+              />
+              <span v-else class="augment-chip">⬡ {{ augmentId }}</span>
+            </div>
+          </a-tooltip>
         </div>
       </div>
     </div>
@@ -191,7 +192,9 @@
     getChampionName,
     getChampionSquareIcon,
     getItemIcon,
+    getItemName,
     getKiwiAugment,
+    loadItemMap,
     loadKiwiAugments,
     type ChampionMeta,
     type KiwiAugment
@@ -202,6 +205,8 @@
 
   const props = defineProps<{
     game: Game;
+    /** 对局详情（含全员），团队占比/参团率/标签等依赖它 */
+    detail?: Game | null;
     puuid: string;
     championMap: Map<number, ChampionMeta>;
     index: number;
@@ -215,8 +220,10 @@
     expanded.value = !expanded.value;
   };
 
-  const basic = computed(() => toBasicInfo(props.game));
-  const participants = computed(() => toParticipants(props.game, basic.value));
+  const effectiveGame = computed(() => props.detail || props.game);
+
+  const basic = computed(() => toBasicInfo(effectiveGame.value));
+  const participants = computed(() => toParticipants(effectiveGame.value, basic.value));
   const participant = computed(() => participants.value.find((p) => p.puuid === props.puuid));
 
   const result = computed(() => participant.value?.winResult ?? 'loss');
@@ -236,7 +243,7 @@
   });
 
   const championId = computed(
-    () => participant.value?.championId ?? props.game.participants[0]?.championId ?? 0
+    () => participant.value?.championId ?? effectiveGame.value.participants[0]?.championId ?? 0
   );
   const championName = computed(() => getChampionName(championId.value, props.championMap));
   const championAlias = computed(() => getChampionAlias(championId.value, props.championMap));
@@ -252,11 +259,25 @@
     basic.value.gameDuration > 0 ? (participant.value?.cs ?? 0) / (basic.value.gameDuration / 60) : 0
   );
 
-  const summary = computed(() => analyzeGame(props.game, props.puuid));
-  const akariTotal = computed(() => summary.value?.akariScore.total ?? 0);
+  /** 团队占比/Akari 评分需要完整对局数据（详情），未加载时返回 null */
+  const summary = computed(() =>
+    props.detail ? analyzeGame(props.detail, props.puuid) : null
+  );
+  const akariTotal = computed(() => summary.value?.akariScore.total ?? null);
+  const akariText = computed(() =>
+    summary.value ? toFixed(akariTotal.value ?? 0) : '—'
+  );
+
+  /** 占比文本：有详情显示百分比，否则显示占位符 */
+  const shareText = (v: number | null | undefined): string => {
+    if (v === null || v === undefined) {
+      return '—';
+    }
+    return `${toFixed(v * 100)}%`;
+  };
 
   const tags = computed(() => {
-    if (!participant.value) {
+    if (!props.detail || !participant.value) {
       return [];
     }
     return computeMatchTags(participant.value, participants.value);
@@ -269,9 +290,12 @@
 
   // ===== 海克斯强化 =====
   const augmentMap = ref<Map<number, KiwiAugment>>(new Map());
+  // ===== 装备名 =====
+  const itemMap = ref<Map<number, string>>(new Map());
 
   onMounted(async () => {
     augmentMap.value = await loadKiwiAugments();
+    itemMap.value = await loadItemMap();
   });
 
   const getAugmentIcon = (id: number): string => {
@@ -294,6 +318,14 @@
       default:
         return '';
     }
+  };
+
+  const getAugmentDesc = (id: number): string => {
+    return getKiwiAugment(id, augmentMap.value)?.desc || '';
+  };
+
+  const getItemNameText = (itemId: number): string => {
+    return getItemName(itemId, itemMap.value) || `装备 ${itemId}`;
   };
 </script>
 
@@ -564,6 +596,18 @@
       &.tag-gold {
         background: rgba(180, 140, 30, 0.9);
       }
+      &.tag-violet {
+        background: rgba(109, 40, 217, 0.9);
+      }
+      &.tag-cyan {
+        background: rgba(14, 116, 144, 0.9);
+      }
+      &.tag-orange {
+        background: rgba(194, 65, 12, 0.9);
+      }
+      &.tag-fuchsia {
+        background: rgba(162, 28, 175, 0.9);
+      }
     }
   }
 
@@ -726,6 +770,19 @@
         background: rgba(245, 158, 11, 0.15);
         border: 1px solid rgba(245, 158, 11, 0.4);
         cursor: default;
+      }
+    }
+
+    .augment-tooltip {
+      .augment-tooltip-name {
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .augment-tooltip-desc {
+        font-size: 12px;
+        opacity: 0.85;
+        max-width: 260px;
+        white-space: normal;
       }
     }
   }

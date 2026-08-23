@@ -2,7 +2,7 @@
  * 英雄联盟资源图片 URL 工具（腾讯 CDN，与项目现有皮肤模块保持一致）
  */
 import http from '@/utils/http';
-import { mhGetLcuImage } from './ipc';
+import { mhGetLcuImage, mhGetLcuJson } from './ipc';
 
 /** 空物品槽位 ID（LCU 用 0 表示空物品） */
 export const EMPTY_ITEM_ID = 0;
@@ -84,6 +84,8 @@ export interface KiwiAugment {
   level: string;
   /** 图标完整 URL */
   icon: string;
+  /** 中文描述 */
+  desc: string;
 }
 
 let kiwiAugmentMap: Map<number, KiwiAugment> | null = null;
@@ -106,7 +108,8 @@ export async function loadKiwiAugments(): Promise<Map<number, KiwiAugment>> {
           augmentID: Number(a.augmentID),
           nameCn: a.name_cn || a.name_en || '',
           level: a.level || '',
-          icon: a.small_Icon || ''
+          icon: a.small_Icon || '',
+          desc: a.tooltip || a.desc || ''
         });
       }
     });
@@ -124,6 +127,37 @@ export const getKiwiAugment = (
   map?: Map<number, KiwiAugment>
 ): KiwiAugment | undefined => {
   return map?.get(id);
+};
+
+let itemNameMap: Map<number, string> | null = null;
+
+/**
+ * 加载装备 id → 中文名映射（来自 LCU items.json），结果会缓存
+ */
+export async function loadItemMap(): Promise<Map<number, string>> {
+  if (itemNameMap) {
+    return itemNameMap;
+  }
+  try {
+    const res: any = await mhGetLcuJson('items.json');
+    const map = new Map<number, string>();
+    (Array.isArray(res) ? res : []).forEach((item: any) => {
+      const id = Number(item.id);
+      if (Number.isFinite(id) && item.name) {
+        map.set(id, item.name);
+      }
+    });
+    itemNameMap = map;
+    return map;
+  } catch {
+    itemNameMap = new Map();
+    return itemNameMap;
+  }
+}
+
+/** 获取装备名；未知时返回空串 */
+export const getItemName = (itemId: number, map?: Map<number, string>): string => {
+  return map?.get(itemId) ?? '';
 };
 
 /** 召唤师技能图标；未知技能返回空串 */

@@ -26,13 +26,9 @@
           <div class="gd-stat">{{ Math.round(p.goldEarned / 100) / 10 }}k 经济</div>
           <div class="gd-stat">{{ p.visionScore }} 视野</div>
           <div class="gd-items">
-            <img
-              v-for="(itemId, i) in p.items"
-              :key="i"
-              class="gd-item"
-              :src="getItemIcon(itemId)"
-              loading="lazy"
-            />
+            <a-tooltip v-for="(itemId, i) in p.items" :key="i" :title="getItemNameText(itemId)">
+              <img class="gd-item" :src="getItemIcon(itemId)" loading="lazy" />
+            </a-tooltip>
           </div>
         </div>
       </div>
@@ -41,13 +37,15 @@
 </template>
 
 <script setup lang="ts">
-  import { computed } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import { toBasicInfo, toParticipants, type MatchParticipant } from '@/utils/match-history/adapter';
   import { toFixed } from '@/utils/match-history/format';
   import {
     getChampionAlias,
     getChampionSquareIcon,
     getItemIcon,
+    getItemName,
+    loadItemMap,
     type ChampionMeta
   } from '@/utils/match-history/images';
   import { getQueueName } from '@/utils/match-history/queue-names';
@@ -60,6 +58,16 @@
   }>();
 
   defineEmits<{ (e: 'close'): void }>();
+
+  const itemMap = ref<Map<number, string>>(new Map());
+
+  onMounted(async () => {
+    itemMap.value = await loadItemMap();
+  });
+
+  const getItemNameText = (itemId: number): string => {
+    return getItemName(itemId, itemMap.value) || `装备 ${itemId}`;
+  };
 
   const formatDuration = (seconds: number) => {
     const m = Math.max(0, Math.floor(seconds / 60));

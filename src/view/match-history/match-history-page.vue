@@ -105,7 +105,13 @@
             <div class="stat-value">{{ toFixed(analysis.summary.avgKillParticipation * 100) }}%</div>
           </div>
         </div>
-        <div v-else class="summary-empty">暂无有效的匹配对局数据（已过滤人机/训练/重开等）</div>
+        <div v-else class="summary-empty">
+          {{
+            games.length
+              ? '正在加载对局详情，用于计算团队占比…'
+              : '暂无有效的匹配对局数据（已过滤人机/训练/重开等）'
+          }}
+        </div>
       </div>
 
       <!-- 筛选栏 -->
@@ -131,6 +137,7 @@
           v-for="(game, i) in filteredGames"
           :key="game.gameId"
           :game="game"
+          :detail="detailsMap[game.gameId] || null"
           :puuid="summoner.puuid"
           :champion-map="championMap"
           :index="i"
@@ -179,7 +186,8 @@
   import {
     mhGetCurrentSummoner,
     mhGetMatchHistory,
-    mhSearchSummonerByName
+    mhSearchSummonerByName,
+    mhGetGameDetails
   } from '@/utils/match-history/ipc';
   import { getQueueName } from '@/utils/match-history/queue-names';
   import type { Game, SummonerInfo } from '@/utils/match-history/types';
@@ -228,6 +236,9 @@
   const pageSize = ref(10);
   const loading = ref(false);
 
+  /** 对局详情缓存（列表接口只含当前玩家，团队占比/参团率等需要详情里的全员数据） */
+  const detailsMap = ref<Record<number, Game>>({});
+
   const winFilter = ref<'all' | 'win' | 'loss'>('all');
   const queueFilter = ref<number | 'all'>('all');
 
@@ -267,7 +278,15 @@
     if (!summoner.value) {
       return null;
     }
-    return analyzeGames(games.value, summoner.value.puuid);
+    // 团队相关指标（伤害/承伤/经济占比、参团率、Akari 评分）需要含全员的详情数据，
+    // 因此只用已加载详情的对局聚合；详情会在后台陆续加载，聚合随之更新
+    const detailedGames = games.value
+      .map((g) => detailsMap.value[g.gameId])
+      .filter((d): d is Game => Boolean(d));
+    if (!detailedGames.length) {
+      return null;
+    }
+    return analyzeGames(detailedGames, summoner.value.puuid);
   });
 
   const loadMatchHistory = async () => {
@@ -282,10 +301,29 @@
       totalCount.value = res?.games?.gameCount || 0;
       winFilter.value = 'all';
       queueFilter.value = 'all';
+      loadDetailsForGames(games.value);
     } catch (e: any) {
       message.error(`加载战绩失败：${e?.message || e}`);
     } finally {
       loading.value = false;
+    }
+  };
+
+  /** 后台加载当前页各局详情（含全员选手数据），用于团队占比/参团率/标签等计算 */
+  const loadDetailsForGames = (games: Game[]) => {
+    for (const g of games) {
+      if (detailsMap.value[g.gameId]) {
+        continue;
+      }
+      mhGetGameDetails(g.gameId)
+        .then((detail) => {
+          if (detail) {
+            detailsMap.value = { ...detailsMap.value, [g.gameId]: detail };
+          }
+        })
+        .catch(() => {
+          // 详情加载失败时忽略，条目会退回到列表数据
+        });
     }
   };
 
