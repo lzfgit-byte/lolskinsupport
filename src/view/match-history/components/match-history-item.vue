@@ -1,11 +1,14 @@
 <template>
   <div class="mh-item-wrap">
-    <!-- 主卡片（点击展开） -->
-    <div
-      class="mh-item"
-      :class="[resultClass, { 'is-expanded': expanded }]"
-      @click="toggleExpand"
-    >
+    <div class="mh-row">
+      <!-- 左侧三行内容 -->
+      <div class="mh-main">
+        <!-- 主卡片（点击展开） -->
+        <div
+          class="mh-item"
+          :class="[resultClass, { 'is-expanded': expanded }]"
+          @click="toggleExpand"
+        >
       <!-- 英雄头像 -->
       <div class="mh-champion">
         <img
@@ -61,6 +64,7 @@
           </template>
           <img
             class="augment-icon"
+            :class="augmentRarityClass(id)"
             :src="getAugmentIcon(id)"
             :alt="augmentName(id)"
             loading="lazy"
@@ -96,23 +100,34 @@
           详情
         </button>
       </div>
-    </div>
+      </div>
 
-    <!-- 评级徽章（第二行） -->
-    <div v-if="badges.length" class="mh-badges" :class="resultClass">
-      <span
-        v-for="(tag, i) in badges"
-        :key="i"
-        class="badge"
-        :class="`badge-${tag.color}`"
-        :title="tag.content"
-      >
-        {{ tag.label }}
-      </span>
-    </div>
+      <!-- 评级徽章（第二行） -->
+      <div v-if="badges.length" class="mh-badges" :class="resultClass">
+        <span
+          v-for="(tag, i) in badges"
+          :key="i"
+          class="badge"
+          :class="`badge-${tag.color}`"
+          :title="tag.content"
+        >
+          {{ tag.label }}
+        </span>
+      </div>
 
-    <!-- 底部信息行 -->
-    <div class="mh-meta" :class="resultClass">{{ metaText }}</div>
+      <!-- 底部信息行 -->
+      <div class="mh-meta" :class="resultClass">{{ metaText }}</div>
+      </div>
+
+      <!-- 右侧六边形统计（横跨三行） -->
+      <div class="mh-side">
+        <HexagonStats
+          :participant="participant"
+          :team="participants"
+          :ready="Boolean(detail)"
+        />
+      </div>
+    </div>
 
     <!-- 展开总览 -->
     <div v-if="expanded" class="mh-expand">
@@ -156,6 +171,7 @@ import {
 } from '@/utils/match-history/images';
 import { getQueueName, loadQueueNames } from '@/utils/match-history/queue-names';
 import type { KiwiAugment, ItemInfo, ChampionMeta } from '@/utils/match-history/images';
+import HexagonStats from './hexagon-stats.vue';
 
 const props = defineProps<{
   game: Game;
@@ -348,6 +364,23 @@ const getAugmentDesc = (id: number): string => {
   return getKiwiAugment(id, augmentMap.value)?.desc || '';
 };
 
+/** 海克斯强化稀有度配色（与 LeagueAkari 保持一致） */
+const augmentRarityClass = (id: number): string => {
+  const level = getKiwiAugment(id, augmentMap.value)?.level;
+  switch (level) {
+    case 'kPrismatic':
+      return 'augment-prismatic';
+    case 'kGold':
+      return 'augment-gold';
+    case 'kSilver':
+      return 'augment-silver';
+    case 'kBronze':
+      return 'augment-bronze';
+    default:
+      return '';
+  }
+};
+
 const formatRarity = (id: number): string => {
   const level = getKiwiAugment(id, augmentMap.value)?.level;
   switch (level) {
@@ -412,6 +445,28 @@ const itemDescHtml = (itemId: number): string => {
     border-radius: 8px;
     overflow: hidden;
     background: #1b1f2a;
+  }
+
+  .mh-row {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .mh-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mh-side {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 14px;
+    background: #1b1f2a;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .mh-item {
@@ -504,10 +559,30 @@ const itemDescHtml = (itemId: number): string => {
     .augment-icon {
       width: 26px;
       height: 26px;
-      border-radius: 5px;
+      border-radius: 4px;
       object-fit: cover;
       display: block;
+      box-sizing: border-box;
       background: #10131c;
+
+      // 稀有度配色（与 LeagueAkari 一致）
+      &.augment-prismatic {
+        border: 1px solid transparent;
+        border-image: linear-gradient(135deg, #e78fff, #8b05b0) 1;
+        background-color: rgb(45, 37, 66);
+      }
+      &.augment-gold {
+        border: 1px solid rgb(255, 183, 0);
+        background-color: rgb(50, 37, 5);
+      }
+      &.augment-silver {
+        border: 1px solid rgb(180, 180, 180);
+        background-color: rgb(35, 35, 34);
+      }
+      &.augment-bronze {
+        border: 1px solid rgb(205, 127, 50);
+        background-color: rgb(50, 30, 15);
+      }
     }
   }
 
