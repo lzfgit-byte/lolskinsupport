@@ -59,7 +59,7 @@
               <div v-if="itemFromNames(itemId).length" class="item-tooltip-from">
                 合成：{{ itemFromNames(itemId).join('、') }}
               </div>
-              <div v-if="itemDesc(itemId)" class="item-tooltip-desc">{{ itemDesc(itemId) }}</div>
+              <div v-if="itemDescHtml(itemId)" class="item-tooltip-desc" v-html="itemDescHtml(itemId)"></div>
             </div>
           </template>
           <img class="item-icon" :src="getItemIcon(itemId)" loading="lazy" />
@@ -172,9 +172,11 @@
                   <span class="rarity-indicator" :class="rarityClass(augmentId)"></span>
                   {{ formatRarity(augmentId) }}
                 </div>
-                <div v-if="getAugmentDesc(augmentId)" class="augment-tooltip-desc">
-                  {{ getAugmentDesc(augmentId) }}
-                </div>
+                <div
+                  v-if="getAugmentDesc(augmentId)"
+                  class="augment-tooltip-desc"
+                  v-html="getAugmentDesc(augmentId)"
+                ></div>
               </div>
             </template>
             <div class="augment-item">
@@ -213,7 +215,6 @@
     getKiwiAugment,
     loadItemMap,
     loadKiwiAugments,
-    stripItemHtml,
     type ChampionMeta,
     type ItemInfo,
     type KiwiAugment
@@ -370,12 +371,13 @@
     return info.from.map((id) => getItemInfoOf(id)?.name || `#${id}`);
   };
 
-  const itemDesc = (itemId: number): string => {
+  /** 装备描述（保留 HTML 标签与换行，直接用 v-html 渲染） */
+  const itemDescHtml = (itemId: number): string => {
     const info = getItemInfoOf(itemId);
     if (!info) {
       return '';
     }
-    return stripItemHtml(info.description || info.plaintext);
+    return info.description || info.plaintext || '';
   };
 
   const formatRarity = (id: number): string => {
@@ -894,7 +896,7 @@
         font-size: 12px;
         opacity: 0.85;
         max-width: 260px;
-        white-space: normal;
+        white-space: pre-line;
       }
     }
 
@@ -921,7 +923,7 @@
       .item-tooltip-desc {
         font-size: 12px;
         opacity: 0.8;
-        white-space: normal;
+        white-space: pre-line;
       }
     }
   }

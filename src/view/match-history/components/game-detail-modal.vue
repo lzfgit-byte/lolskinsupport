@@ -33,9 +33,7 @@
                   <div v-if="getItemPriceText(itemId)" class="item-tooltip-price">
                     {{ getItemPriceText(itemId) }}
                   </div>
-                  <div v-if="getItemDescText(itemId)" class="item-tooltip-desc">
-                    {{ getItemDescText(itemId) }}
-                  </div>
+                  <div v-if="getItemDescText(itemId)" class="item-tooltip-desc" v-html="getItemDescText(itemId)"></div>
                 </div>
               </template>
               <img class="gd-item" :src="getItemIcon(itemId)" loading="lazy" />
@@ -58,7 +56,6 @@
     getItemInfo,
     getItemName,
     loadItemMap,
-    stripItemHtml,
     type ChampionMeta,
     type ItemInfo
   } from '@/utils/match-history/images';
@@ -94,12 +91,13 @@
       : `${goldTotal} G`;
   };
 
+  /** 装备描述（保留 HTML 标签与换行，直接用 v-html 渲染） */
   const getItemDescText = (itemId: number): string => {
     const info = getItemInfo(itemId, itemMap.value);
     if (!info) {
       return '';
     }
-    return stripItemHtml(info.description || info.plaintext);
+    return info.description || info.plaintext || '';
   };
 
   const formatDuration = (seconds: number) => {
@@ -260,7 +258,7 @@
     .item-tooltip-desc {
       font-size: 12px;
       opacity: 0.8;
-      white-space: normal;
+      white-space: pre-line;
     }
   }
 </style>
