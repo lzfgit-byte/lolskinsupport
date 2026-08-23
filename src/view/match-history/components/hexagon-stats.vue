@@ -1,11 +1,6 @@
 <template>
   <div class="hexagon-stats" :class="{ 'is-ready': ready }" :title="tooltipText">
-    <svg
-      :viewBox="`0 0 ${size} ${size}`"
-      :width="size"
-      :height="size"
-      class="hex-svg"
-    >
+    <svg :viewBox="`0 0 ${size} ${size}`" :width="size" :height="size" class="hex-svg">
       <!-- 网格环 -->
       <polygon
         v-for="ring in rings"
@@ -51,106 +46,106 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import type { MatchParticipant } from '@/utils/match-history/adapter';
+  import { computed } from 'vue';
+  import type { MatchParticipant } from '@/utils/match-history/adapter';
 
-const props = defineProps<{
-  participant: MatchParticipant | null;
-  team: MatchParticipant[];
-  /** 是否已加载完整对局（详情），未加载时仅显示网格占位 */
-  ready?: boolean;
-}>();
+  const props = defineProps<{
+    participant: MatchParticipant | null;
+    team: MatchParticipant[];
+    /** 是否已加载完整对局（详情），未加载时仅显示网格占位 */
+    ready?: boolean;
+  }>();
 
-const size = 150;
-const cx = size / 2;
-const cy = size / 2;
-const radius = 56;
-const labelScale = 1.15;
+  const size = 150;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = 56;
+  const labelScale = 1.15;
 
-const axes = [
-  { key: 'kills', label: '击杀' },
-  { key: 'damage', label: '伤害' },
-  { key: 'taken', label: '承伤' },
-  { key: 'assists', label: '助攻' },
-  { key: 'heal', label: '治疗' },
-  { key: 'cs', label: '补刀' }
-];
+  const axes = [
+    { key: 'kills', label: '击杀' },
+    { key: 'damage', label: '伤害' },
+    { key: 'taken', label: '承伤' },
+    { key: 'assists', label: '助攻' },
+    { key: 'heal', label: '治疗' },
+    { key: 'cs', label: '补刀' },
+  ];
 
-const getValue = (p: MatchParticipant, key: string): number => {
-  switch (key) {
-    case 'kills':
-      return p.kills;
-    case 'damage':
-      return p.totalDamageDealtToChampions;
-    case 'taken':
-      return p.totalDamageTaken;
-    case 'assists':
-      return p.assists;
-    case 'heal':
-      return p.totalHeal;
-    case 'cs':
-      return p.cs;
-    default:
-      return 0;
-  }
-};
+  const getValue = (p: MatchParticipant, key: string): number => {
+    switch (key) {
+      case 'kills':
+        return p.kills;
+      case 'damage':
+        return p.totalDamageDealtToChampions;
+      case 'taken':
+        return p.totalDamageTaken;
+      case 'assists':
+        return p.assists;
+      case 'heal':
+        return p.totalHeal;
+      case 'cs':
+        return p.cs;
+      default:
+        return 0;
+    }
+  };
 
-/** 队伍中每项统计的最高值（六极） */
-const teamMax = computed(() => {
-  const m: Record<string, number> = {};
-  for (const a of axes) {
-    m[a.key] = props.team.reduce((acc, p) => Math.max(acc, getValue(p, a.key)), 0);
-  }
-  return m;
-});
-
-/** 当前用户每项相对队内最高值的比例（0-1） */
-const ratios = computed(() => {
-  const r: Record<string, number> = {};
-  const p = props.participant;
-  if (!p || !props.ready) {
+  /** 队伍中每项统计的最高值（六极） */
+  const teamMax = computed(() => {
+    const m: Record<string, number> = {};
     for (const a of axes) {
-      r[a.key] = 0;
+      m[a.key] = props.team.reduce((acc, p) => Math.max(acc, getValue(p, a.key)), 0);
+    }
+    return m;
+  });
+
+  /** 当前用户每项相对队内最高值的比例（0-1） */
+  const ratios = computed(() => {
+    const r: Record<string, number> = {};
+    const p = props.participant;
+    if (!p || !props.ready) {
+      for (const a of axes) {
+        r[a.key] = 0;
+      }
+      return r;
+    }
+    for (const a of axes) {
+      const max = teamMax.value[a.key];
+      r[a.key] = max > 0 ? Math.min(1, getValue(p, a.key) / max) : 0;
     }
     return r;
-  }
-  for (const a of axes) {
-    const max = teamMax.value[a.key];
-    r[a.key] = max > 0 ? Math.min(1, getValue(p, a.key) / max) : 0;
-  }
-  return r;
-});
+  });
 
-const angle = (i: number) => (-90 + i * 60) * (Math.PI / 180);
+  const angle = (i: number) => (-90 + i * 60) * (Math.PI / 180);
 
-const vertex = (i: number, scale: number) => ({
-  x: cx + Math.cos(angle(i)) * radius * scale,
-  y: cy + Math.sin(angle(i)) * radius * scale
-});
+  const vertex = (i: number, scale: number) => ({
+    x: cx + Math.cos(angle(i)) * radius * scale,
+    y: cy + Math.sin(angle(i)) * radius * scale,
+  });
 
-const rings = [0.33, 0.66, 1];
+  const rings = [0.33, 0.66, 1];
 
-const hexPoints = (scale: number) =>
-  axes.map((_, i) => `${vertex(i, scale).x},${vertex(i, scale).y}`).join(' ');
+  const hexPoints = (scale: number) =>
+    axes.map((_, i) => `${vertex(i, scale).x},${vertex(i, scale).y}`).join(' ');
 
-const userHexPoints = computed(() =>
-  axes.map((_, i) => `${userVertex(i).x},${userVertex(i).y}`).join(' ')
-);
+  const userHexPoints = computed(() =>
+    axes.map((_, i) => `${userVertex(i).x},${userVertex(i).y}`).join(' ')
+  );
 
-const userVertex = (i: number) => vertex(i, ratios.value[axes[i].key]);
+  const userVertex = (i: number) => vertex(i, ratios.value[axes[i].key]);
 
-const tooltipText = computed(() => {
-  if (!props.participant || !props.ready) {
-    return '';
-  }
-  return axes
-    .map((a) => {
-      const max = teamMax.value[a.key];
-      const val = getValue(props.participant!, a.key);
-      return `${a.label}：${val.toLocaleString()} / 队内最高 ${max.toLocaleString()}`;
-    })
-    .join('\n');
-});
+  const tooltipText = computed(() => {
+    if (!props.participant || !props.ready) {
+      return '';
+    }
+    return axes
+      .map((a) => {
+        const max = teamMax.value[a.key];
+        const val = getValue(props.participant!, a.key);
+        return `${a.label}：${val.toLocaleString()} / 队内最高 ${max.toLocaleString()}`;
+      })
+      .join('\n');
+  });
 </script>
 
 <style scoped lang="less">
