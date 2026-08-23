@@ -16,6 +16,7 @@ import {
   copyFileSync,
   existsSync,
   readFileSync,
+  renameSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -115,12 +116,23 @@ const readYaml = (filePath: string): any => {
 };
 
 const writeYaml = (filePath: string, data: any): boolean => {
+  const content = yaml.dump(data, { indent: 2 });
   try {
-    writeFileSync(filePath, yaml.dump(data), 'utf8');
+    // 原子写入：先写临时文件再重命名，避免游戏在读取过程中读到不完整的文件
+    const tmpPath = `${filePath}.tmp`;
+    writeFileSync(tmpPath, content, 'utf8');
+    renameSync(tmpPath, filePath);
     return true;
   } catch (e) {
-    console.error(`[LocaleWatcher] 写入 YAML 失败 ${filePath}:`, e);
-    return false;
+    console.error(`[LocaleWatcher] 原子写入 YAML 失败 ${filePath}:`, e);
+    // 原子写入失败（如目标被占用）时回退为直接写入
+    try {
+      writeFileSync(filePath, content, 'utf8');
+      return true;
+    } catch (e2) {
+      console.error(`[LocaleWatcher] 直接写入 YAML 失败 ${filePath}:`, e2);
+      return false;
+    }
   }
 };
 
@@ -260,7 +272,28 @@ const normalizeFilePath = (filePath: string): string => {
   }
 };
 
-/** 文件被修改后，若语言不一致则自动修复 */
+/**
+ * 判断文件是否需要重写：语言不一致，或缩进/格式未被规范化为 2 空格。
+ * 通过对比规范化输出与原文，可避免写入后再次触发监听的死循环。
+ */
+const needsRewrite = (filePath: string, locale: string): boolean => {
+  try {
+    const raw = readFileSync(filePath, 'utf8');
+    const parsed = yaml.load(raw);
+    if (!isValidSettings(parsed)) {
+      return false;
+    }
+    if (parsed.settings.locale !== locale) {
+      return true;
+    }
+    const normalized = yaml.dump(parsed, { indent: 2 });
+    return normalized.trimEnd() !== raw.trimEnd();
+  } catch {
+    return false;
+  }
+};
+
+/** 文件被修改后，若语言不一致或缩进不规范（非 2 空格），则自动重写统一为 2 空格 */
 const onFileChanged = (filePath: string) => {
   if (updateTimer) {
     clearTimeout(updateTimer);
@@ -270,13 +303,13 @@ const onFileChanged = (filePath: string) => {
     if (!info || !info.valid) {
       return;
     }
-    if (info.locale !== selectedLocale) {
+    if (needsRewrite(filePath, selectedLocale)) {
       LogMsgUtil.sendLogMsg(
-        `[LocaleWatcher] 正在将语言 ${info.locale} 更新为 ${selectedLocale} ...`
+        `[LocaleWatcher] 正在将语言 ${info.locale} 更新为 ${selectedLocale}，并规范化缩进为 2 空格 ...`
       );
       updateLocaleSettings(filePath, selectedLocale);
     }
-  }, 500);
+  }, 150);
 };
 
 const stopWatcher = () => {
@@ -344,6 +377,13 @@ export const startLocaleWatcher = (
   // 启动前先应用一次目标语言
   updateLocaleSettings(filePath, selectedLocale);
 
+  // 客户端可能在应用启动初期重写配置（恢复默认语言），稍后再补一次确保生效
+  setTimeout(() => {
+    if (watchedFile) {
+      onFileChanged(watchedFile);
+    }
+  }, 1500);
+
   // 监听配置文件所在目录（而非直接监听文件）。
   // 原因：通过 Riot 客户端 --launch-product 启动时，客户端会用“临时文件+原子替换”重写该 YAML，
   // 直接监听文件会导致 chokidar 丢失对替换后新文件的监听（语言监听失效）。监听目录可捕获
@@ -355,7 +395,8 @@ export const startLocaleWatcher = (
     persistent: true,
     ignoreInitial: true,
     depth: 1,
-    awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
+    // 缩短稳定性等待：配合原子写入，尽快捕获客户端重写并纠正语言
+    awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
   });
   watcher.on('change', (changedPath) => {
     if (isTargetFile(changedPath)) onFileChanged(filePath);
