@@ -49,8 +49,8 @@
           />
           <div class="player-info">
             <div class="player-name">{{ summoner.displayName || summoner.gameName || summoner.internalName }}</div>
-            <div class="player-meta">等级 {{ summoner.summonerLevel }}</div>
-            <div class="player-meta player-puuid" :title="summoner.puuid">{{ summoner.puuid }}</div>
+            <div class="player-meta">{{ riotIdText }}</div>
+            <div class="player-meta">等级 {{ summoner.summonerLevel }} · ID {{ summoner.summonerId }}</div>
           </div>
         </div>
 
@@ -134,13 +134,12 @@
       <!-- 战绩列表 -->
       <div v-if="filteredGames.length" class="mh-list">
         <MatchHistoryItem
-          v-for="(game, i) in filteredGames"
+          v-for="game in filteredGames"
           :key="game.gameId"
           :game="game"
           :detail="detailsMap[game.gameId] || null"
           :puuid="summoner.puuid"
           :champion-map="championMap"
-          :index="i"
           @open-detail="openDetail"
         />
       </div>
@@ -149,9 +148,10 @@
       <!-- 分页 -->
       <div class="mh-pagination">
         <a-select v-model:value="pageSize" style="width: 90px" size="small" @change="onPageSizeChange">
-          <a-select-option :value="10">10/页</a-select-option>
           <a-select-option :value="20">20/页</a-select-option>
-          <a-select-option :value="30">30/页</a-select-option>
+          <a-select-option :value="40">40/页</a-select-option>
+          <a-select-option :value="60">60/页</a-select-option>
+          <a-select-option :value="80">80/页</a-select-option>
         </a-select>
         <a-button size="small" :disabled="page <= 0" @click="prevPage">上一页</a-button>
         <span class="page-info">第 {{ page + 1 }} / {{ totalPages || 1 }} 页</span>
@@ -212,6 +212,18 @@
   const lcuConnected = computed(() => lcuState.value);
   const championMap = ref<Map<number, ChampionMeta>>(new Map());
 
+  /** 玩家 Riot ID（gameName#tagLine），用于头像卡片展示 */
+  const riotIdText = computed(() => {
+    const s = summoner.value;
+    if (!s) {
+      return '';
+    }
+    if (s.gameName && s.tagLine) {
+      return `${s.gameName}#${s.tagLine}`;
+    }
+    return s.displayName || s.gameName || '';
+  });
+
   const searchName = ref('');
   const searching = ref(false);
   const loadingCurrent = ref(false);
@@ -233,7 +245,7 @@
   const games = ref<Game[]>([]);
   const totalCount = ref(0);
   const page = ref(0);
-  const pageSize = ref(10);
+  const pageSize = ref(20);
   const loading = ref(false);
 
   /** 对局详情缓存（列表接口只含当前玩家，团队占比/参团率等需要详情里的全员数据） */
@@ -470,13 +482,6 @@
           color: #8b93a5;
           font-size: 12px;
           margin-top: 4px;
-        }
-        .player-puuid {
-          font-size: 10px;
-          max-width: 220px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
         }
       }
     }

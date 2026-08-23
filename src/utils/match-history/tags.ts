@@ -477,3 +477,13 @@ export function computeMatchTags(
   return tags.sort((a, b) => b.priority - a.priority);
 }
 
+/**
+ * 仅计算多杀标签（五杀/四杀/三杀/双杀）。
+ * 不依赖完整对局数据，仅用选手自身数据即可，列表接口即可得到。
+ */
+export function computeMultikillTags(participant: MatchParticipant): PlayerTag[] {
+  const tags: PlayerTag[] = [];
+  pushMultikillTags(tags, participant);
+  return tags.sort((a, b) => b.priority - a.priority);
+}
+

@@ -200,6 +200,38 @@ export const stripItemHtml = (html: string): string => {
     .trim();
 };
 
+let mapNameMap: Map<number, string> | null = null;
+
+/**
+ * 加载地图 id → 名称映射（来自 LCU maps.json，客户端本地化），结果会缓存
+ */
+export async function loadMapNames(): Promise<Map<number, string>> {
+  if (mapNameMap) {
+    return mapNameMap;
+  }
+  try {
+    const res: any = await mhGetLcuJson('maps.json');
+    const map = new Map<number, string>();
+    (Array.isArray(res) ? res : []).forEach((m: any) => {
+      const id = Number(m.mapId);
+      const name = m.mapName || m.name || '';
+      if (Number.isFinite(id) && name) {
+        map.set(id, name);
+      }
+    });
+    mapNameMap = map;
+    return map;
+  } catch {
+    mapNameMap = new Map();
+    return mapNameMap;
+  }
+}
+
+/** 获取地图名；未知时返回空串 */
+export const getMapName = (mapId: number, map?: Map<number, string>): string => {
+  return map?.get(mapId) ?? '';
+};
+
 /** 召唤师技能图标；未知技能返回空串 */
 export const getSpellIcon = (spellId: number): string => {
   const assetName = SPELL_ASSET_NAMES[spellId];

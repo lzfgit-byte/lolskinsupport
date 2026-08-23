@@ -1,195 +1,129 @@
 <template>
-  <div class="mh-item-wrap" @click="toggleExpand">
+  <div class="mh-item-wrap">
+    <!-- 主卡片（点击展开） -->
     <div
       class="mh-item"
-      :class="{
-        'is-win': result === 'win',
-        'is-loss': result === 'loss',
-        'is-abnormal': result === 'remake' || result === 'abort',
-        'is-expanded': expanded
-      }"
+      :class="[resultClass, { 'is-expanded': expanded }]"
+      @click="toggleExpand"
     >
-      <!-- 序号 -->
-      <div class="mh-col mh-index">{{ index + 1 }}</div>
-
-      <!-- 英雄 -->
-      <div class="mh-col mh-champion">
-        <img class="champion-icon" :src="championIcon" :alt="championName" loading="lazy" />
-        <div class="champion-meta">
-          <div class="champion-name" :title="championName">{{ championName || '未知英雄' }}</div>
-          <div class="champion-role">{{ queueName }}</div>
-        </div>
-      </div>
-
-      <!-- 结果 -->
-      <div class="mh-col mh-result">
-        <span class="result-badge" :class="result">{{ resultText }}</span>
-      </div>
-
-      <!-- KDA -->
-      <div class="mh-col mh-kda">
-        <span class="kda-num" :class="{ strong: kda >= 3 }">{{ toFixed(kda) }}</span>
-        <span class="kda-detail">
-          {{ participant?.kills }} / {{ participant?.deaths }} / {{ participant?.assists }}
-        </span>
-      </div>
-
-      <!-- 伤害（含团队占比） -->
-      <div class="mh-col mh-stats">
-        <div class="stat-row">{{ formatExtremeNumber(participant?.totalDamageDealtToChampions || 0) }}</div>
-        <div class="stat-row sub">{{ shareText(summary?.summary.championDamagePercentageOfTeam) }} 伤害</div>
-      </div>
-
-      <!-- 承伤（含团队占比） -->
-      <div class="mh-col mh-stats">
-        <div class="stat-row">{{ formatExtremeNumber(participant?.totalDamageTaken || 0) }}</div>
-        <div class="stat-row sub">{{ shareText(summary?.summary.damageTakenPercentageOfTeam) }} 承伤</div>
+      <!-- 英雄头像 -->
+      <div class="mh-champion">
+        <img
+          class="champion-icon"
+          :src="championIcon"
+          :alt="championName"
+          loading="lazy"
+        />
       </div>
 
       <!-- 装备 -->
-      <div class="mh-col mh-items">
+      <div class="mh-items">
         <a-tooltip v-for="(itemId, i) in participantItems" :key="i">
           <template #title>
             <div class="item-tooltip">
-              <div class="item-tooltip-name">
-                {{ itemName(itemId) }}
-                <span class="item-tooltip-id">({{ itemId }})</span>
+              <div class="item-tooltip-name">{{ itemName(itemId) }}</div>
+              <div v-if="itemPrice(itemId)" class="item-tooltip-price">
+                {{ itemPrice(itemId) }}
               </div>
-              <div v-if="itemPrice(itemId)" class="item-tooltip-price">{{ itemPrice(itemId) }}</div>
               <div v-if="itemFromNames(itemId).length" class="item-tooltip-from">
-                合成：{{ itemFromNames(itemId).join('、') }}
+                {{ itemFromNames(itemId).join(' + ') }}
               </div>
-              <div v-if="itemDescHtml(itemId)" class="item-tooltip-desc" v-html="itemDescHtml(itemId)"></div>
+              <div v-if="itemStatsText(itemId)" class="item-tooltip-stats">
+                {{ itemStatsText(itemId) }}
+              </div>
+              <div class="item-tooltip-desc" v-html="itemDescHtml(itemId)" />
             </div>
           </template>
-          <img class="item-icon" :src="getItemIcon(itemId)" loading="lazy" />
+          <img
+            v-if="itemId"
+            class="item-icon"
+            :src="getItemIcon(itemId)"
+            :alt="itemName(itemId)"
+            loading="lazy"
+          />
+          <span v-else class="item-slot" />
         </a-tooltip>
       </div>
 
-      <!-- Akari 评分 -->
-      <div class="mh-col mh-akari">
-        <span class="akari-score" :class="{ good: (akariTotal ?? 0) >= 6.5 }">
-          {{ akariText }}
-        </span>
+      <!-- 海克斯强化（列表数据即含，无需详情） -->
+      <div v-if="augments.length" class="mh-augments">
+        <a-tooltip v-for="id in augments" :key="id">
+          <template #title>
+            <div class="augment-tooltip">
+              <div class="augment-tooltip-name">
+                {{ augmentName(id) }}
+                <span v-if="formatRarity(id)" class="augment-rarity">
+                  {{ formatRarity(id) }}
+                </span>
+              </div>
+              <div class="augment-tooltip-desc">{{ getAugmentDesc(id) }}</div>
+            </div>
+          </template>
+          <img
+            class="augment-icon"
+            :src="getAugmentIcon(id)"
+            :alt="augmentName(id)"
+            loading="lazy"
+          />
+        </a-tooltip>
       </div>
 
-      <!-- 时间 -->
-      <div class="mh-col mh-time">
-        <div class="stat-row">{{ formatDuration(game.gameDuration) }}</div>
-        <div class="stat-row sub">{{ formatDateTime(game.gameCreation) }}</div>
+      <!-- KDA -->
+      <div class="mh-kda">
+        <div class="kda-main">
+          {{ participant?.kills ?? '-' }} / {{ participant?.deaths ?? '-' }} /
+          {{ participant?.assists ?? '-' }}
+        </div>
+        <div class="kda-sub">{{ kdaRatioText }}</div>
       </div>
 
-      <!-- 展开箭头 / 详情 -->
-      <div class="mh-col mh-actions">
+      <!-- 伤害 -->
+      <div class="mh-damage">
+        <div class="dmg-share">
+          {{
+            summary
+              ? shareText(summary.summary.championDamagePercentageOfTeam)
+              : '—'
+          }}
+        </div>
+        <div class="dmg-value">{{ damageText }}</div>
+      </div>
+
+      <!-- 操作 -->
+      <div class="mh-actions">
         <span class="expand-arrow" :class="{ open: expanded }">▾</span>
-        <button class="detail-btn" @click.stop="$emit('open-detail', game)">详情</button>
+        <button class="detail-btn" @click.stop="$emit('open-detail', game)">
+          详情
+        </button>
       </div>
     </div>
 
-    <!-- 评级标签（始终显示） -->
-    <div v-if="tags.length" class="mh-tags-row">
+    <!-- 评级徽章（第二行） -->
+    <div v-if="badges.length" class="mh-badges" :class="resultClass">
       <span
-        v-for="(tag, i) in tags"
+        v-for="(tag, i) in badges"
         :key="i"
-        class="player-tag"
-        :class="`tag-${tag.color}`"
+        class="badge"
+        :class="`badge-${tag.color}`"
         :title="tag.content"
       >
         {{ tag.label }}
       </span>
     </div>
 
+    <!-- 底部信息行 -->
+    <div class="mh-meta" :class="resultClass">{{ metaText }}</div>
+
     <!-- 展开总览 -->
     <div v-if="expanded" class="mh-expand">
-      <div class="expand-section">
-        <div class="section-title">数据总览</div>
-        <div class="overview-grid">
-          <div class="ov-item">
-            <div class="ov-label">伤害</div>
-            <div class="ov-value">{{ formatExtremeNumber(participant?.totalDamageDealtToChampions || 0) }}</div>
-            <div class="ov-sub">团队占比 {{ shareText(summary?.summary.championDamagePercentageOfTeam) }}</div>
-          </div>
-          <div class="ov-item">
-            <div class="ov-label">承伤</div>
-            <div class="ov-value">{{ formatExtremeNumber(participant?.totalDamageTaken || 0) }}</div>
-            <div class="ov-sub">团队占比 {{ shareText(summary?.summary.damageTakenPercentageOfTeam) }}</div>
-          </div>
-          <div class="ov-item">
-            <div class="ov-label">经济</div>
-            <div class="ov-value">{{ Math.round((participant?.goldEarned ?? 0) / 100) / 10 }}k</div>
-            <div class="ov-sub">团队占比 {{ shareText(summary?.summary.goldPercentageOfTeam) }}</div>
-          </div>
-          <div class="ov-item">
-            <div class="ov-label">补刀</div>
-            <div class="ov-value">{{ participant?.cs ?? 0 }}</div>
-            <div class="ov-sub">分均 {{ toFixed(csPerMinute) }}</div>
-          </div>
-          <div class="ov-item">
-            <div class="ov-label">视野</div>
-            <div class="ov-value">{{ participant?.visionScore ?? 0 }}</div>
-            <div class="ov-sub">团队占比 {{ shareText(summary?.summary.visionScorePercentageOfTeam) }}</div>
-          </div>
-          <div class="ov-item">
-            <div class="ov-label">推塔伤害</div>
-            <div class="ov-value">{{ formatExtremeNumber(participant?.totalDamageToTowers || 0) }}</div>
-            <div class="ov-sub">治疗 {{ formatExtremeNumber(participant?.totalHeal || 0) }}</div>
-          </div>
-          <div class="ov-item">
-            <div class="ov-label">参团率</div>
-            <div class="ov-value">{{ shareText(summary?.summary.killParticipation) }}</div>
-            <div class="ov-sub">KDA {{ toFixed(kda) }}</div>
-          </div>
-          <div class="ov-item">
-            <div class="ov-label">多杀</div>
-            <div class="ov-value multikill">
-              <span v-if="participant?.pentaKills" class="mk mk-penta">五杀{{ participant.pentaKills }}</span>
-              <span v-if="participant?.quadraKills" class="mk mk-quadra">四杀{{ participant.quadraKills }}</span>
-              <span v-if="participant?.tripleKills" class="mk mk-triple">三杀{{ participant.tripleKills }}</span>
-              <span v-if="participant?.doubleKills" class="mk mk-double">双杀{{ participant.doubleKills }}</span>
-              <span
-                v-if="
-                  !(participant?.pentaKills ||
-                    participant?.quadraKills ||
-                    participant?.tripleKills ||
-                    participant?.doubleKills)
-                "
-                class="mk-none"
-              >-</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 海克斯强化 -->
-      <div v-if="augments.length" class="expand-section">
-        <div class="section-title">海克斯强化</div>
-        <div class="augment-row">
-          <a-tooltip v-for="augmentId in augments" :key="augmentId">
-            <template #title>
-              <div class="augment-tooltip">
-                <div class="augment-tooltip-name">{{ augmentName(augmentId) }}</div>
-                <div v-if="formatRarity(augmentId)" class="augment-tooltip-rarity">
-                  <span class="rarity-indicator" :class="rarityClass(augmentId)"></span>
-                  {{ formatRarity(augmentId) }}
-                </div>
-                <div
-                  v-if="getAugmentDesc(augmentId)"
-                  class="augment-tooltip-desc"
-                  v-html="getAugmentDesc(augmentId)"
-                ></div>
-              </div>
-            </template>
-            <div class="augment-item">
-              <img
-                v-if="getAugmentIcon(augmentId)"
-                class="augment-icon"
-                :class="augmentLevelClass(augmentId)"
-                :src="getAugmentIcon(augmentId)"
-                loading="lazy"
-              />
-              <span v-else class="augment-chip">⬡ {{ augmentId }}</span>
-            </div>
-          </a-tooltip>
+      <div class="overview-grid">
+        <div
+          v-for="(row, i) in overviewRows"
+          :key="i"
+          class="overview-item"
+        >
+          <span class="ov-label">{{ row.label }}</span>
+          <span class="ov-value">{{ row.value }}</span>
         </div>
       </div>
     </div>
@@ -197,425 +131,548 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, ref } from 'vue';
-  import { toBasicInfo, toParticipants } from '@/utils/match-history/adapter';
-  import { analyzeGame } from '@/utils/match-history/analysis';
-  import {
-    formatDateTime,
-    formatDuration,
-    formatExtremeNumber,
-    toFixed
-  } from '@/utils/match-history/format';
-  import {
-    getChampionAlias,
-    getChampionName,
-    getChampionSquareIcon,
-    getItemIcon,
-    getItemInfo,
-    getKiwiAugment,
-    loadItemMap,
-    loadKiwiAugments,
-    type ChampionMeta,
-    type ItemInfo,
-    type KiwiAugment
-  } from '@/utils/match-history/images';
-  import { getQueueName } from '@/utils/match-history/queue-names';
-  import { computeMatchTags } from '@/utils/match-history/tags';
-  import type { Game } from '@/utils/match-history/types';
+import { computed, onMounted, ref } from 'vue';
+import type { Game } from '@/utils/match-history/types';
+import { toBasicInfo, toParticipants } from '@/utils/match-history/adapter';
+import {
+  toFixed,
+  formatDurationClock,
+  formatRelativeTime
+} from '@/utils/match-history/format';
+import { analyzeGame } from '@/utils/match-history/analysis';
+import { computeMatchTags, computeMultikillTags } from '@/utils/match-history/tags';
+import {
+  getChampionName,
+  getChampionAlias,
+  getChampionSquareIcon,
+  getItemIcon,
+  getItemInfo,
+  getKiwiAugment,
+  loadKiwiAugments,
+  loadItemMap,
+  loadMapNames,
+  getMapName
+} from '@/utils/match-history/images';
+import { getQueueName, loadQueueNames } from '@/utils/match-history/queue-names';
+import type { KiwiAugment, ItemInfo, ChampionMeta } from '@/utils/match-history/images';
 
-  const props = defineProps<{
-    game: Game;
-    /** 对局详情（含全员），团队占比/参团率/标签等依赖它 */
-    detail?: Game | null;
-    puuid: string;
-    championMap: Map<number, ChampionMeta>;
-    index: number;
-  }>();
+const props = defineProps<{
+  game: Game;
+  detail: Game | null;
+  puuid: string;
+  championMap: Map<number, ChampionMeta>;
+}>();
 
-  defineEmits<{ (e: 'open-detail', game: Game): void }>();
+const emit = defineEmits<{
+  (e: 'open-detail', game: Game): void;
+}>();
 
-  const expanded = ref(false);
+const expanded = ref(false);
 
-  const toggleExpand = () => {
-    expanded.value = !expanded.value;
-  };
+const toggleExpand = () => {
+  expanded.value = !expanded.value;
+};
 
-  const effectiveGame = computed(() => props.detail || props.game);
+// ===== 基础数据（优先使用详情，详情未加载时回退到列表数据） =====
+// 注意：原始 LCU Game 的 participants 是未转换数据（stats 嵌套、item0-6 等），
+// 必须经 toBasicInfo / toParticipants 转成 MatchBasicInfo / MatchParticipant
+const basic = computed(() => toBasicInfo(props.detail ?? props.game));
+const participants = computed(() => toParticipants(props.detail ?? props.game, basic.value));
+const participant = computed(
+  () =>
+    participants.value.find((p) => p.puuid === props.puuid) ??
+    participants.value[0] ??
+    null
+);
 
-  const basic = computed(() => toBasicInfo(effectiveGame.value));
-  const participants = computed(() => toParticipants(effectiveGame.value, basic.value));
-  const participant = computed(() => participants.value.find((p) => p.puuid === props.puuid));
+const result = computed(() => participant.value?.winResult ?? 'abort');
+const resultClass = computed(() => {
+  switch (result.value) {
+    case 'win':
+      return 'is-win';
+    case 'loss':
+      return 'is-loss';
+    default:
+      return 'is-abnormal';
+  }
+});
+const resultText = computed(() => {
+  switch (result.value) {
+    case 'win':
+      return '胜利';
+    case 'loss':
+      return '失败';
+    case 'remake':
+      return '重开';
+    default:
+      return '异常';
+  }
+});
 
-  const result = computed(() => participant.value?.winResult ?? 'loss');
-  const resultText = computed(() => {
-    switch (result.value) {
-      case 'win':
-        return '胜利';
-      case 'loss':
-        return '失败';
-      case 'remake':
-        return '重开';
-      case 'abort':
-        return '取消';
-      default:
-        return '-';
-    }
-  });
+// ===== 英雄 =====
+const championId = computed(() => participant.value?.championId ?? 0);
+const championName = computed(() => getChampionName(championId.value, props.championMap));
+const championAlias = computed(() => getChampionAlias(championId.value, props.championMap));
+const championIcon = computed(
+  () => championAlias.value && getChampionSquareIcon(championAlias.value)
+);
 
-  const championId = computed(
-    () => participant.value?.championId ?? effectiveGame.value.participants[0]?.championId ?? 0
-  );
-  const championName = computed(() => getChampionName(championId.value, props.championMap));
-  const championAlias = computed(() => getChampionAlias(championId.value, props.championMap));
-  const championIcon = computed(
-    () => championAlias.value && getChampionSquareIcon(championAlias.value)
-  );
-  const queueName = computed(() => getQueueName(basic.value.queueId));
+// ===== 模式 / 地图（LCU queues.json / maps.json，静态表兜底） =====
+const queueMap = ref<Map<number, string>>(new Map());
+const mapMap = ref<Map<number, string>>(new Map());
+const queueName = computed(() => getQueueName(basic.value.queueId, queueMap.value));
+const mapName = computed(() => getMapName(basic.value.mapId, mapMap.value));
 
-  const participantItems = computed(() => participant.value?.items ?? []);
+// ===== 装备 =====
+const participantItems = computed(() => participant.value?.items ?? []);
 
-  const kda = computed(() => participant.value?.kda ?? 0);
-  const csPerMinute = computed(() =>
-    basic.value.gameDuration > 0 ? (participant.value?.cs ?? 0) / (basic.value.gameDuration / 60) : 0
-  );
+// ===== KDA =====
+const kda = computed(() => participant.value?.kda ?? 0);
+const kdaRatioText = computed(() => {
+  if (summary.value) {
+    const kp = summary.value.summary.killParticipation ?? 0;
+    return `${toFixed(kda.value)} (${toFixed(kp * 100)}%)`;
+  }
+  return toFixed(kda.value);
+});
 
-  /** 团队占比/Akari 评分需要完整对局数据（详情），未加载时返回 null */
-  const summary = computed(() =>
-    props.detail ? analyzeGame(props.detail, props.puuid) : null
-  );
-  const akariTotal = computed(() => summary.value?.akariScore.total ?? null);
-  const akariText = computed(() =>
-    summary.value ? toFixed(akariTotal.value ?? 0) : '—'
-  );
+// ===== 伤害 =====
+const damageText = computed(() =>
+  participant.value
+    ? `${(participant.value.totalDamageDealtToChampions ?? 0).toLocaleString()} 伤害`
+    : ''
+);
 
-  /** 占比文本：有详情显示百分比，否则显示占位符 */
-  const shareText = (v: number | null | undefined): string => {
-    if (v === null || v === undefined) {
-      return '—';
-    }
-    return `${toFixed(v * 100)}%`;
-  };
+/** 汇总分析（需要完整对局数据-详情，未加载时为 null） */
+const summary = computed(() => (props.detail ? analyzeGame(props.detail, props.puuid) : null));
+const akariTotal = computed(() => summary.value?.akariScore.total ?? null);
+const akariText = computed(() => (summary.value ? toFixed(akariTotal.value ?? 0) : '—'));
 
-  const tags = computed(() => {
-    if (!props.detail || !participant.value) {
-      return [];
-    }
+const csPerMinute = computed(() =>
+  basic.value.gameDuration > 0
+    ? (participant.value?.cs ?? 0) / (basic.value.gameDuration / 60)
+    : 0
+);
+
+/** 占比文本：有详情显示百分比，否则显示占位符 */
+const shareText = (v: number | null | undefined): string => {
+  if (v === null || v === undefined) {
+    return '—';
+  }
+  return `${toFixed(v * 100)}%`;
+};
+
+// ===== 徽章 =====
+const badges = computed(() => {
+  if (!participant.value) {
+    return [];
+  }
+  if (props.detail) {
     return computeMatchTags(participant.value, participants.value);
-  });
+  }
+  // 详情未加载时仅显示多杀徽章（列表数据即可计算）
+  return computeMultikillTags(participant.value);
+});
 
-  const augments = computed(() => {
-    const list = participant.value?.augments ?? [];
-    return list.filter((id) => id && id !== 0);
-  });
+// ===== 底部信息行 =====
+const metaText = computed(() =>
+  [
+    queueName.value,
+    formatDurationClock(basic.value.gameDuration),
+    formatRelativeTime(basic.value.gameCreation),
+    mapName.value
+  ]
+    .filter(Boolean)
+    .join(' · ')
+);
 
-  // ===== 海克斯强化 =====
-  const augmentMap = ref<Map<number, KiwiAugment>>(new Map());
-  // ===== 装备信息 =====
-  const itemMap = ref<Map<number, ItemInfo>>(new Map());
+// ===== 展开总览 =====
+const overviewRows = computed(() => {
+  const p = participant.value;
+  const s = summary.value?.summary;
+  if (!p) {
+    return [];
+  }
+  return [
+    { label: '结果', value: resultText.value },
+    { label: '英雄', value: championName.value },
+    { label: 'KDA', value: `${p.kills} / ${p.deaths} / ${p.assists}` },
+    { label: '参团率', value: s ? shareText(s.killParticipation) : '—' },
+    { label: '伤害', value: (p.totalDamageDealtToChampions ?? 0).toLocaleString() },
+    { label: '伤害占比', value: s ? shareText(s.championDamagePercentageOfTeam) : '—' },
+    { label: '承伤', value: (p.totalDamageTaken ?? 0).toLocaleString() },
+    { label: '承伤占比', value: s ? shareText(s.championDamageTakenPercentageOfTeam) : '—' },
+    { label: '经济', value: (p.goldEarned ?? 0).toLocaleString() },
+    { label: '经济占比', value: s ? shareText(s.goldPercentageOfTeam) : '—' },
+    { label: '补刀', value: `${p.cs}（${toFixed(csPerMinute.value)}/min）` },
+    { label: '伤转率', value: s ? toFixed(s.damageGoldEfficiency) : '—' },
+    { label: '控制时长', value: `${(p.timeCCingOthers ?? 0).toFixed(1)}s` },
+    { label: '视野得分', value: toFixed(p.visionScore ?? 0) },
+    { label: 'Akari 评分', value: akariText.value }
+  ];
+});
 
-  onMounted(async () => {
-    augmentMap.value = await loadKiwiAugments();
-    itemMap.value = await loadItemMap();
-  });
+const augments = computed(() => {
+  const list = participant.value?.augments ?? [];
+  return list.filter((id) => id && id !== 0);
+});
 
-  const getAugmentIcon = (id: number): string => {
-    return getKiwiAugment(id, augmentMap.value)?.icon || '';
-  };
+// ===== 海克斯强化 =====
+const augmentMap = ref<Map<number, KiwiAugment>>(new Map());
+// ===== 装备信息 =====
+const itemMap = ref<Map<number, ItemInfo>>(new Map());
 
-  const augmentName = (id: number): string => {
-    return getKiwiAugment(id, augmentMap.value)?.nameCn || `海克斯强化 #${id}`;
-  };
+onMounted(async () => {
+  const [a, i, q, m] = await Promise.all([
+    loadKiwiAugments(),
+    loadItemMap(),
+    loadQueueNames(),
+    loadMapNames()
+  ]);
+  augmentMap.value = a;
+  itemMap.value = i;
+  queueMap.value = q;
+  mapMap.value = m;
+});
 
-  const augmentLevelClass = (id: number): string => {
-    const level = getKiwiAugment(id, augmentMap.value)?.level;
-    switch (level) {
-      case 'kPrismatic':
-        return 'level-prismatic';
-      case 'kGold':
-        return 'level-gold';
-      case 'kSilver':
-        return 'level-silver';
-      default:
-        return '';
-    }
-  };
+const getAugmentIcon = (id: number): string => {
+  return getKiwiAugment(id, augmentMap.value)?.icon || '';
+};
 
-  const getAugmentDesc = (id: number): string => {
-    return getKiwiAugment(id, augmentMap.value)?.desc || '';
-  };
+const augmentName = (id: number): string => {
+  return getKiwiAugment(id, augmentMap.value)?.nameCn || `海克斯强化 #${id}`;
+};
 
-  const getItemInfoOf = (itemId: number): ItemInfo | undefined => {
-    return getItemInfo(itemId, itemMap.value);
-  };
+const getAugmentDesc = (id: number): string => {
+  return getKiwiAugment(id, augmentMap.value)?.desc || '';
+};
 
-  const itemName = (itemId: number): string => {
-    return getItemInfoOf(itemId)?.name || `装备 ${itemId}`;
-  };
-
-  const itemPrice = (itemId: number): string => {
-    const info = getItemInfoOf(itemId);
-    if (!info) {
+const formatRarity = (id: number): string => {
+  const level = getKiwiAugment(id, augmentMap.value)?.level;
+  switch (level) {
+    case 'kPrismatic':
+      return '棱彩';
+    case 'kGold':
+      return '金色';
+    case 'kSilver':
+      return '银色';
+    case 'kBronze':
+      return '青铜';
+    default:
       return '';
-    }
-    const { goldTotal, goldBase } = info;
-    return goldBase > 0 && goldBase !== goldTotal
-      ? `${goldTotal} G（合成价 ${goldBase} G）`
-      : `${goldTotal} G`;
-  };
+  }
+};
 
-  const itemFromNames = (itemId: number): string[] => {
-    const info = getItemInfoOf(itemId);
-    if (!info) {
-      return [];
-    }
-    return info.from.map((id) => getItemInfoOf(id)?.name || `#${id}`);
-  };
+// ===== 装备工具 =====
+const getItemInfoOf = (itemId: number): ItemInfo | undefined => {
+  return getItemInfo(itemId, itemMap.value);
+};
 
-  /** 装备描述（保留 HTML 标签与换行，直接用 v-html 渲染） */
-  const itemDescHtml = (itemId: number): string => {
-    const info = getItemInfoOf(itemId);
-    if (!info) {
-      return '';
-    }
-    return info.description || info.plaintext || '';
-  };
+const itemName = (itemId: number): string => {
+  return getItemInfoOf(itemId)?.name || `装备 ${itemId}`;
+};
 
-  const formatRarity = (id: number): string => {
-    const level = getKiwiAugment(id, augmentMap.value)?.level;
-    switch (level) {
-      case 'kPrismatic':
-        return '棱彩';
-      case 'kGold':
-        return '金色';
-      case 'kSilver':
-        return '银色';
-      case 'kBronze':
-        return '青铜';
-      default:
-        return '';
-    }
-  };
+const itemPrice = (itemId: number): string => {
+  const info = getItemInfoOf(itemId);
+  if (!info) {
+    return '';
+  }
+  const { goldTotal, goldBase } = info;
+  return goldBase > 0 && goldBase !== goldTotal
+    ? `${goldTotal} G (合成 ${goldBase} G)`
+    : `${goldTotal} G`;
+};
 
-  const rarityClass = (id: number): string => {
-    const level = getKiwiAugment(id, augmentMap.value)?.level;
-    switch (level) {
-      case 'kPrismatic':
-        return 'rarity-prismatic';
-      case 'kGold':
-        return 'rarity-gold';
-      case 'kSilver':
-        return 'rarity-silver';
-      case 'kBronze':
-        return 'rarity-bronze';
-      default:
-        return '';
-    }
-  };
+const itemFromNames = (itemId: number): string[] => {
+  const info = getItemInfoOf(itemId);
+  if (!info) {
+    return [];
+  }
+  return info.from.map((id) => getItemInfoOf(id)?.name || `#${id}`);
+};
+
+/** 装备属性行（plaintext，如 "110 法术强度 15 法术穿透"） */
+const itemStatsText = (itemId: number): string => {
+  return getItemInfoOf(itemId)?.plaintext || '';
+};
+
+/** 装备被动/效果描述（保留 HTML 标签与换行，直接用 v-html 渲染） */
+const itemDescHtml = (itemId: number): string => {
+  const info = getItemInfoOf(itemId);
+  if (!info) {
+    return '';
+  }
+  return info.description || '';
+};
 </script>
 
 <style scoped lang="less">
   .mh-item-wrap {
     border-radius: 8px;
     overflow: hidden;
+    background: #1b1f2a;
   }
 
   .mh-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 14px;
-    border-radius: 8px;
-    background: #1f2430;
+    gap: 14px;
+    padding: 10px 14px;
+    background: #1b1f2a;
     border-left: 4px solid #4a5568;
     cursor: pointer;
     transition: background 0.2s;
 
     &:hover {
-      background: #2a3140;
+      background: #232938;
     }
 
     &.is-win {
-      border-left-color: #38a169;
+      border-left-color: #3b82f6;
     }
     &.is-loss {
-      border-left-color: #e53e3e;
+      border-left-color: #ef4444;
     }
     &.is-abnormal {
-      border-left-color: #718096;
+      border-left-color: #6b7280;
     }
     &.is-expanded {
-      border-radius: 8px 8px 0 0;
-      background: #2a3140;
+      background: #232938;
     }
   }
 
-  .mh-col {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-
-  .mh-index {
-    width: 24px;
-    color: #8b93a5;
-    font-size: 12px;
-    flex-shrink: 0;
-  }
-
+  // ===== 英雄头像 =====
   .mh-champion {
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    width: 140px;
     flex-shrink: 0;
 
     .champion-icon {
-      width: 44px;
-      height: 44px;
+      width: 52px;
+      height: 52px;
       border-radius: 8px;
+      border: 2px solid #4a5568;
       object-fit: cover;
-      background: #2d3342;
+      display: block;
     }
-    .champion-meta {
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+
+    .is-win & .champion-icon {
+      border-color: #3b82f6;
     }
-    .champion-name {
-      color: #e5e7eb;
-      font-size: 13px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 88px;
+    .is-loss & .champion-icon {
+      border-color: #ef4444;
     }
-    .champion-role {
-      color: #8b93a5;
-      font-size: 11px;
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 88px;
+    .is-abnormal & .champion-icon {
+      border-color: #6b7280;
     }
   }
 
-  .mh-result {
-    width: 56px;
-    flex-shrink: 0;
-
-    .result-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #fff;
-
-      &.win {
-        background: rgba(56, 161, 105, 0.85);
-      }
-      &.loss {
-        background: rgba(229, 62, 62, 0.85);
-      }
-      &.remake,
-      &.abort {
-        background: rgba(113, 128, 150, 0.85);
-      }
-    }
-  }
-
-  .mh-kda {
-    width: 92px;
-    flex-shrink: 0;
-
-    .kda-num {
-      color: #e5e7eb;
-      font-size: 15px;
-      font-weight: 700;
-
-      &.strong {
-        color: #48bb78;
-      }
-    }
-    .kda-detail {
-      color: #8b93a5;
-      font-size: 12px;
-      margin-top: 2px;
-    }
-  }
-
-  .mh-stats {
-    width: 82px;
-    flex-shrink: 0;
-
-    .stat-row {
-      color: #e5e7eb;
-      font-size: 12px;
-
-      &.sub {
-        color: #8b93a5;
-        margin-top: 2px;
-        font-size: 11px;
-      }
-    }
-  }
-
+  // ===== 装备（单行不换行） =====
   .mh-items {
-    flex-direction: row;
+    display: flex;
     gap: 4px;
-    flex: 1;
-    min-width: 150px;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
 
     .item-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 5px;
+      object-fit: cover;
+      display: block;
+      transition: box-shadow 0.15s;
+
+      &:hover {
+        box-shadow: 0 0 0 2px rgba(247, 201, 106, 0.85);
+      }
+    }
+
+    .item-slot {
+      width: 28px;
+      height: 28px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  }
+
+  // ===== 海克斯强化（列表内，无需详情） =====
+  .mh-augments {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+
+    .augment-icon {
       width: 26px;
       height: 26px;
-      border-radius: 4px;
-      background: #2d3342;
+      border-radius: 5px;
       object-fit: cover;
+      display: block;
+      background: #10131c;
     }
   }
 
-  .mh-akari {
-    width: 48px;
-    flex-shrink: 0;
+  .item-tooltip {
+    max-width: 280px;
 
-    .akari-score {
-      color: #e5e7eb;
-      font-size: 14px;
+    .item-tooltip-name {
       font-weight: 700;
-
-      &.good {
-        color: #48bb78;
-      }
+      color: #f7c96a;
+      margin-bottom: 4px;
     }
-  }
-
-  .mh-time {
-    width: 96px;
-    flex-shrink: 0;
-
-    .stat-row {
-      color: #e5e7eb;
+    .item-tooltip-price {
+      color: #c9b37a;
       font-size: 12px;
-
-      &.sub {
-        color: #8b93a5;
-        margin-top: 2px;
-        font-size: 11px;
-      }
+      margin-bottom: 6px;
+    }
+    .item-tooltip-from {
+      color: #94a3b8;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .item-tooltip-stats {
+      color: #e2e8f0;
+      font-size: 12px;
+      line-height: 1.6;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+    }
+    .item-tooltip-desc {
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.6;
     }
   }
 
-  .mh-actions {
-    width: 76px;
+  // ===== KDA =====
+  .mh-kda {
     flex-shrink: 0;
-    flex-direction: row;
+    min-width: 84px;
+
+    .kda-main {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+    .kda-sub {
+      font-size: 12px;
+      color: #8b93a5;
+      white-space: nowrap;
+    }
+  }
+
+  // ===== 伤害 =====
+  .mh-damage {
+    flex-shrink: 0;
+    min-width: 96px;
+
+    .dmg-share {
+      font-size: 18px;
+      font-weight: 700;
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+    .dmg-value {
+      font-size: 12px;
+      color: #8b93a5;
+      white-space: nowrap;
+    }
+  }
+
+  // ===== 评级徽章（第二行） =====
+  .mh-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 18px 8px 18px;
+    border-left: 4px solid #4a5568;
+
+    &.is-win {
+      border-left-color: #3b82f6;
+    }
+    &.is-loss {
+      border-left-color: #ef4444;
+    }
+    &.is-abnormal {
+      border-left-color: #6b7280;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: nowrap;
+      cursor: default;
+    }
+
+    .badge-rose {
+      color: #fda4af;
+      background: rgba(244, 63, 94, 0.16);
+      border: 1px solid rgba(244, 63, 94, 0.35);
+    }
+    .badge-red {
+      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.16);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+    .badge-slate {
+      color: #cbd5e1;
+      background: rgba(100, 116, 139, 0.2);
+      border: 1px solid rgba(100, 116, 139, 0.4);
+    }
+    .badge-emerald {
+      color: #6ee7b7;
+      background: rgba(16, 185, 129, 0.16);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .badge-stone {
+      color: #d6d3d1;
+      background: rgba(120, 113, 108, 0.2);
+      border: 1px solid rgba(120, 113, 108, 0.4);
+    }
+    .badge-gold {
+      color: #fde047;
+      background: rgba(234, 179, 8, 0.16);
+      border: 1px solid rgba(234, 179, 8, 0.35);
+    }
+    .badge-violet {
+      color: #c4b5fd;
+      background: rgba(139, 92, 246, 0.16);
+      border: 1px solid rgba(139, 92, 246, 0.35);
+    }
+    .badge-cyan {
+      color: #67e8f9;
+      background: rgba(6, 182, 212, 0.16);
+      border: 1px solid rgba(6, 182, 212, 0.35);
+    }
+    .badge-orange {
+      color: #fdba74;
+      background: rgba(249, 115, 22, 0.16);
+      border: 1px solid rgba(249, 115, 22, 0.35);
+    }
+    .badge-fuchsia {
+      color: #f0abfc;
+      background: rgba(217, 70, 239, 0.16);
+      border: 1px solid rgba(217, 70, 239, 0.35);
+    }
+    .badge-lime {
+      color: #bef264;
+      background: rgba(132, 204, 22, 0.16);
+      border: 1px solid rgba(132, 204, 22, 0.35);
+    }
+  }
+
+  // ===== 操作 =====
+  .mh-actions {
+    display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
+    margin-left: auto;
 
     .expand-arrow {
       color: #8b93a5;
@@ -628,303 +685,91 @@
     }
 
     .detail-btn {
-      padding: 2px 8px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.06);
+      color: #cbd5e1;
       font-size: 12px;
-      color: #d8c99b;
-      background: #27313b;
-      border: 1px solid #33404d;
-      border-radius: 4px;
       cursor: pointer;
+      transition: background 0.2s;
 
       &:hover {
-        border-color: #6d9f43;
-        color: #6d9f43;
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
       }
     }
   }
 
-  /* ===== 评级标签行 ===== */
-  .mh-tags-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    background: #1f2430;
-    border-radius: 0 0 8px 8px;
-    padding: 4px 14px 8px;
+  // ===== 底部信息行 =====
+  .mh-meta {
+    padding: 6px 18px 8px 18px;
+    font-size: 12px;
+    color: #8b93a5;
+    border-left: 4px solid #4a5568;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 
-    .player-tag {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 12px;
+    &.is-win {
+      border-left-color: #3b82f6;
+    }
+    &.is-loss {
+      border-left-color: #ef4444;
+    }
+    &.is-abnormal {
+      border-left-color: #6b7280;
+    }
+  }
+
+  // ===== 展开总览 =====
+  .mh-expand {
+    padding: 12px 14px;
+    background: #161a24;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px 16px;
+
+    .overview-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+
+      .ov-label {
+        color: #8b93a5;
+      }
+      .ov-value {
+        color: #e2e8f0;
+        font-weight: 500;
+        text-align: right;
+      }
+    }
+  }
+
+  .augment-tooltip {
+    max-width: 280px;
+
+    .augment-tooltip-name {
       font-weight: 600;
       color: #fff;
-      cursor: default;
+      margin-bottom: 4px;
 
-      &.tag-rose {
-        background: rgba(190, 18, 60, 0.9);
-      }
-      &.tag-red {
-        background: rgba(185, 28, 28, 0.9);
-      }
-      &.tag-slate {
-        background: rgba(51, 65, 85, 0.95);
-      }
-      &.tag-emerald {
-        background: rgba(4, 120, 87, 0.9);
-      }
-      &.tag-stone {
-        background: rgba(68, 64, 60, 0.95);
-      }
-      &.tag-gold {
-        background: rgba(180, 140, 30, 0.9);
-      }
-      &.tag-violet {
-        background: rgba(109, 40, 217, 0.9);
-      }
-      &.tag-cyan {
-        background: rgba(14, 116, 144, 0.9);
-      }
-      &.tag-orange {
-        background: rgba(194, 65, 12, 0.9);
-      }
-      &.tag-fuchsia {
-        background: rgba(162, 28, 175, 0.9);
-      }
-      &.tag-lime {
-        background: rgba(63, 98, 18, 0.95);
-      }
-    }
-  }
-
-  /* ===== 展开区域 ===== */
-  .mh-expand {
-    background: #1b212c;
-    border-radius: 0 0 8px 8px;
-    padding: 12px 16px;
-
-    .expand-section + .expand-section {
-      margin-top: 12px;
-    }
-
-    .section-title {
-      color: #8b93a5;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .tag-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-
-      .player-tag {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: 600;
-        color: #fff;
-        cursor: default;
-
-        &.tag-rose {
-          background: rgba(190, 18, 60, 0.9);
-        }
-        &.tag-red {
-          background: rgba(185, 28, 28, 0.9);
-        }
-        &.tag-slate {
-          background: rgba(51, 65, 85, 0.95);
-        }
-        &.tag-emerald {
-          background: rgba(4, 120, 87, 0.9);
-        }
-        &.tag-stone {
-          background: rgba(68, 64, 60, 0.95);
-        }
-        &.tag-gold {
-          background: rgba(180, 140, 30, 0.9);
-        }
-      }
-
-      .tag-empty {
-        color: #6b7485;
-        font-size: 12px;
-      }
-    }
-
-    .overview-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-
-      .ov-item {
-        background: #232a37;
-        border-radius: 6px;
-        padding: 8px 10px;
-
-        .ov-label {
-          color: #8b93a5;
-          font-size: 11px;
-        }
-        .ov-value {
-          color: #e5e7eb;
-          font-size: 15px;
-          font-weight: 700;
-          margin-top: 2px;
-
-          &.multikill {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-
-            .mk {
-              font-size: 11px;
-              padding: 1px 5px;
-              border-radius: 3px;
-              font-weight: 600;
-              color: #fff;
-
-              &.mk-penta {
-                background: rgba(159, 122, 234, 0.9);
-              }
-              &.mk-quadra {
-                background: rgba(217, 119, 6, 0.9);
-              }
-              &.mk-triple {
-                background: rgba(220, 38, 38, 0.9);
-              }
-              &.mk-double {
-                background: rgba(147, 51, 234, 0.85);
-              }
-            }
-
-            .mk-none {
-              color: #6b7485;
-              font-size: 12px;
-            }
-          }
-        }
-        .ov-sub {
-          color: #6b7485;
-          font-size: 11px;
-          margin-top: 2px;
-        }
-      }
-    }
-
-    .augment-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-
-      .augment-item {
-        display: inline-flex;
-      }
-
-      .augment-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 6px;
-        border: 2px solid rgba(148, 163, 184, 0.6);
-        object-fit: cover;
-        background: #2d3342;
-        cursor: default;
-
-        &.level-prismatic {
-          border-color: #c084fc;
-          box-shadow: 0 0 6px rgba(192, 132, 252, 0.5);
-        }
-        &.level-gold {
-          border-color: #f59e0b;
-        }
-        &.level-silver {
-          border-color: #94a3b8;
-        }
-      }
-
-      .augment-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        color: #fcd34d;
-        background: rgba(245, 158, 11, 0.15);
-        border: 1px solid rgba(245, 158, 11, 0.4);
-        cursor: default;
-      }
-    }
-
-    .augment-tooltip {
-      .augment-tooltip-name {
-        font-weight: 600;
-        margin-bottom: 4px;
-      }
-      .augment-tooltip-rarity {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 4px;
-        font-size: 12px;
-      }
-      .rarity-indicator {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #94a3b8;
-
-        &.rarity-prismatic {
-          background: #c084fc;
-        }
-        &.rarity-gold {
-          background: #f59e0b;
-        }
-        &.rarity-silver {
-          background: #94a3b8;
-        }
-        &.rarity-bronze {
-          background: #d97706;
-        }
-      }
-      .augment-tooltip-desc {
-        font-size: 12px;
-        opacity: 0.85;
-        max-width: 260px;
-        white-space: pre-line;
-      }
-    }
-
-    .item-tooltip {
-      max-width: 280px;
-      .item-tooltip-name {
-        font-weight: 600;
-      }
-      .item-tooltip-id {
-        opacity: 0.6;
+      .augment-rarity {
         font-weight: 400;
-        margin-left: 2px;
-      }
-      .item-tooltip-price {
         font-size: 12px;
-        color: #fcd34d;
-        margin: 4px 0;
+        color: #94a3b8;
+        margin-left: 6px;
       }
-      .item-tooltip-from {
-        font-size: 12px;
-        opacity: 0.85;
-        margin-bottom: 4px;
-      }
-      .item-tooltip-desc {
-        font-size: 12px;
-        opacity: 0.8;
-        white-space: pre-line;
-      }
+    }
+    .augment-tooltip-desc {
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.5;
     }
   }
 </style>
