@@ -36,6 +36,7 @@ import { lcuConnector } from '../http/lcuConnector';
 import { loadSkinData, loadSkinDataByFile, setConfigData, unpackWadFile } from './load-skin-data';
 
 export * from '../http';
+export * from './locale-watcher';
 const idName = {};
 const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
 const defaultSkinSuffix = 'leagueSkins';

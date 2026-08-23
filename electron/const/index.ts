@@ -25,6 +25,12 @@ export const defaultModToolsPath = path.join(temp_dir, 'mod-tools\\mod-tools.exe
 export const defaultInstalledPath = path.join(temp_dir, 'installed');
 export const defaultScreenshotPath = path.join(app.getPath('pictures'), 'lolskinsupport');
 export const SKIN_IMAGE_KEY = 'SKIN_IMAGE';
+/** 语言自动修复：Riot 配置文件路径 */
+export const LOCALE_WATCHER_FILE = 'LOCALE_WATCHER_FILE';
+/** 语言自动修复：目标语言 */
+export const LOCALE_WATCHER_LOCALE = 'LOCALE_WATCHER_LOCALE';
+/** 语言自动修复：是否启用 */
+export const LOCALE_WATCHER_ENABLED = 'LOCALE_WATCHER_ENABLED';
 export let IS_USE_COMMAND = false;
 export const setUseCommand = (flag: boolean) => {
   IS_USE_COMMAND = flag;

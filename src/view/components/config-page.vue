@@ -85,6 +85,45 @@
         </a-button>
       </a-space>
       <br /><br />
+      <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px">
+        <h3 style="margin: 0 0 8px">语言自动修复</h3>
+        <div style="font-size: 12px; color: #999; margin-bottom: 8px">
+          监听 Riot 语言配置文件，游戏更新恢复默认语言时自动改回所选语言。
+        </div>
+        启用监听：
+        <a-switch
+          v-model:checked="localeWatcherEnabled"
+          @change="handleLocaleWatcherToggle"
+        ></a-switch>
+        <span v-if="localeWatcherState?.enabled" style="color: #52c41a; margin-left: 8px">
+          监听中
+        </span>
+        <span
+          v-if="localeWatcherState?.currentLocale && localeWatcherState?.currentLocale !== localeWatcherLocale"
+          style="color: #faad14; margin-left: 8px"
+        >
+          当前文件语言：{{ localeWatcherState.currentLocale }}
+        </span>
+        <br /><br />
+        目标语言：
+        <a-select
+          v-model:value="localeWatcherLocale"
+          style="width: 220px"
+          :options="localeOptions"
+          :disabled="!localeWatcherEnabled"
+          @change="handleLocaleChange"
+        ></a-select>
+        <br /><br />
+        配置文件：{{ localeWatcherFile || '（未设置）' }}
+        <a-space>
+          <a-button size="small" @click="handleDetectLocaleConfig">自动检测</a-button>
+          <a-button size="small" @click="handleChooseLocaleConfig">手动选择</a-button>
+          <a-button v-if="localeWatcherFile" size="small" @click="f_openPath(localeWatcherFile)">
+            打开所在目录
+          </a-button>
+        </a-space>
+      </div>
+      <br /><br />
       lcuState：{{ lcuState }}<span m-l-4 m-r-4>isUseCommand:</span>
       <a-switch v-model:checked="isUseCommand" @change="f_setIsUseCommand($event)"></a-switch>
       <br /><br />
@@ -147,9 +186,12 @@
     f_checkCanAutoConfirm,
     f_clearSkinImage,
     f_confirmChoseSkin,
+    f_detectLocaleConfigFile,
     f_emptyPah,
     f_getAllLoadSkins,
     f_getGamePath,
+    f_getLocaleCodes,
+    f_getLocaleWatcherState,
     f_getSkinImage,
     f_importLeagueSkinsPackage,
     f_loadSkinDataByFilePath,
@@ -164,6 +206,8 @@
     f_setConfig,
     f_setIsUseCommand,
     f_shoutDownModTools,
+    f_startLocaleWatcher,
+    f_stopLocaleWatcher,
     f_winGetData,
   } from '@/utils/business';
   import { showFrontendConfirm } from '@/utils/kit-utils';
@@ -269,12 +313,84 @@
       logDrawOpen.value = true;
     });
   };
+  // ===================== 语言自动修复 =====================
+  const localeWatcherState = ref<any>(null);
+  const localeWatcherEnabled = ref(false);
+  const localeWatcherLocale = ref('zh_CN');
+  const localeWatcherFile = ref('');
+  const localeOptions = ref<{ label: string; value: string }[]>([]);
+
+  const refreshLocaleWatcher = async () => {
+    localeWatcherState.value = await f_getLocaleWatcherState();
+    localeWatcherEnabled.value = !!localeWatcherState.value?.enabled;
+    localeWatcherLocale.value = localeWatcherState.value?.locale || 'zh_CN';
+    localeWatcherFile.value = localeWatcherState.value?.file || '';
+  };
+  const handleLocaleWatcherToggle = async (checked: boolean) => {
+    try {
+      if (checked) {
+        await f_startLocaleWatcher({
+          filePath: localeWatcherFile.value || undefined,
+          locale: localeWatcherLocale.value,
+        });
+        message.success('已开始语言自动修复');
+      } else {
+        await f_stopLocaleWatcher();
+        message.success('已停止语言自动修复');
+      }
+    } finally {
+      await refreshLocaleWatcher();
+    }
+  };
+  const handleLocaleChange = async (locale: string) => {
+    if (localeWatcherEnabled.value) {
+      await f_startLocaleWatcher({
+        filePath: localeWatcherFile.value || undefined,
+        locale,
+      });
+      message.success('语言设置已更新');
+    }
+    await refreshLocaleWatcher();
+  };
+  const handleDetectLocaleConfig = async () => {
+    const files = await f_detectLocaleConfigFile();
+    if (!files || files.length === 0) {
+      message.warning('未检测到英雄联盟语言配置文件');
+      return;
+    }
+    localeWatcherFile.value = files[0];
+    await f_startLocaleWatcher({
+      filePath: files[0],
+      locale: localeWatcherLocale.value,
+    });
+    await refreshLocaleWatcher();
+    message.success(`已自动检测到配置文件并开始监听`);
+  };
+  const handleChooseLocaleConfig = async () => {
+    const path = await f_selectPathOrFile('openFile', localeWatcherFile.value);
+    if (!path) {
+      return;
+    }
+    localeWatcherFile.value = path;
+    await f_startLocaleWatcher({
+      filePath: path,
+      locale: localeWatcherLocale.value,
+    });
+    await refreshLocaleWatcher();
+    message.success('配置文件设置成功');
+  };
   watchEffect(() => {
     if (drawerOpen.value) {
       getAllChoseSkin();
+      refreshLocaleWatcher();
     }
   });
-  onMounted(() => {
+  onMounted(async () => {
+    localeOptions.value = Object.entries(await f_getLocaleCodes()).map(([value, label]) => ({
+      label,
+      value,
+    }));
+    await refreshLocaleWatcher();
     document.addEventListener('keydown', function (event) {
       if (event.ctrlKey && event.key === 'w') {
         drawerOpen.value = !drawerOpen.value;

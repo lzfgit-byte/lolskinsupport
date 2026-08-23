@@ -226,3 +226,30 @@ export const f_unpackWadFileTo = async (fullWadPath) => {
 export const f_setIsUseCommand = async (isUseCommand: boolean) => {
   return executeFunction('setIsUseCommand', isUseCommand);
 };
+/**
+ * 语言自动修复（迁移自 LOLauncher）
+ */
+/** export const getLocaleCodes = () => {} */
+export const f_getLocaleCodes = async (): Promise<Record<string, string>> => {
+  return executeFunction('getLocaleCodes');
+};
+/** export const detectLocaleConfigFile = () => {} */
+export const f_detectLocaleConfigFile = async (): Promise<string[]> => {
+  return executeFunction('detectLocaleConfigFile');
+};
+/** export const readLocaleConfigFile = (filePath: string) => {} */
+export const f_readLocaleConfigFile = async (filePath: string) => {
+  return executeFunction('readLocaleConfigFile', filePath);
+};
+/** export const getLocaleWatcherState = () => {} */
+export const f_getLocaleWatcherState = async (): Promise<any> => {
+  return executeFunction('getLocaleWatcherState');
+};
+/** export const startLocaleWatcher = (opts?: { filePath?: string; locale?: string }) => {} */
+export const f_startLocaleWatcher = async (opts?: { filePath?: string; locale?: string }) => {
+  return executeFunction('startLocaleWatcher', opts);
+};
+/** export const stopLocaleWatcher = () => {} */
+export const f_stopLocaleWatcher = async () => {
+  return executeFunction('stopLocaleWatcher');
+};

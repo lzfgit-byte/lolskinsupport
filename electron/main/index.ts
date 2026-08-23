@@ -11,6 +11,7 @@ import { initLcu } from '../http/connect-league-legends';
 import { lcuConnector } from '../http/lcuConnector';
 import { gameflowMonitor } from '../http/gameflowMonitor';
 import useHtmlGetWin from '../http/use-html-get-win';
+import { initLocaleWatcher, stopLocaleWatcher } from '../export/locale-watcher';
 // 启动服务
 let win: BrowserWindow | null = null;
 const url = process.env.VITE_DEV_SERVER_URL;
@@ -32,6 +33,8 @@ async function createWindow() {
   useGlobalShortcut(win);
   useGlobalMessage(win);
   initLcu(win);
+  // 若上次启用了语言监听，启动时自动恢复
+  initLocaleWatcher();
   // useHtmlGetWin(win);
   if (process.env.VITE_DEV_SERVER_URL) {
     await win.loadURL(url);
@@ -43,6 +46,7 @@ async function createWindow() {
     execFuncOnClose.forEach((func) => {
       func && func();
     });
+    stopLocaleWatcher();
     lcuConnector?.disconnect();
     gameflowMonitor?.stop();
   });
