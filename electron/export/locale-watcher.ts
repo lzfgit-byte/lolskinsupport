@@ -283,8 +283,11 @@ const stopWatcher = () => {
  * 启动语言监听
  * @param opts.filePath 配置文件路径（不传则自动检测）
  * @param opts.locale   目标语言代码（不传则读取配置，默认 zh_CN）
+ * @param opts.silent   静默模式：应用启动时自动启用，失败时不弹错误框，仅写日志
  */
-export const startLocaleWatcher = (opts: { filePath?: string; locale?: string } = {}) => {
+export const startLocaleWatcher = (
+  opts: { filePath?: string; locale?: string; silent?: boolean } = {}
+) => {
   const config = readConfig();
   let filePath = opts.filePath || config[LOCALE_WATCHER_FILE] || '';
   const locale = opts.locale || config[LOCALE_WATCHER_LOCALE] || DEFAULT_LOCALE;
@@ -293,15 +296,24 @@ export const startLocaleWatcher = (opts: { filePath?: string; locale?: string } 
     const detected = detectLocaleConfigFile();
     filePath = detected[0] || '';
     if (!filePath) {
-      MessageUtil.error(
-        '未找到英雄联盟语言配置文件，请手动指定 league_of_legends.[live|pbe].product_settings.yaml 路径'
-      );
+      const msg =
+        '未找到英雄联盟语言配置文件，请手动指定 league_of_legends.[live|pbe].product_settings.yaml 路径';
+      if (opts.silent) {
+        LogMsgUtil.sendLogMsg(`[LocaleWatcher] ${msg}`);
+      } else {
+        MessageUtil.error(msg);
+      }
       return getLocaleWatcherState();
     }
   }
 
   if (!existsSync(filePath)) {
-    MessageUtil.error(`配置文件不存在: ${filePath}`);
+    const msg = `配置文件不存在: ${filePath}`;
+    if (opts.silent) {
+      LogMsgUtil.sendLogMsg(`[LocaleWatcher] ${msg}`);
+    } else {
+      MessageUtil.error(msg);
+    }
     return getLocaleWatcherState();
   }
 
@@ -345,12 +357,14 @@ export const stopLocaleWatcher = () => {
   return getLocaleWatcherState();
 };
 
-/** 应用启动时调用：若之前启用了语言监听，则自动恢复监听 */
+/**
+ * 应用启动时调用：自动启用语言监听（打开软件即自动监听）
+ */
 export const initLocaleWatcher = (): boolean => {
-  const config = readConfig();
-  if (config[LOCALE_WATCHER_ENABLED] === 'true') {
-    startLocaleWatcher();
-    return true;
+  const state = startLocaleWatcher({ silent: true });
+  if (!state.enabled) {
+    LogMsgUtil.sendLogMsg('[LocaleWatcher] 启动时未能启用监听，可稍后在设置中手动启用');
+    return false;
   }
-  return false;
+  return true;
 };

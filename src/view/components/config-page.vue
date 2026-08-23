@@ -12,156 +12,179 @@
     <div h-85vh overflow-auto w-full m-t-4 p-t-2>
       <h1>设置信息</h1>
 
-      皮肤存储路径：
-      {{ skinPath }}
-      <a-space>
-        <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
-        <!--          <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button> -->
-        <a-button size="small" @click="setConfigPath(SKIN_PATH, skinPath)">设置文件地址</a-button>
-        <a-button
-          size="small"
-          type="primary"
-          :loading="importLeagueSkinsLoading"
-          @click="handleImportLeagueSkinsPackage"
-        >
-          上传皮肤压缩包
-        </a-button>
-      </a-space>
-      <br /><br />
-      皮肤目录名称：
-      <a-space>
-        <a-input v-model:value="skinDefaultSuffix" size="small" style="width: 180px" />
-        <a-button size="small" @click="setSkinDefaultSuffix">设置目录名称</a-button>
-      </a-space>
-      <br /><br />
-      截图保存路径：{{ screenshotPath }}
-      <a-space>
-        <a-button size="small" @click="f_openPath(screenshotPath)">打开文件路径</a-button>
-        <a-button size="small" @click="setScreenshotPath">设置文件地址</a-button>
-      </a-space>
-      <br /><br />
-      游戏路径：{{ gamePath }}
-      <a-space>
-        <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
-        <a-button size="small" @click="setConfigPath(GAME_PATH, gamePath)">设置文件地址</a-button>
-      </a-space>
-      <br /><br />
-      installedPath路径：{{ installedPath }}
-      <a-space>
-        <a-button size="small" @click="f_openPath(installedPath)">打开文件路径</a-button>
-        <a-button size="small" danger @click="f_removePath(installedPath)">删除文件路径</a-button>
-        <a-button size="small" @click="setConfigPath(INSTALLED_PATH, installedPath)">
-          设置文件地址
-        </a-button>
-      </a-space>
-      <br /><br />
-      overlay路径：{{ overlayPath }}
-      <a-space>
-        <a-button size="small" @click="f_openPath(overlayPath)">打开文件路径</a-button>
-        <a-button size="small" danger @click="f_removePath(overlayPath)">删除文件路径</a-button>
-        <a-button size="small" @click="setConfigPath(OVERLAY_PATH, overlayPath)">
-          设置文件地址
-        </a-button>
-      </a-space>
-      <br /><br />
-      overlayConfig路径：{{ overlayConfigPath }}
-      <a-space>
-        <a-button size="small" @click="f_openPath(overlayConfigPath)">打开文件路径</a-button>
-        <!--          <a-button size="small" @click="f_removePath(overlayConfigPath)">删除文件路径</a-button> -->
-        <a-button size="small" @click="setConfigPath(OVERLAY_CONFIG_PATH, overlayConfigPath)">
-          设置文件地址
-        </a-button>
-      </a-space>
-      <br /><br />
-      toolsPath路径：{{ toolsPath }}
-      <a-space>
-        <a-button size="small" @click="f_openPath(toolsPath)">打开文进路径</a-button>
-        <!--          <a-button size="small" @click="f_removePath(toolsPath)">删除文件路径</a-button> -->
-        <a-button size="small" @click="setConfigFilePath(MOD_TOOLS_PATH, toolsPath)">
-          设置文件地址
-        </a-button>
-        <a-button size="small" @click="f_openUrl('https://github.com/LeagueToolkit/cslol-manager')">
-          打开url地址
-        </a-button>
-      </a-space>
-      <br /><br />
-      <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px">
-        <h3 style="margin: 0 0 8px">语言自动修复</h3>
-        <div style="font-size: 12px; color: #999; margin-bottom: 8px">
-          监听 Riot 语言配置文件，游戏更新恢复默认语言时自动改回所选语言。
-        </div>
-        启用监听：
-        <a-switch
-          v-model:checked="localeWatcherEnabled"
-          @change="handleLocaleWatcherToggle"
-        ></a-switch>
-        <span v-if="localeWatcherState?.enabled" style="color: #52c41a; margin-left: 8px">
-          监听中
-        </span>
-        <span
-          v-if="localeWatcherState?.currentLocale && localeWatcherState?.currentLocale !== localeWatcherLocale"
-          style="color: #faad14; margin-left: 8px"
-        >
-          当前文件语言：{{ localeWatcherState.currentLocale }}
-        </span>
-        <br /><br />
-        目标语言：
-        <a-select
-          v-model:value="localeWatcherLocale"
-          style="width: 220px"
-          :options="localeOptions"
-          :disabled="!localeWatcherEnabled"
-          @change="handleLocaleChange"
-        ></a-select>
-        <br /><br />
-        配置文件：{{ localeWatcherFile || '（未设置）' }}
-        <a-space>
-          <a-button size="small" @click="handleDetectLocaleConfig">自动检测</a-button>
-          <a-button size="small" @click="handleChooseLocaleConfig">手动选择</a-button>
-          <a-button v-if="localeWatcherFile" size="small" @click="f_openPath(localeWatcherFile)">
-            打开所在目录
-          </a-button>
-        </a-space>
-      </div>
-      <br /><br />
-      lcuState：{{ lcuState }}<span m-l-4 m-r-4>isUseCommand:</span>
-      <a-switch v-model:checked="isUseCommand" @change="f_setIsUseCommand($event)"></a-switch>
-      <br /><br />
-      <a-space>
-        <span>线程数：</span>
-        <a-input-number v-model:value="chuckValue" size="small" :min="1" :max="100" />
-        <a-button size="small" danger @click="handleLoadAllSkinData()">创建所有皮肤数据</a-button>
-      </a-space>
-      <br /><br />
-      <a-space>
-        <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
-        <a-button size="small" danger @click="f_shoutDownModTools()">
-          杀掉modTools[{{ modToolsState }}]
-        </a-button>
-        <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
-        <a-button size="small" @click="testNotify">测试通知</a-button>
-        <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
-      </a-space>
-      <br />
-      <transition-group
-        enter-active-class="animate__animated animate__fadeIn"
-        leave-active-class="animate__animated animate__fadeOut"
-        :duration="200"
-      >
-        <div
-          v-for="item in skinImages"
-          :key="item.skinId"
-          style="margin: 10px; display: inline-block"
-        >
-          <a-image width="200px" :src="item.src">
-            <template #previewMask>
-              <a-button size="small" @click="deleteSkinCache(item.heroId, item.skinId)">
-                清理
+      <a-tabs v-model:active-key="activeTab">
+        <a-tab-pane key="basic" tab="基础设置">
+          皮肤存储路径：
+          {{ skinPath }}
+          <a-space>
+            <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
+            <!--          <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button> -->
+            <a-button size="small" @click="setConfigPath(SKIN_PATH, skinPath)"
+              >设置文件地址</a-button
+            >
+            <a-button
+              size="small"
+              type="primary"
+              :loading="importLeagueSkinsLoading"
+              @click="handleImportLeagueSkinsPackage"
+            >
+              上传皮肤压缩包
+            </a-button>
+          </a-space>
+          <br /><br />
+          皮肤目录名称：
+          <a-space>
+            <a-input v-model:value="skinDefaultSuffix" size="small" style="width: 180px" />
+            <a-button size="small" @click="setSkinDefaultSuffix">设置目录名称</a-button>
+          </a-space>
+          <br /><br />
+          截图保存路径：{{ screenshotPath }}
+          <a-space>
+            <a-button size="small" @click="f_openPath(screenshotPath)">打开文件路径</a-button>
+            <a-button size="small" @click="setScreenshotPath">设置文件地址</a-button>
+          </a-space>
+          <br /><br />
+          游戏路径：{{ gamePath }}
+          <a-space>
+            <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
+            <a-button size="small" @click="setConfigPath(GAME_PATH, gamePath)"
+              >设置文件地址</a-button
+            >
+          </a-space>
+          <br /><br />
+          installedPath路径：{{ installedPath }}
+          <a-space>
+            <a-button size="small" @click="f_openPath(installedPath)">打开文件路径</a-button>
+            <a-button size="small" danger @click="f_removePath(installedPath)"
+              >删除文件路径</a-button
+            >
+            <a-button size="small" @click="setConfigPath(INSTALLED_PATH, installedPath)">
+              设置文件地址
+            </a-button>
+          </a-space>
+          <br /><br />
+          overlay路径：{{ overlayPath }}
+          <a-space>
+            <a-button size="small" @click="f_openPath(overlayPath)">打开文件路径</a-button>
+            <a-button size="small" danger @click="f_removePath(overlayPath)">删除文件路径</a-button>
+            <a-button size="small" @click="setConfigPath(OVERLAY_PATH, overlayPath)">
+              设置文件地址
+            </a-button>
+          </a-space>
+          <br /><br />
+          overlayConfig路径：{{ overlayConfigPath }}
+          <a-space>
+            <a-button size="small" @click="f_openPath(overlayConfigPath)">打开文件路径</a-button>
+            <!--          <a-button size="small" @click="f_removePath(overlayConfigPath)">删除文件路径</a-button> -->
+            <a-button size="small" @click="setConfigPath(OVERLAY_CONFIG_PATH, overlayConfigPath)">
+              设置文件地址
+            </a-button>
+          </a-space>
+          <br /><br />
+          toolsPath路径：{{ toolsPath }}
+          <a-space>
+            <a-button size="small" @click="f_openPath(toolsPath)">打开文进路径</a-button>
+            <!--          <a-button size="small" @click="f_removePath(toolsPath)">删除文件路径</a-button> -->
+            <a-button size="small" @click="setConfigFilePath(MOD_TOOLS_PATH, toolsPath)">
+              设置文件地址
+            </a-button>
+            <a-button
+              size="small"
+              @click="f_openUrl('https://github.com/LeagueToolkit/cslol-manager')"
+            >
+              打开url地址
+            </a-button>
+          </a-space>
+          <br /><br />
+          lcuState：{{ lcuState }}<span m-l-4 m-r-4>isUseCommand:</span>
+          <a-switch v-model:checked="isUseCommand" @change="f_setIsUseCommand($event)"></a-switch>
+          <br /><br />
+          <a-space>
+            <span>线程数：</span>
+            <a-input-number v-model:value="chuckValue" size="small" :min="1" :max="100" />
+            <a-button size="small" danger @click="handleLoadAllSkinData()"
+              >创建所有皮肤数据</a-button
+            >
+          </a-space>
+          <br /><br />
+          <a-space>
+            <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
+            <a-button size="small" danger @click="f_shoutDownModTools()">
+              杀掉modTools[{{ modToolsState }}]
+            </a-button>
+            <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
+            <a-button size="small" @click="testNotify">测试通知</a-button>
+            <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
+          </a-space>
+          <br />
+          <transition-group
+            enter-active-class="animate__animated animate__fadeIn"
+            leave-active-class="animate__animated animate__fadeOut"
+            :duration="200"
+          >
+            <div
+              v-for="item in skinImages"
+              :key="item.skinId"
+              style="margin: 10px; display: inline-block"
+            >
+              <a-image width="200px" :src="item.src">
+                <template #previewMask>
+                  <a-button size="small" @click="deleteSkinCache(item.heroId, item.skinId)">
+                    清理
+                  </a-button>
+                </template>
+              </a-image>
+            </div>
+          </transition-group>
+        </a-tab-pane>
+        <a-tab-pane key="locale" tab="语言自动修复">
+          <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px">
+            <h3 style="margin: 0 0 8px">语言自动修复</h3>
+            <div style="font-size: 12px; color: #999; margin-bottom: 8px">
+              监听 Riot 语言配置文件，游戏更新恢复默认语言时自动改回所选语言。
+            </div>
+            启用监听：
+            <a-switch
+              v-model:checked="localeWatcherEnabled"
+              @change="handleLocaleWatcherToggle"
+            ></a-switch>
+            <span v-if="localeWatcherState?.enabled" style="color: #52c41a; margin-left: 8px">
+              监听中
+            </span>
+            <span
+              v-if="
+                localeWatcherState?.currentLocale &&
+                localeWatcherState?.currentLocale !== localeWatcherLocale
+              "
+              style="color: #faad14; margin-left: 8px"
+            >
+              当前文件语言：{{ localeWatcherState.currentLocale }}
+            </span>
+            <br /><br />
+            目标语言：
+            <a-select
+              v-model:value="localeWatcherLocale"
+              style="width: 220px"
+              :options="localeOptions"
+              :disabled="!localeWatcherEnabled"
+              @change="handleLocaleChange"
+            ></a-select>
+            <br /><br />
+            配置文件：{{ localeWatcherFile || '（未设置）' }}
+            <a-space>
+              <a-button size="small" @click="handleDetectLocaleConfig">自动检测</a-button>
+              <a-button size="small" @click="handleChooseLocaleConfig">手动选择</a-button>
+              <a-button
+                v-if="localeWatcherFile"
+                size="small"
+                @click="f_openPath(localeWatcherFile)"
+              >
+                打开所在目录
               </a-button>
-            </template>
-          </a-image>
-        </div>
-      </transition-group>
+            </a-space>
+          </div>
+        </a-tab-pane>
+      </a-tabs>
     </div>
   </a-drawer>
 </template>
@@ -232,6 +255,7 @@
   } = useGlobalState();
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const importLeagueSkinsLoading = ref(false);
+  const activeTab = ref('basic');
   const testSlideWin = () => {
     f_checkCanAutoConfirm({
       title: '提示',

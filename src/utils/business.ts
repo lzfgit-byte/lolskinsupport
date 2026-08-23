@@ -253,3 +253,22 @@ export const f_startLocaleWatcher = async (opts?: { filePath?: string; locale?: 
 export const f_stopLocaleWatcher = async () => {
   return executeFunction('stopLocaleWatcher');
 };
+/**
+ * 英雄联盟启动（迁移自 LOLauncher）
+ */
+/** export const findRiotClients = () => {} */
+export const f_findRiotClients = async (): Promise<string[]> => {
+  return executeFunction('findRiotClients');
+};
+/** export const launchLeagueOfLegends = () => {} */
+export const f_launchLeagueOfLegends = async (): Promise<{
+  ok: boolean;
+  msg: string;
+  candidates: string[];
+}> => {
+  return executeFunction('launchLeagueOfLegends');
+};
+/** export const launchLeagueOfLegendsAt = async (clientPath: string) => {} */
+export const f_launchLeagueOfLegendsAt = async (clientPath: string) => {
+  return executeFunction('launchLeagueOfLegendsAt', clientPath);
+};

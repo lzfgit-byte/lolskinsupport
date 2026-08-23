@@ -33,7 +33,7 @@ async function createWindow() {
   useGlobalShortcut(win);
   useGlobalMessage(win);
   initLcu(win);
-  // 若上次启用了语言监听，启动时自动恢复
+  // 打开软件即自动启用语言监听
   initLocaleWatcher();
   // useHtmlGetWin(win);
   if (process.env.VITE_DEV_SERVER_URL) {

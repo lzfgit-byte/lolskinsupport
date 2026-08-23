@@ -44,9 +44,35 @@
     </aside>
   </div>
   <FloatButtonGroup :handle-draw-open="handleDrawOpen"></FloatButtonGroup>
+
+  <!-- 启动英雄联盟 -->
+  <div class="launch-game-bar">
+    <button class="launch-game-btn" :disabled="launching" @click="handleLaunchGame">
+      <span class="launch-icon">▶</span>
+      <span>{{ launching ? '启动中...' : '英雄联盟，启动！' }}</span>
+    </button>
+  </div>
+
+  <!-- 多游戏路径选择 -->
+  <a-modal
+    v-model:open="clientModalOpen"
+    title="选择游戏启动路径"
+    ok-text="启动"
+    cancel-text="取消"
+    :confirm-loading="launching"
+    @ok="confirmClientChoose"
+  >
+    <a-radio-group
+      v-model:value="selectedClient"
+      style="display: flex; flex-direction: column; gap: 8px"
+    >
+      <a-radio v-for="c in clientCandidates" :key="c" :value="c">{{ c }}</a-radio>
+    </a-radio-group>
+  </a-modal>
 </template>
 <script setup lang="ts">
   import { computed, onMounted, ref, watchEffect } from 'vue';
+  import { message } from 'ant-design-vue';
   import HeroCard from '@/view/lolskin/hero-card.vue';
   import DoLolskinChoseSkin from '@/view/components/do-lolskin-chose-skin.vue';
   import FloatButtonGroup from '@/view/components/float-button-group.vue';
@@ -54,9 +80,57 @@
   import bus from '@/utils/bus';
   import http from '@/utils/http';
   import type { mainHeroInfo } from '@/type/type';
-  import { f_setIdName } from '@/utils/business';
+  import { f_launchLeagueOfLegends, f_launchLeagueOfLegendsAt, f_setIdName } from '@/utils/business';
 
   const { heroId, heros, heroAlias, heroIdAliasMap } = useGlobalState();
+
+  // ===================== 启动英雄联盟 =====================
+  const launching = ref(false);
+  const clientModalOpen = ref(false);
+  const clientCandidates = ref<string[]>([]);
+  const selectedClient = ref('');
+
+  const handleLaunchGame = async () => {
+    if (launching.value) {
+      return;
+    }
+    launching.value = true;
+    try {
+      const res = await f_launchLeagueOfLegends();
+      if (!res?.ok) {
+        if (res?.candidates && res.candidates.length > 1) {
+          clientCandidates.value = res.candidates;
+          selectedClient.value = res.candidates[0];
+          clientModalOpen.value = true;
+        } else if (res?.msg) {
+          message.warning(res.msg);
+        }
+        return;
+      }
+      if (res.candidates?.length === 1) {
+        await f_launchLeagueOfLegendsAt(res.candidates[0]);
+      }
+    } catch (e) {
+      message.error(`启动失败: ${e}`);
+    } finally {
+      launching.value = false;
+    }
+  };
+
+  const confirmClientChoose = async () => {
+    if (!selectedClient.value) {
+      return;
+    }
+    clientModalOpen.value = false;
+    launching.value = true;
+    try {
+      await f_launchLeagueOfLegendsAt(selectedClient.value);
+    } catch (e) {
+      message.error(`启动失败: ${e}`);
+    } finally {
+      launching.value = false;
+    }
+  };
 
   // 英雄列表数据
   const mainIMg = ref<mainHeroInfo[]>([]);
@@ -370,5 +444,49 @@
       min-width: 80px;
       text-align: center;
     }
+  }
+
+  /* 启动英雄联盟 */
+  .launch-game-bar {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 998;
+  }
+
+  .launch-game-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 34px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #010a13;
+    background: linear-gradient(135deg, #c8aa6e 0%, #f0e6d2 50%, #c8aa6e 100%);
+    border: 1px solid #927934;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    transition: all 0.25s ease;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(200, 170, 110, 0.35);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  .launch-icon {
+    display: inline-flex;
+    font-size: 14px;
   }
 </style>

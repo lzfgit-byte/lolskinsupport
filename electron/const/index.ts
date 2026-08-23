@@ -31,6 +31,8 @@ export const LOCALE_WATCHER_FILE = 'LOCALE_WATCHER_FILE';
 export const LOCALE_WATCHER_LOCALE = 'LOCALE_WATCHER_LOCALE';
 /** 语言自动修复：是否启用 */
 export const LOCALE_WATCHER_ENABLED = 'LOCALE_WATCHER_ENABLED';
+/** 启动游戏：Riot 客户端路径（RiotClientServices.exe） */
+export const RIOT_CLIENT_PATH = 'RIOT_CLIENT_PATH';
 export let IS_USE_COMMAND = false;
 export const setUseCommand = (flag: boolean) => {
   IS_USE_COMMAND = flag;

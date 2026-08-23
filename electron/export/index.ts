@@ -37,6 +37,7 @@ import { loadSkinData, loadSkinDataByFile, setConfigData, unpackWadFile } from '
 
 export * from '../http';
 export * from './locale-watcher';
+export * from './launch-game';
 const idName = {};
 const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
 const defaultSkinSuffix = 'leagueSkins';
