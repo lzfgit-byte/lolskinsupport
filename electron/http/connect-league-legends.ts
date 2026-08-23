@@ -15,16 +15,28 @@ export const getLockfile = () => {
   const [name, pid, port, password, protocol] = content.split(':');
   return { port, password, protocol, username: 'riot', address: '127.0.0.1' };
 };
+
+/** 安全发送消息：窗口已销毁时静默忽略，避免 "Object has been destroyed" 报错 */
+const safeSend = (win: BrowserWindow, channel: string, ...args: any[]) => {
+  try {
+    if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+      win.webContents.send(channel, ...args);
+    }
+  } catch {
+    // webContents 可能已销毁，忽略即可
+  }
+};
+
 export const initLcu = async (win: BrowserWindow) => {
   lcuConnector.startAutoConnect();
   await gameflowMonitor.start();
   gameflowMonitor.on('champion-selected', (args) => {
-    win?.webContents?.send('champion-selected', args?.championId);
+    safeSend(win, 'champion-selected', args?.championId);
   });
   gameflowMonitor.on('phase-changed', (phase, previousPhase) => {});
   setInterval(() => {
-    win?.webContents?.send('notify-lcu-connect', lcuConnector.isConnected());
-    win?.webContents?.send('notify-mod-tools-connect', modToolsWrapper.isRunning());
-    win?.webContents?.send('notify-state', { IS_USE_COMMAND });
+    safeSend(win, 'notify-lcu-connect', lcuConnector.isConnected());
+    safeSend(win, 'notify-mod-tools-connect', modToolsWrapper.isRunning());
+    safeSend(win, 'notify-state', { IS_USE_COMMAND });
   }, 1000);
 };

@@ -4,6 +4,27 @@ import type { MessageInfo } from '@ghs/types';
 import { eventEmitter, getCurrentDate } from './KitUtil';
 
 let win: BrowserWindow;
+
+/** 判断窗口及 webContents 是否仍可用（未被销毁） */
+const isWinAlive = (): boolean => {
+  try {
+    return !!win && !win.isDestroyed() && !!win.webContents && !win.webContents.isDestroyed();
+  } catch {
+    return false;
+  }
+};
+
+/** 安全发送消息：窗口已销毁等异常时静默忽略，避免 "Object has been destroyed" 报错 */
+const safeSend = (channel: string, msg: MessageInfo) => {
+  try {
+    if (isWinAlive()) {
+      win.webContents.send(channel, msg);
+    }
+  } catch {
+    // webContents 可能已销毁，忽略即可
+  }
+};
+
 /**
  * 发送及时的消息
  */
@@ -25,7 +46,7 @@ export class MessageUtil {
   }
 
   private static sendMsg(msg: MessageInfo) {
-    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_MESSAGE, msg);
+    safeSend(MESSAGE_EVENT_KEY.SEND_MESSAGE, msg);
   }
 }
 
@@ -35,7 +56,7 @@ export class MessageUtil {
 export class StepMessageUtil {
   static key: 'step_msg_key';
   private static sendMsg(msg: MessageInfo) {
-    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_STEP_MESSAGE, {
+    safeSend(MESSAGE_EVENT_KEY.SEND_STEP_MESSAGE, {
       ...msg,
       key: StepMessageUtil.key,
     });
@@ -55,7 +76,7 @@ export class StepMessageUtil {
  */
 export class NotifyMsgUtil {
   private static sendMsg(msg: MessageInfo) {
-    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_NOTIFY_MESSAGE, msg);
+    safeSend(MESSAGE_EVENT_KEY.SEND_NOTIFY_MESSAGE, msg);
   }
 
   static sendNotifyMsg(title: string, msg: string, key: string) {
@@ -72,7 +93,7 @@ export class NotifyMsgUtil {
  */
 export class LogMsgUtil {
   private static sendMsg(msg: MessageInfo) {
-    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_LOG_MESSAGE, msg);
+    safeSend(MESSAGE_EVENT_KEY.SEND_LOG_MESSAGE, msg);
   }
 
   static sendLogMsg(...msg: string[]) {
@@ -89,7 +110,7 @@ export class LogMsgUtil {
  */
 export class ProgressMsgUtil {
   private static sendMsg(msg: MessageInfo) {
-    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_PROCESS_MESSAGE, msg);
+    safeSend(MESSAGE_EVENT_KEY.SEND_PROCESS_MESSAGE, msg);
   }
 
   static sendProgressMsg(msg: MessageInfo) {
@@ -110,7 +131,7 @@ export class ProgressMsgUtil {
  */
 export class ConsoleLogUtil {
   private static sendMsg(msg: MessageInfo) {
-    win?.webContents?.send(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, msg);
+    safeSend(MESSAGE_EVENT_KEY.SEND_CONSOLE_LOG, msg);
   }
 
   static sendLogMsg(...msg: string[]) {

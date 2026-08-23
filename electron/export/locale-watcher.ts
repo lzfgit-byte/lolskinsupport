@@ -74,6 +74,8 @@ let selectedLocale = DEFAULT_LOCALE;
 let watchedFile = '';
 // 防止 chokidar 连续触发导致重复写入
 let updateTimer: NodeJS.Timeout | null = null;
+// 兜底：定期检查一次语言，防止漏掉文件事件
+let checkTimer: NodeJS.Timeout | null = null;
 
 // ===================== 配置读写（本地实现，避免循环依赖） =====================
 const readConfig = (): Record<string, any> => {
@@ -249,6 +251,15 @@ export const getLocaleWatcherState = () => {
 };
 
 // ===================== 监听逻辑 =====================
+/** 规范化路径（Windows 下忽略大小写、统一分隔符），用于事件路径比对 */
+const normalizeFilePath = (filePath: string): string => {
+  try {
+    return path.normalize(filePath).toLowerCase();
+  } catch {
+    return String(filePath).toLowerCase();
+  }
+};
+
 /** 文件被修改后，若语言不一致则自动修复 */
 const onFileChanged = (filePath: string) => {
   if (updateTimer) {
@@ -272,6 +283,10 @@ const stopWatcher = () => {
   if (updateTimer) {
     clearTimeout(updateTimer);
     updateTimer = null;
+  }
+  if (checkTimer) {
+    clearInterval(checkTimer);
+    checkTimer = null;
   }
   if (watcher) {
     watcher.close().catch(() => {});
@@ -329,17 +344,38 @@ export const startLocaleWatcher = (
   // 启动前先应用一次目标语言
   updateLocaleSettings(filePath, selectedLocale);
 
-  // 监听文件（文件不存在/被替换时 chokidar 也会通过 add 事件捕获）
-  watcher = watch(filePath, {
+  // 监听配置文件所在目录（而非直接监听文件）。
+  // 原因：通过 Riot 客户端 --launch-product 启动时，客户端会用“临时文件+原子替换”重写该 YAML，
+  // 直接监听文件会导致 chokidar 丢失对替换后新文件的监听（语言监听失效）。监听目录可捕获
+  // change/add/unlink 等所有事件，文件被删除重建/替换也不会丢失。
+  const watchDir = path.dirname(filePath);
+  const isTargetFile = (changedPath: string) =>
+    normalizeFilePath(changedPath) === normalizeFilePath(filePath);
+  watcher = watch(watchDir, {
     persistent: true,
     ignoreInitial: true,
+    depth: 1,
     awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
   });
-  watcher.on('change', () => onFileChanged(filePath));
-  watcher.on('add', () => onFileChanged(filePath));
+  watcher.on('change', (changedPath) => {
+    if (isTargetFile(changedPath)) onFileChanged(filePath);
+  });
+  watcher.on('add', (changedPath) => {
+    if (isTargetFile(changedPath)) onFileChanged(filePath);
+  });
+  watcher.on('unlink', (changedPath) => {
+    if (isTargetFile(changedPath)) onFileChanged(filePath);
+  });
   watcher.on('error', (error) => {
     LogMsgUtil.sendLogMsg(`[LocaleWatcher] 监听错误: ${error}`);
   });
+
+  // 兜底：每 30 秒检查一次语言，即使漏掉文件事件也能自动修复
+  checkTimer = setInterval(() => {
+    if (watchedFile) {
+      onFileChanged(watchedFile);
+    }
+  }, 30000);
 
   LogMsgUtil.sendLogMsg(
     `[LocaleWatcher] 已开始监听 ${watchedFile}，目标语言: ${

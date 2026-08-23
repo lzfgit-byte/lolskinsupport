@@ -272,3 +272,7 @@ export const f_launchLeagueOfLegends = async (): Promise<{
 export const f_launchLeagueOfLegendsAt = async (clientPath: string) => {
   return executeFunction('launchLeagueOfLegendsAt', clientPath);
 };
+/** export const isGameRunning = async () => {} */
+export const f_isGameRunning = async (): Promise<boolean> => {
+  return executeFunction('isGameRunning');
+};

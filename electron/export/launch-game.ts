@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import yaml from 'js-yaml';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { RIOT_CLIENT_PATH, configPath } from '../const';
@@ -114,4 +114,29 @@ export const launchLeagueOfLegendsAt = async (
     MessageUtil.error(msg);
     return { ok: false, msg };
   }
+};
+
+/**
+ * 判断英雄联盟游戏进程是否正在运行（已启动）
+ * 通过 tasklist 检查 League of Legends.exe 进程
+ */
+export const isGameRunning = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    try {
+      execFile(
+        'tasklist',
+        ['/FI', 'ImageName eq League of Legends.exe', '/FO', 'CSV', '/NH'],
+        (error, stdout) => {
+          if (error) {
+            // tasklist 找不到匹配进程时也可能返回非 0，此时视为未运行
+            resolve(false);
+            return;
+          }
+          resolve(stdout.toLowerCase().includes('league of legends.exe'));
+        }
+      );
+    } catch {
+      resolve(false);
+    }
+  });
 };

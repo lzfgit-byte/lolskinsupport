@@ -45,8 +45,8 @@
   </div>
   <FloatButtonGroup :handle-draw-open="handleDrawOpen"></FloatButtonGroup>
 
-  <!-- 启动英雄联盟 -->
-  <div class="launch-game-bar">
+  <!-- 启动英雄联盟（游戏已启动时隐藏） -->
+  <div v-if="!gameRunning" class="launch-game-bar">
     <button class="launch-game-btn" :disabled="launching" @click="handleLaunchGame">
       <span class="launch-icon">▶</span>
       <span>{{ launching ? '启动中...' : '英雄联盟，启动！' }}</span>
@@ -71,7 +71,7 @@
   </a-modal>
 </template>
 <script setup lang="ts">
-  import { computed, onMounted, ref, watchEffect } from 'vue';
+  import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue';
   import { message } from 'ant-design-vue';
   import HeroCard from '@/view/lolskin/hero-card.vue';
   import DoLolskinChoseSkin from '@/view/components/do-lolskin-chose-skin.vue';
@@ -80,15 +80,31 @@
   import bus from '@/utils/bus';
   import http from '@/utils/http';
   import type { mainHeroInfo } from '@/type/type';
-  import { f_launchLeagueOfLegends, f_launchLeagueOfLegendsAt, f_setIdName } from '@/utils/business';
+  import {
+    f_isGameRunning,
+    f_launchLeagueOfLegends,
+    f_launchLeagueOfLegendsAt,
+    f_setIdName,
+  } from '@/utils/business';
 
   const { heroId, heros, heroAlias, heroIdAliasMap } = useGlobalState();
 
   // ===================== 启动英雄联盟 =====================
   const launching = ref(false);
+  const gameRunning = ref(false);
   const clientModalOpen = ref(false);
   const clientCandidates = ref<string[]>([]);
   const selectedClient = ref('');
+  let gameCheckTimer: number | null = null;
+
+  // 定时检测游戏是否已启动，已启动则隐藏“英雄联盟，启动！”按钮
+  const checkGameRunning = async () => {
+    try {
+      gameRunning.value = !!(await f_isGameRunning());
+    } catch {
+      // 检测失败时保持现状
+    }
+  };
 
   const handleLaunchGame = async () => {
     if (launching.value) {
@@ -200,6 +216,17 @@
         )
       );
     });
+    // 启动时检测一次游戏是否已运行
+    checkGameRunning();
+    // 每 3 秒检测一次，游戏启动后隐藏“英雄联盟，启动！”按钮
+    gameCheckTimer = window.setInterval(checkGameRunning, 3000);
+  });
+
+  onUnmounted(() => {
+    if (gameCheckTimer !== null) {
+      window.clearInterval(gameCheckTimer);
+      gameCheckTimer = null;
+    }
   });
 
   const handleDrawOpen = () => {
