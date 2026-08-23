@@ -1,6 +1,11 @@
 <template>
   <div class="skin-page">
-    <button class="mh-entry-btn" @click="router.push('/match-history')" title="战绩查询">
+    <button
+      v-if="!heroId"
+      class="mh-entry-btn"
+      title="战绩查询"
+      @click="router.push('/match-history')"
+    >
       🏆 战绩查询
     </button>
     <main class="skin-panel">
@@ -16,7 +21,9 @@
       <div class="search-body">
         <div class="search-input-wrapper">
           <input v-model="searchValue" placeholder="输入英雄名字..." class="search-input" />
-          <button v-if="searchValue" class="clear-btn" @click="searchValue = ''" title="清空">✕</button>
+          <button v-if="searchValue" class="clear-btn" title="清空" @click="searchValue = ''">
+            ✕
+          </button>
         </div>
       </div>
     </div>
@@ -49,7 +56,7 @@
   <FloatButtonGroup :handle-draw-open="handleDrawOpen"></FloatButtonGroup>
 
   <!-- 启动英雄联盟（游戏已启动时隐藏） -->
-  <div v-if="!gameRunning" class="launch-game-bar">
+  <div v-if="!gameRunning && !heroId" class="launch-game-bar">
     <button class="launch-game-btn" :disabled="launching" @click="handleLaunchGame">
       <span class="launch-icon">▶</span>
       <span>{{ launching ? '启动中...' : '英雄联盟，启动！' }}</span>
