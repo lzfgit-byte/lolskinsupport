@@ -184,6 +184,20 @@ export class LCUConnector extends EventEmitter {
     }
   }
 
+  /** 请求二进制资源（如图片），返回 ArrayBuffer；未连接时抛错 */
+  async requestArrayBuffer(method: string, endpoint: string): Promise<ArrayBuffer> {
+    if (!this.axiosInstance) {
+      throw new Error('Not connected to LCU');
+    }
+
+    const response = await this.axiosInstance.request({
+      method,
+      url: endpoint,
+      responseType: 'arraybuffer',
+    });
+    return response.data as ArrayBuffer;
+  }
+
   async getGameflowPhase(): Promise<string> {
     try {
       const phase = await this.request('GET', '/lol-gameflow/v1/gameflow-phase');

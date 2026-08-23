@@ -2,7 +2,7 @@
   <div class="mh-page">
     <!-- 顶部栏 -->
     <div class="mh-header">
-      <a-button class="back-btn" @click="router.push('/')">← 返回</a-button>
+      <a-button class="back-btn" @click="goBack">← 返回</a-button>
       <span class="mh-title">战绩查询</span>
 
       <div class="search-box">
@@ -42,7 +42,11 @@
       <!-- 召唤师卡片 + 汇总面板 -->
       <div class="mh-summary">
         <div class="player-card">
-          <img class="player-icon" :src="getProfileIcon(summoner.profileIconId)" loading="lazy" />
+          <img
+            class="player-icon"
+            :src="profileIconSrc || getProfileIcon(summoner.profileIconId)"
+            loading="lazy"
+          />
           <div class="player-info">
             <div class="player-name">{{ summoner.displayName || summoner.gameName || summoner.internalName }}</div>
             <div class="player-meta">等级 {{ summoner.summonerLevel }}</div>
@@ -79,6 +83,18 @@
           <div class="stat-block">
             <div class="stat-label">分均补刀</div>
             <div class="stat-value">{{ toFixed(analysis.summary.avgCsPerMinute) }}</div>
+          </div>
+          <div class="stat-block">
+            <div class="stat-label">平均伤害占比</div>
+            <div class="stat-value">{{ toFixed(analysis.summary.avgChampionDamagePercentageOfTeam * 100) }}%</div>
+          </div>
+          <div class="stat-block">
+            <div class="stat-label">平均承伤占比</div>
+            <div class="stat-value">{{ toFixed(analysis.summary.avgDamageTakenPercentageOfTeam * 100) }}%</div>
+          </div>
+          <div class="stat-block">
+            <div class="stat-label">平均经济占比</div>
+            <div class="stat-value">{{ toFixed(analysis.summary.avgGoldPercentageOfTeam * 100) }}%</div>
           </div>
           <div class="stat-block">
             <div class="stat-label">平均视野</div>
@@ -149,7 +165,7 @@
 <script setup lang="ts">
   import { computed, onMounted, ref, watch } from 'vue';
   import { message } from 'ant-design-vue';
-  import { useRouter } from 'vue-router';
+  import router from '@/router/router';
   import useGlobalState from '@/hooks/use-global-state';
   import { analyzeGames } from '@/utils/match-history/analysis';
   import { toBasicInfo, toParticipants } from '@/utils/match-history/adapter';
@@ -157,6 +173,7 @@
   import {
     loadChampionMap,
     getProfileIcon,
+    getProfileIconSrc,
     type ChampionMeta
   } from '@/utils/match-history/images';
   import {
@@ -169,8 +186,20 @@
   import MatchHistoryItem from './components/match-history-item.vue';
   import GameDetailModal from './components/game-detail-modal.vue';
 
-  const router = useRouter();
   const { lcuState } = useGlobalState();
+
+  const goBack = () => {
+    // hash 路由兜底：直接改 hash 一定会触发路由跳转，避免任何异常导致返回失效
+    try {
+      window.location.hash = '#/';
+    } catch {
+      router.push('/').catch(() => {
+        // 忽略导航失败
+      });
+    }
+  };
+
+  const profileIconSrc = ref('');
 
   const lcuConnected = computed(() => lcuState.value);
   const championMap = ref<Map<number, ChampionMeta>>(new Map());
@@ -179,6 +208,19 @@
   const searching = ref(false);
   const loadingCurrent = ref(false);
   const summoner = ref<SummonerInfo | null>(null);
+
+  // 账号头像：随 summoner 变化异步加载（优先 LCU 代理），immediate 立即求值一次
+  watch(
+    () => summoner.value?.profileIconId,
+    async (iconId) => {
+      if (!iconId) {
+        profileIconSrc.value = '';
+        return;
+      }
+      profileIconSrc.value = await getProfileIconSrc(iconId);
+    },
+    { immediate: true }
+  );
 
   const games = ref<Game[]>([]);
   const totalCount = ref(0);
@@ -327,9 +369,10 @@
 
 <style scoped lang="less">
   .mh-page {
+    height: 100%;
     padding: 16px 24px;
-    min-height: 100vh;
     box-sizing: border-box;
+    overflow-y: auto;
   }
 
   .mh-header {

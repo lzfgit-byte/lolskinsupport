@@ -63,3 +63,32 @@ export const mhGetGameDetails = async (gameId: number): Promise<any> => {
     10 * 60 * 1000
   );
 };
+
+/**
+ * 通过 LCU 代理获取客户端本地资源图片（如头像、海克斯强化图标），
+ * 返回 base64 data URL；失败或未连接时返回 null。
+ *
+ * assetPath 形如 `profile-icons/1234.jpg`，对应
+ * `/lol-game-data/assets/v1/profile-icons/1234.jpg`
+ */
+export const mhGetLcuImage = async (assetPath: string): Promise<string | null> => {
+  try {
+    const buf = await lcuConnector.requestArrayBuffer(
+      'GET',
+      `/lol-game-data/assets/v1/${assetPath}`
+    );
+    if (!buf || !buf.byteLength) {
+      return null;
+    }
+    const ext = assetPath.split('.').pop()?.toLowerCase() || 'png';
+    const mime =
+      ext === 'jpg' || ext === 'jpeg'
+        ? 'image/jpeg'
+        : ext === 'webp'
+        ? 'image/webp'
+        : 'image/png';
+    return `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
+  } catch {
+    return null;
+  }
+};

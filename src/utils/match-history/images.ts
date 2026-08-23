@@ -2,6 +2,7 @@
  * 英雄联盟资源图片 URL 工具（腾讯 CDN，与项目现有皮肤模块保持一致）
  */
 import http from '@/utils/http';
+import { mhGetLcuImage } from './ipc';
 
 /** 空物品槽位 ID（LCU 用 0 表示空物品） */
 export const EMPTY_ITEM_ID = 0;
@@ -36,9 +37,9 @@ export interface ChampionMeta {
 
 const GTIMG_CDN = 'https://game.gtimg.cn/images/lol/act/img';
 
-/** 英雄方形头像 */
+/** 英雄方形头像（腾讯 CDN，注意是 {alias}.png 而非 _square_0.png） */
 export const getChampionSquareIcon = (alias: string): string =>
-  `${GTIMG_CDN}/champion/${alias}_square_0.png`;
+  `${GTIMG_CDN}/champion/${alias}.png`;
 
 /** 物品图标；空物品槽返回空串 */
 export const getItemIcon = (itemId: number): string => {
@@ -51,6 +52,79 @@ export const getItemIcon = (itemId: number): string => {
 /** 召唤师头像 */
 export const getProfileIcon = (profileIconId: number): string =>
   `${GTIMG_CDN}/profileicon/${profileIconId}.png`;
+
+const profileIconCache = new Map<number, string>();
+
+/**
+ * 获取召唤师头像图片地址（异步）。
+ * 腾讯 CDN 头像覆盖不全，优先通过 LCU 客户端资源取（base64 data URL），
+ * 失败时回退到腾讯 CDN URL；结果会缓存。
+ */
+export async function getProfileIconSrc(iconId: number): Promise<string> {
+  const gtimg = getProfileIcon(iconId);
+  if (!iconId) {
+    return '';
+  }
+  const cached = profileIconCache.get(iconId);
+  if (cached) {
+    return cached;
+  }
+  const viaLcu = await mhGetLcuImage(`profile-icons/${iconId}.jpg`);
+  const src = viaLcu || gtimg;
+  profileIconCache.set(iconId, src);
+  return src;
+}
+
+/** 海克斯强化（KIWI）数据 */
+export interface KiwiAugment {
+  augmentID: number;
+  /** 中文名 */
+  nameCn: string;
+  /** 品质：kPrismatic / kGold / kSilver / kBronze */
+  level: string;
+  /** 图标完整 URL */
+  icon: string;
+}
+
+let kiwiAugmentMap: Map<number, KiwiAugment> | null = null;
+
+/**
+ * 加载海克斯强化数据（来自腾讯 CDN kiwi_augments.json），结果会缓存
+ */
+export async function loadKiwiAugments(): Promise<Map<number, KiwiAugment>> {
+  if (kiwiAugmentMap) {
+    return kiwiAugmentMap;
+  }
+  try {
+    const res: any = await http.axios.get(
+      'https://game.gtimg.cn/images/lol/act/img/js/kiwi/kiwi_augments.json'
+    );
+    const map = new Map<number, KiwiAugment>();
+    (Array.isArray(res) ? res : []).forEach((a: any) => {
+      if (a && a.augmentID) {
+        map.set(Number(a.augmentID), {
+          augmentID: Number(a.augmentID),
+          nameCn: a.name_cn || a.name_en || '',
+          level: a.level || '',
+          icon: a.small_Icon || ''
+        });
+      }
+    });
+    kiwiAugmentMap = map;
+    return map;
+  } catch {
+    kiwiAugmentMap = new Map();
+    return kiwiAugmentMap;
+  }
+}
+
+/** 获取海克斯强化信息；未知时返回 undefined */
+export const getKiwiAugment = (
+  id: number,
+  map?: Map<number, KiwiAugment>
+): KiwiAugment | undefined => {
+  return map?.get(id);
+};
 
 /** 召唤师技能图标；未知技能返回空串 */
 export const getSpellIcon = (spellId: number): string => {

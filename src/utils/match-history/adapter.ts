@@ -42,6 +42,8 @@ export type MatchParticipant = {
   teamIdentifier: string;
   items: number[];
   spells: number[];
+  /** 海克斯强化（非强化模式为 0） */
+  augments: number[];
   level: number;
   kills: number;
   deaths: number;
@@ -140,6 +142,14 @@ function mapStatsToParticipant(
     teamIdentifier,
     items: [stats.item0, stats.item1, stats.item2, stats.item3, stats.item4, stats.item5, stats.item6],
     spells: [participant.spell1Id, participant.spell2Id],
+    augments: [
+      stats.playerAugment1,
+      stats.playerAugment2,
+      stats.playerAugment3,
+      stats.playerAugment4,
+      stats.playerAugment5,
+      stats.playerAugment6
+    ],
     level: stats.champLevel,
     kills: stats.kills,
     deaths: stats.deaths,

@@ -38,3 +38,11 @@ export const mhGetMatchHistory = async (
 export const mhGetGameDetails = async (gameId: number): Promise<any> => {
   return executeFunction('mhGetGameDetails', gameId);
 };
+
+/**
+ * 通过 LCU 代理获取客户端本地资源图片（头像、海克斯强化图标等），
+ * 返回 base64 data URL；失败时返回 null
+ */
+export const mhGetLcuImage = async (assetPath: string): Promise<string | null> => {
+  return executeFunction('mhGetLcuImage', assetPath);
+};

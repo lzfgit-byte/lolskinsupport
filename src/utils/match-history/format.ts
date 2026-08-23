@@ -26,3 +26,18 @@ export const toFixed = (value: number, digits = 1): string => {
   }
   return value.toFixed(digits);
 };
+
+/** 大数字缩写：12345 → 12.3k，1234567 → 1.2m */
+export const formatExtremeNumber = (value: number): string => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '-';
+  }
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)}m`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  return `${Math.round(value)}`;
+};
+
