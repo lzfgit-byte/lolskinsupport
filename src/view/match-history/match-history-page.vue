@@ -1,28 +1,5 @@
 <template>
   <div class="mh-page">
-    <!-- 顶部栏 -->
-    <div class="mh-header">
-      <a-button class="back-btn" @click="goBack">← 返回</a-button>
-      <span class="mh-title">战绩查询</span>
-
-      <div class="search-box">
-        <a-input
-          v-model:value="searchName"
-          placeholder="输入召唤师名称（如：小明 或 小明 #tag）"
-          :disabled="!lcuConnected"
-          @press-enter="handleSearch"
-          allow-clear
-          style="width: 300px"
-        />
-        <a-button type="primary" :loading="searching" :disabled="!lcuConnected" @click="handleSearch">
-          查询
-        </a-button>
-        <a-button :loading="loadingCurrent" :disabled="!lcuConnected" @click="handleCurrentSummoner">
-          查询当前账号
-        </a-button>
-      </div>
-    </div>
-
     <!-- 未连接提示 -->
     <a-alert
       v-if="!lcuConnected"
@@ -42,6 +19,7 @@
       <!-- 召唤师卡片 + 汇总面板 -->
       <div class="mh-summary">
         <div class="player-card">
+          <a-button class="back-btn" @click="goBack">← 返回</a-button>
           <img
             class="player-icon"
             :src="profileIconSrc || getProfileIcon(summoner.profileIconId)"
@@ -158,14 +136,6 @@
         <a-button size="small" :disabled="page >= totalPages - 1" @click="nextPage">下一页</a-button>
       </div>
     </template>
-
-    <!-- 对局详情 -->
-    <GameDetailModal
-      :open="detailOpen"
-      :game="detailGame"
-      :champion-map="championMap"
-      @close="detailOpen = false"
-    />
   </div>
 </template>
 
@@ -186,13 +156,11 @@
   import {
     mhGetCurrentSummoner,
     mhGetMatchHistory,
-    mhSearchSummonerByName,
     mhGetGameDetails
   } from '@/utils/match-history/ipc';
   import { getQueueName } from '@/utils/match-history/queue-names';
   import type { Game, SummonerInfo } from '@/utils/match-history/types';
   import MatchHistoryItem from './components/match-history-item.vue';
-  import GameDetailModal from './components/game-detail-modal.vue';
 
   const { lcuState } = useGlobalState();
 
@@ -224,8 +192,6 @@
     return s.displayName || s.gameName || '';
   });
 
-  const searchName = ref('');
-  const searching = ref(false);
   const loadingCurrent = ref(false);
   const summoner = ref<SummonerInfo | null>(null);
 
@@ -253,9 +219,6 @@
 
   const winFilter = ref<'all' | 'win' | 'loss'>('all');
   const queueFilter = ref<number | 'all'>('all');
-
-  const detailOpen = ref(false);
-  const detailGame = ref<Game | null>(null);
 
   const totalPages = computed(() => Math.ceil(totalCount.value / pageSize.value) || 1);
 
@@ -339,34 +302,11 @@
     }
   };
 
-  const handleSearch = async () => {
-    const name = searchName.value.trim();
-    if (!name) {
-      return;
-    }
-    searching.value = true;
-    try {
-      const s = await mhSearchSummonerByName(name);
-      if (!s) {
-        message.warning('未找到该召唤师，请确认名称与 #tag 正确');
-        return;
-      }
-      summoner.value = s;
-      page.value = 0;
-      await loadMatchHistory();
-    } catch (e: any) {
-      message.error(`查询失败：${e?.message || e}`);
-    } finally {
-      searching.value = false;
-    }
-  };
-
   const handleCurrentSummoner = async () => {
     loadingCurrent.value = true;
     try {
       const s = await mhGetCurrentSummoner();
       summoner.value = s;
-      searchName.value = s?.displayName || s?.gameName || '';
       page.value = 0;
       await loadMatchHistory();
     } catch (e: any) {
@@ -395,11 +335,6 @@
   const onPageSizeChange = () => {
     page.value = 0;
     loadMatchHistory();
-  };
-
-  const openDetail = (game: Game) => {
-    detailGame.value = game;
-    detailOpen.value = true;
   };
 
   onMounted(async () => {
@@ -448,6 +383,19 @@
     display: flex;
     justify-content: center;
     padding: 80px 0;
+  }
+
+  .back-btn {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #cbd5e1;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.28);
+    }
   }
 
   .mh-summary {

@@ -96,9 +96,6 @@
       <!-- 操作 -->
       <div class="mh-actions">
         <span class="expand-arrow" :class="{ open: expanded }">▾</span>
-        <button class="detail-btn" @click.stop="$emit('open-detail', game)">
-          详情
-        </button>
       </div>
       </div>
 
@@ -178,10 +175,6 @@ const props = defineProps<{
   detail: Game | null;
   puuid: string;
   championMap: Map<number, ChampionMeta>;
-}>();
-
-const emit = defineEmits<{
-  (e: 'open-detail', game: Game): void;
 }>();
 
 const expanded = ref(false);
@@ -478,6 +471,8 @@ const itemDescHtml = (itemId: number): string => {
     border-left: 4px solid #4a5568;
     cursor: pointer;
     transition: background 0.2s;
+    flex: 1;
+    min-height: 52px;
 
     &:hover {
       background: #232938;
