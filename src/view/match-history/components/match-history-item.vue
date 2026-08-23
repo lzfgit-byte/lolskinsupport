@@ -151,7 +151,8 @@ import {
   loadKiwiAugments,
   loadItemMap,
   loadMapNames,
-  getMapName
+  getMapName,
+  stripItemStatsFromHtml
 } from '@/utils/match-history/images';
 import { getQueueName, loadQueueNames } from '@/utils/match-history/queue-names';
 import type { KiwiAugment, ItemInfo, ChampionMeta } from '@/utils/match-history/images';
@@ -396,13 +397,13 @@ const itemStatsText = (itemId: number): string => {
   return getItemInfoOf(itemId)?.plaintext || '';
 };
 
-/** 装备被动/效果描述（保留 HTML 标签与换行，直接用 v-html 渲染） */
+/** 装备被动/效果描述（保留 HTML 标签与换行，直接用 v-html 渲染，去掉属性段避免重复） */
 const itemDescHtml = (itemId: number): string => {
   const info = getItemInfoOf(itemId);
   if (!info) {
     return '';
   }
-  return info.description || '';
+  return stripItemStatsFromHtml(info.description || '');
 };
 </script>
 

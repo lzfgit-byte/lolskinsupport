@@ -145,6 +145,31 @@ export interface ItemInfo {
 
 let itemMap: Map<number, ItemInfo> | null = null;
 
+/** 从装备 description HTML 的 <stats> 段提取纯文本属性行（如 "110 法术强度 15 法术穿透"） */
+function extractItemStatsFromHtml(html: string): string {
+  if (!html) {
+    return '';
+  }
+  const match = html.match(/<stats>([\s\S]*?)<\/stats>/i);
+  const stats = match ? match[1] : '';
+  if (!stats) {
+    return '';
+  }
+  return stats
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 从装备 description HTML 中移除 <stats> 属性段，仅保留被动/效果描述 */
+export function stripItemStatsFromHtml(html: string): string {
+  if (!html) {
+    return '';
+  }
+  return html.replace(/<stats>[\s\S]*?<\/stats>/gi, '').trim();
+}
+
 /**
  * 加载装备 id → 信息映射（来自 LCU items.json），结果会缓存
  */
@@ -161,12 +186,18 @@ export async function loadItemMap(): Promise<Map<number, ItemInfo>> {
         map.set(id, {
           id,
           name: item.name,
-          plaintext: item.plaintext || '',
+          // LCU items.json 无 plaintext，属性行从 description 的 <stats> 段提取
+          plaintext: extractItemStatsFromHtml(item.description || ''),
           description: item.description || '',
-          goldTotal: Number(item.gold?.total ?? 0),
-          goldBase: Number(item.gold?.base ?? 0),
+          // LCU items.json 价格字段为 price（合成价）/ priceTotal（总价），没有 gold 对象
+          goldTotal: Number(item.priceTotal ?? 0),
+          goldBase: Number(item.price ?? 0),
           from: Array.isArray(item.from) ? item.from.map(Number) : [],
-          into: Array.isArray(item.into) ? item.into.map(Number) : []
+          into: Array.isArray(item.to)
+            ? item.to.map(Number)
+            : Array.isArray(item.into)
+            ? item.into.map(Number)
+            : []
         });
       }
     });
