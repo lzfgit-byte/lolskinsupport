@@ -31,13 +31,22 @@ export class GameflowMonitor extends EventEmitter {
   private sessionCheckInterval: NodeJS.Timeout | null = null;
   private missedUpdates = 0;
   private readonly maxMissedUpdates = 3;
+  private listenersAttached = false;
 
   constructor() {
     super();
-    this.setupEventListeners();
+    // 注意：不能在构造函数中访问 lcuConnector。
+    // lcuConnector / connect-league-legends / gameflowMonitor 之间存在循环依赖，
+    // 模块初始化阶段 lcuConnector 可能仍处于未初始化状态（TDZ），
+    // 因此监听器改由 start() 首次调用时挂载。
   }
 
   async start(): Promise<void> {
+    if (!this.listenersAttached) {
+      this.setupEventListeners();
+      this.listenersAttached = true;
+    }
+
     this.monitoringActive = true;
 
     // Subscribe to gameflow phase changes

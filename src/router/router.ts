@@ -21,6 +21,13 @@ export const staticRoutes: RouterType[] = [
     showInMenu: true,
     component: () => import('@/view/main-page.vue'),
   },
+  {
+    path: '/match-history',
+    name: 'matchHistory',
+    aliasZH: '战绩查询',
+    showInMenu: true,
+    component: () => import('@/view/match-history/match-history-page.vue'),
+  },
 ];
 
 const router = createRouter({

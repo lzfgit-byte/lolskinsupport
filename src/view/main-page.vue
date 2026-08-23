@@ -1,5 +1,8 @@
 <template>
   <div class="skin-page">
+    <button class="mh-entry-btn" @click="router.push('/match-history')" title="战绩查询">
+      🏆 战绩查询
+    </button>
     <main class="skin-panel">
       <DoLolskinChoseSkin v-if="heroId" :key="heroId"></DoLolskinChoseSkin>
       <div v-else class="empty-panel">
@@ -73,6 +76,7 @@
 <script setup lang="ts">
   import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue';
   import { message } from 'ant-design-vue';
+  import { useRouter } from 'vue-router';
   import HeroCard from '@/view/lolskin/hero-card.vue';
   import DoLolskinChoseSkin from '@/view/components/do-lolskin-chose-skin.vue';
   import FloatButtonGroup from '@/view/components/float-button-group.vue';
@@ -88,6 +92,7 @@
   } from '@/utils/business';
 
   const { heroId, heros, heroAlias, heroIdAliasMap } = useGlobalState();
+  const router = useRouter();
 
   // ===================== 启动英雄联盟 =====================
   const launching = ref(false);
@@ -515,5 +520,28 @@
   .launch-icon {
     display: inline-flex;
     font-size: 14px;
+  }
+
+  /* 战绩查询入口 */
+  .mh-entry-btn {
+    position: fixed;
+    top: 14px;
+    right: 16px;
+    z-index: 1001;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #d8c99b;
+    background: #1a2332;
+    border: 1px solid #27313b;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: #27313b;
+      border-color: #6d9f43;
+      color: #6d9f43;
+    }
   }
 </style>
