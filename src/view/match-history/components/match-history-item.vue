@@ -13,7 +13,7 @@
       <div class="mh-champion">
         <img
           class="champion-icon"
-          :src="championIcon"
+          :src="championIconSrc || championIcon"
           :alt="championName"
           loading="lazy"
         />
@@ -157,6 +157,7 @@ import {
   getChampionName,
   getChampionAlias,
   getChampionSquareIcon,
+  getChampionIconSrc,
   getItemIcon,
   getItemInfo,
   getKiwiAugment,
@@ -226,6 +227,8 @@ const championAlias = computed(() => getChampionAlias(championId.value, props.ch
 const championIcon = computed(
   () => championAlias.value && getChampionSquareIcon(championAlias.value)
 );
+/** LCU champion-icons 头像（异步加载，覆盖更全）；未加载完时回退到 CDN 头像 */
+const championIconSrc = ref('');
 
 // ===== 模式 / 地图（LCU queues.json / maps.json，静态表兜底） =====
 const queueMap = ref<Map<number, string>>(new Map());
@@ -333,16 +336,20 @@ const augmentMap = ref<Map<number, KiwiAugment>>(new Map());
 const itemMap = ref<Map<number, ItemInfo>>(new Map());
 
 onMounted(async () => {
-  const [a, i, q, m] = await Promise.all([
+  const [a, i, q, m, icon] = await Promise.all([
     loadKiwiAugments(),
     loadItemMap(),
     loadQueueNames(),
-    loadMapNames()
+    loadMapNames(),
+    getChampionIconSrc(championId.value, championAlias.value || undefined)
   ]);
   augmentMap.value = a;
   itemMap.value = i;
   queueMap.value = q;
   mapMap.value = m;
+  if (icon) {
+    championIconSrc.value = icon;
+  }
 });
 
 const getAugmentIcon = (id: number): string => {

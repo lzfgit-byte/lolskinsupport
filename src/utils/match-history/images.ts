@@ -75,6 +75,29 @@ export async function getProfileIconSrc(iconId: number): Promise<string> {
   return src;
 }
 
+const championIconCache = new Map<number, string>();
+
+/**
+ * 获取英雄头像图片地址（异步）。
+ * 优先使用 LCU 客户端资源 champion-icons/{id}.png（与 LeagueAkari 一致，覆盖全），
+ * 失败时回退到腾讯 CDN {alias}.png；结果会缓存。
+ */
+export async function getChampionIconSrc(championId: number, alias?: string): Promise<string> {
+  if (!championId) {
+    return '';
+  }
+  const cached = championIconCache.get(championId);
+  if (cached) {
+    return cached;
+  }
+  const viaLcu = await mhGetLcuImage(`champion-icons/${championId}.png`);
+  const src = viaLcu || (alias ? getChampionSquareIcon(alias) : '');
+  if (src) {
+    championIconCache.set(championId, src);
+  }
+  return src;
+}
+
 /** 海克斯强化（KIWI）数据 */
 export interface KiwiAugment {
   augmentID: number;

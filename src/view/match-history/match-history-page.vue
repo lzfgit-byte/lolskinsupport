@@ -158,7 +158,7 @@
     mhGetMatchHistory,
     mhGetGameDetails
   } from '@/utils/match-history/ipc';
-  import { getQueueName } from '@/utils/match-history/queue-names';
+  import { getQueueName, loadQueueNames } from '@/utils/match-history/queue-names';
   import type { Game, SummonerInfo } from '@/utils/match-history/types';
   import MatchHistoryItem from './components/match-history-item.vue';
 
@@ -195,6 +195,9 @@
   const loadingCurrent = ref(false);
   const summoner = ref<SummonerInfo | null>(null);
 
+  /** LCU queues.json 队列名映射（用于筛选下拉等，含新队列的本地化名称） */
+  const queueNameMap = ref<Map<number, string>>(new Map());
+
   // 账号头像：随 summoner 变化异步加载（优先 LCU 代理），immediate 立即求值一次
   watch(
     () => summoner.value?.profileIconId,
@@ -226,7 +229,7 @@
     const ids = Array.from(
       new Set(games.value.map((g) => toBasicInfo(g).queueId).filter((id) => id !== undefined))
     );
-    return ids.map((id) => ({ value: id, label: getQueueName(id) }));
+    return ids.map((id) => ({ value: id, label: getQueueName(id, queueNameMap.value) }));
   });
 
   const findParticipant = (game: Game) => {
@@ -338,7 +341,9 @@
   };
 
   onMounted(async () => {
-    championMap.value = await loadChampionMap();
+    const [cm, qm] = await Promise.all([loadChampionMap(), loadQueueNames()]);
+    championMap.value = cm;
+    queueNameMap.value = qm;
   });
 
   watch(

@@ -12,6 +12,8 @@ const QUEUE_NAMES: Record<number, string> = {
   450: '极地大乱斗',
   460: '轮换模式',
   470: '轮换模式',
+  480: '峡谷极速',
+  490: '快速游戏',
   700: '训练模式',
   800: '人机对战',
   810: '人机对战',
@@ -35,7 +37,8 @@ const QUEUE_NAMES: Record<number, string> = {
   1200: '云顶之弈（匹配）',
   1700: '斗魂竞技场',
   1900: '斗魂竞技场',
-  2400: '海克斯大乱斗'
+  2400: '海克斯大乱斗',
+  4320: '人机对战'
 };
 
 let loadedQueueNames: Map<number, string> | null = null;
