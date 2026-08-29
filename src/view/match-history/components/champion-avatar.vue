@@ -35,6 +35,7 @@ onMounted(async () => {
 
 <style scoped lang="less">
   .champion-avatar {
+    background: #10131c;
     border-radius: 5px;
     object-fit: cover;
     display: block;

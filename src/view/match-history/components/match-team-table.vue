@@ -13,12 +13,17 @@
         <span class="col-champ th">英雄</span>
         <span class="col-name th">玩家</span>
         <span class="col-items th">装备</span>
+        <span v-if="hasAugments" class="col-augments th" title="海克斯强化选择">海克斯</span>
         <span class="col-num th" title="击杀数">击杀</span>
         <span class="col-num th" title="对英雄伤害">伤害</span>
         <span class="col-num th" title="承受伤害">承伤</span>
         <span class="col-num th" title="击杀/死亡/助攻比值">KDA</span>
         <span class="col-num th" title="治疗量">治疗</span>
-        <span class="col-num th" title="补刀数">补刀</span>
+        <span class="col-num cs th" title="补刀数">补刀</span>
+        <span class="col-kp th" title="参团率（击杀+助攻）/ 队伍总击杀">参团率</span>
+        <span class="col-gold th" title="获得经济">经济</span>
+        <span class="col-vision th" title="视野得分">视野</span>
+        <span class="col-level th" title="英雄等级">等级</span>
       </div>
 
       <div class="team-rows">
@@ -52,6 +57,17 @@
               loading="lazy"
             />
           </span>
+          <span v-if="hasAugments" class="col-augments">
+            <img
+              v-for="id in playerAugments(p)"
+              :key="id"
+              class="augment-icon"
+              :class="augmentRarityClass(id)"
+              :src="getKiwiAugment(id, augmentMap)?.icon || ''"
+              :title="getKiwiAugment(id, augmentMap)?.nameCn || `海克斯强化 #${id}`"
+              loading="lazy"
+            />
+          </span>
           <span class="col-num" :title="`击杀 ${p.kills}`">{{ p.kills }}</span>
           <span class="col-num" :title="`伤害 ${fmt(p.totalDamageDealtToChampions)}`">
             {{ fmt(p.totalDamageDealtToChampions) }}
@@ -66,6 +82,16 @@
             {{ fmt(p.totalHeal) }}
           </span>
           <span class="col-num cs" :title="`补刀 ${p.cs}`">{{ p.cs }}</span>
+          <span class="col-kp" :title="`参团率 ${toFixed(p.killParticipation * 100)}%`">
+            {{ toFixed(p.killParticipation * 100) }}%
+          </span>
+          <span class="col-gold" :title="`经济 ${fmt(p.goldEarned)}`">
+            {{ fmt(p.goldEarned) }}
+          </span>
+          <span class="col-vision" :title="`视野 ${toFixed(p.visionScore ?? 0)}`">
+            {{ toFixed(p.visionScore ?? 0) }}
+          </span>
+          <span class="col-level" :title="`等级 ${p.level}`">{{ p.level }}</span>
         </div>
       </div>
     </div>
@@ -73,13 +99,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import type { MatchParticipant } from '@/utils/match-history/adapter';
 import { toFixed } from '@/utils/match-history/format';
 import {
   getChampionAlias,
   getItemIcon,
-  type ChampionMeta
+  getKiwiAugment,
+  loadKiwiAugments,
+  type ChampionMeta,
+  type KiwiAugment
 } from '@/utils/match-history/images';
 import ChampionAvatar from './champion-avatar.vue';
 
@@ -121,6 +150,38 @@ const teams = computed(() => {
     }
   ];
 });
+
+// ===== 海克斯强化 =====
+const augmentMap = ref<Map<number, KiwiAugment>>(new Map());
+
+onMounted(async () => {
+  augmentMap.value = await loadKiwiAugments();
+});
+
+/** 是否包含海克斯强化（无强化时隐藏整列） */
+const hasAugments = computed(() =>
+  props.participants.some((p) => (p.augments || []).some((id) => id && id !== 0))
+);
+
+const playerAugments = (p: MatchParticipant): number[] =>
+  (p.augments || []).filter((id) => id && id !== 0);
+
+/** 海克斯强化稀有度配色（与 LeagueAkari 保持一致） */
+const augmentRarityClass = (id: number): string => {
+  const level = getKiwiAugment(id, augmentMap.value)?.level;
+  switch (level) {
+    case 'kPrismatic':
+      return 'augment-prismatic';
+    case 'kGold':
+      return 'augment-gold';
+    case 'kSilver':
+      return 'augment-silver';
+    case 'kBronze':
+      return 'augment-bronze';
+    default:
+      return '';
+  }
+};
 </script>
 
 <style scoped lang="less">
@@ -210,6 +271,42 @@ const teams = computed(() => {
           }
         }
 
+        .col-augments {
+          width: 76px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          gap: 2px;
+
+          .augment-icon {
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            object-fit: cover;
+            display: block;
+            box-sizing: border-box;
+            background: #10131c;
+
+            &.augment-prismatic {
+              border: 1px solid transparent;
+              border-image: linear-gradient(135deg, #e78fff, #8b05b0) 1;
+              background-color: rgb(45, 37, 66);
+            }
+            &.augment-gold {
+              border: 1px solid rgb(255, 183, 0);
+              background-color: rgb(50, 37, 5);
+            }
+            &.augment-silver {
+              border: 1px solid rgb(180, 180, 180);
+              background-color: rgb(35, 35, 34);
+            }
+            &.augment-bronze {
+              border: 1px solid rgb(205, 127, 50);
+              background-color: rgb(50, 30, 15);
+            }
+          }
+        }
+
         .col-num {
           width: 42px;
           flex-shrink: 0;
@@ -222,6 +319,46 @@ const teams = computed(() => {
           &.cs {
             width: 38px;
           }
+        }
+
+        .col-kp {
+          width: 48px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          color: #94a3b8;
+          font-size: 12px;
+        }
+
+        .col-gold {
+          width: 48px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          color: #94a3b8;
+          font-size: 12px;
+        }
+
+        .col-vision {
+          width: 40px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          color: #94a3b8;
+          font-size: 12px;
+        }
+
+        .col-level {
+          width: 32px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          color: #94a3b8;
+          font-size: 12px;
         }
 
         // 表头单元格
