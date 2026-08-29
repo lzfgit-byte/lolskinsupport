@@ -809,17 +809,23 @@ const itemDescHtml = (itemId: number): string => {
     }
   }
 
-  // ===== 展开总览 =====
+  // ===== 展开总览（左右结构：左=当前玩家总览，右=队友/对手表格） =====
   .mh-expand {
     padding: 12px 14px;
     background: #161a24;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-start;
   }
 
   .overview-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px 16px;
+    width: 380px;
+    flex-shrink: 0;
 
     .overview-item {
       display: flex;

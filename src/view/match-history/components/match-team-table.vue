@@ -186,7 +186,9 @@ const augmentRarityClass = (id: number): string => {
 
 <style scoped lang="less">
   .mh-team-table {
-    margin-top: 14px;
+    margin-top: 0;
+    flex: 1;
+    min-width: 420px;
     display: flex;
     flex-direction: column;
     gap: 12px;
