@@ -19,6 +19,8 @@
         :y2="vertex(i, 1).y"
         class="hex-axis"
       />
+      <!-- 队内平均多边形 -->
+      <polygon :points="teamAvgHexPoints" class="hex-team-avg" />
       <!-- 当前用户数据多边形 -->
       <polygon :points="userHexPoints" class="hex-user" />
       <!-- 用户顶点圆点 -->
@@ -66,7 +68,7 @@
     { key: 'kills', label: '击杀' },
     { key: 'damage', label: '伤害' },
     { key: 'taken', label: '承伤' },
-    { key: 'assists', label: '助攻' },
+    { key: 'kda', label: 'KDA' },
     { key: 'heal', label: '治疗' },
     { key: 'cs', label: '补刀' },
   ];
@@ -79,8 +81,8 @@
         return p.totalDamageDealtToChampions;
       case 'taken':
         return p.totalDamageTaken;
-      case 'assists':
-        return p.assists;
+      case 'kda':
+        return p.kda;
       case 'heal':
         return p.totalHeal;
       case 'cs':
@@ -116,6 +118,33 @@
     return r;
   });
 
+  /** 队伍中每项统计的平均值（「队内平均」层） */
+  const teamAvg = computed(() => {
+    const m: Record<string, number> = {};
+    const n = Math.max(1, props.team.length);
+    for (const a of axes) {
+      m[a.key] = props.team.reduce((acc, p) => acc + getValue(p, a.key), 0) / n;
+    }
+    return m;
+  });
+
+  /** 队内平均相对队内最高值的比例（0-1） */
+  const teamAvgRatios = computed(() => {
+    const r: Record<string, number> = {};
+    for (const a of axes) {
+      const max = teamMax.value[a.key];
+      r[a.key] = max > 0 ? Math.min(1, teamAvg.value[a.key] / max) : 0;
+    }
+    return r;
+  });
+
+  const teamAvgHexPoints = computed(() =>
+    axes.map((_, i) => {
+      const v = vertex(i, teamAvgRatios.value[axes[i].key]);
+      return `${v.x},${v.y}`;
+    }).join(' ')
+  );
+
   const angle = (i: number) => (-90 + i * 60) * (Math.PI / 180);
 
   const vertex = (i: number, scale: number) => ({
@@ -141,8 +170,9 @@
     return axes
       .map((a) => {
         const max = teamMax.value[a.key];
+        const avg = teamAvg.value[a.key];
         const val = getValue(props.participant!, a.key);
-        return `${a.label}：${val.toLocaleString()} / 队内最高 ${max.toLocaleString()}`;
+        return `${a.label}：${val.toLocaleString()} / 队内均值 ${avg.toLocaleString()} / 队内最高 ${max.toLocaleString()}`;
       })
       .join('\n');
   });
@@ -170,6 +200,13 @@
       fill: rgba(96, 165, 250, 0.22);
       stroke: #60a5fa;
       stroke-width: 1.5;
+    }
+
+    .hex-team-avg {
+      fill: rgba(148, 163, 184, 0.12);
+      stroke: rgba(148, 163, 184, 0.85);
+      stroke-width: 1.2;
+      stroke-dasharray: 4 3;
     }
 
     .hex-dot {

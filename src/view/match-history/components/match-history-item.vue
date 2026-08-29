@@ -138,6 +138,14 @@
           <span class="ov-value">{{ row.value }}</span>
         </div>
       </div>
+
+      <!-- 己方队友 / 对手信息（需完整对局数据-详情） -->
+      <MatchTeamTable
+        v-if="detail"
+        :participants="participants"
+        :champion-map="championMap"
+        :highlight-puuid="puuid"
+      />
     </div>
   </div>
 </template>
@@ -170,6 +178,7 @@ import {
 import { getQueueName, loadQueueNames } from '@/utils/match-history/queue-names';
 import type { KiwiAugment, ItemInfo, ChampionMeta } from '@/utils/match-history/images';
 import HexagonStats from './hexagon-stats.vue';
+import MatchTeamTable from './match-team-table.vue';
 
 const props = defineProps<{
   game: Game;
@@ -314,7 +323,7 @@ const overviewRows = computed(() => {
     { label: '伤害', value: (p.totalDamageDealtToChampions ?? 0).toLocaleString() },
     { label: '伤害占比', value: s ? shareText(s.championDamagePercentageOfTeam) : '—' },
     { label: '承伤', value: (p.totalDamageTaken ?? 0).toLocaleString() },
-    { label: '承伤占比', value: s ? shareText(s.championDamageTakenPercentageOfTeam) : '—' },
+    { label: '承伤占比', value: s ? shareText(s.damageTakenPercentageOfTeam) : '—' },
     { label: '经济', value: (p.goldEarned ?? 0).toLocaleString() },
     { label: '经济占比', value: s ? shareText(s.goldPercentageOfTeam) : '—' },
     { label: '补刀', value: `${p.cs}（${toFixed(csPerMinute.value)}/min）` },
