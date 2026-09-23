@@ -10,6 +10,11 @@
         <a-switch v-model:checked="autoChose" size="small" />
       </div>
     </a-tooltip>
+    <a-tooltip title="应用前先构建皮肤 zip" placement="left">
+      <div class="float-switch">
+        <a-switch v-model:checked="buildSkinZipBeforeApply" size="small" />
+      </div>
+    </a-tooltip>
   </div>
 </template>
 <script setup lang="ts">
@@ -18,7 +23,7 @@
   defineProps({
     handleDrawOpen: Function,
   });
-  const { autoChose } = useGlobalState();
+  const { autoChose, buildSkinZipBeforeApply } = useGlobalState();
 </script>
 
 <style scoped lang="less">

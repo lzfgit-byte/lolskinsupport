@@ -19,6 +19,7 @@ const overlayPath = ref('');
 const overlayConfigPath = ref('');
 const installedPath = ref('');
 const autoChose = ref(true);
+const buildSkinZipBeforeApply = ref(false);
 const lcuState = ref(false);
 const modToolsState = ref(false);
 const heros = ref<mainHeroInfo[]>();
@@ -99,6 +100,7 @@ export default () => ({
   overlayConfigPath,
   installedPath,
   autoChose,
+  buildSkinZipBeforeApply,
   lcuState,
   heroAlias,
   heros,

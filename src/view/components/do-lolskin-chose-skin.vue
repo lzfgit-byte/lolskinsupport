@@ -29,7 +29,7 @@
           :class="{ active: isChose(item) }"
           :title="item.description"
           @click="handleChoseSkin(item)"
-          @dblclick="confirm_"
+          @dblclick="applySelectedSkin"
         >
           <img :src="item.mainImg" loading="lazy" />
           <div class="skin-name" :title="item.name">{{ item.name }}</div>
@@ -88,7 +88,7 @@
             （一个）当前皮肤文件
           </a-button>
           <a-button class="action-btn-secondary" @click="doMkOverlay"> 构建 overlay </a-button>
-          <a-button class="action-btn-primary" @click="confirm_"> 点击使用皮肤 </a-button>
+          <a-button class="action-btn-primary" @click="applySelectedSkin"> 点击使用皮肤 </a-button>
         </footer>
       </main>
     </div>
@@ -119,6 +119,7 @@
   const {
     heroId,
     autoChose,
+    buildSkinZipBeforeApply,
     heroAlias,
     lcuState,
     gamePath,
@@ -192,9 +193,9 @@
           f_confirmChoseSkin(
             `选择皮肤【${choseSkin.value?.name}】`,
             choseSkin.value.mainImg || getSkinChromaUrl(choseSkin.value)
-          ).then((res) => {
+          ).then(async (res) => {
             if (res) {
-              confirm_();
+              await applySelectedSkin();
             }
           });
         }
@@ -227,12 +228,28 @@
     await preChose();
   };
 
-  const confirm_ = async () => {
+  const ensureBuildSkinZipBeforeApply = async () => {
+    if (!buildSkinZipBeforeApply.value) {
+      return;
+    }
+
+    const wadPath = `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`;
+    if (!wadPath) {
+      message.warn('未找到当前英雄的 WAD 文件，无法构建皮肤 zip');
+      return;
+    }
+
+    await f_loadSkinDataByFilePath(wadPath, +mkSkinId.value);
+    logDrawOpen.value = true;
+  };
+
+  const applySelectedSkin = async () => {
     const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
     if (!res) {
       message.warn('请先下载英雄皮肤');
       return;
     }
+    await ensureBuildSkinZipBeforeApply();
     await f_loadSkin(heroId.value, choseSkin.value.skinId, getSkinImage());
   };
 
