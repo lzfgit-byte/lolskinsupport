@@ -104,12 +104,14 @@
   import useGlobalState, { LogUtil } from '@/hooks/use-global-state';
   import {
     f_checkHasSkins,
+    f_clearSkinImage,
     f_confirmChoseSkin,
     f_getHeroChoseSkin,
     f_loadSkin,
     f_loadSkinDataByFilePath,
     f_mkOverlay,
     f_openPath,
+    f_removePath,
     f_selectPathOrFile,
     f_setHeroChoseSkin,
     f_unpackWadFileTo,
@@ -123,7 +125,9 @@
     heroAlias,
     lcuState,
     gamePath,
+    installedPath,
     logDrawOpen,
+    overlayPath,
     skinPath,
     skinDefaultSuffix,
     choseDrawerOpen,
@@ -232,6 +236,10 @@
     if (!buildSkinZipBeforeApply.value) {
       return;
     }
+
+    await f_removePath(`${installedPath.value}\${heroId.value}_${choseSkinId.value}`);
+    await f_removePath(`${overlayPath.value}\${heroId.value}_${choseSkinId.value}`);
+    await f_clearSkinImage(choseSkinId.value);
 
     const wadPath = `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`;
     if (!wadPath) {
