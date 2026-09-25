@@ -34,6 +34,7 @@ import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
 import { loadSkinData, loadSkinDataByFile, setConfigData, unpackWadFile } from './load-skin-data';
+import { findOverlayWads, isEncryptedOverlay, restoreWadHeaders } from './overlayWad';
 
 export * from '../http';
 export * from './locale-watcher';
@@ -230,32 +231,75 @@ const useConstData = (heroId: string, skinId: string) => {
  *
  *
  *
- * mod-tools.exe
- * runoverlay
- * "D:\\WeGameApps\\preset_temp_1763828056312"
- * "C:\\Users\\18074\\AppData\\Roaming\\bocchi\\presets.json"
- * --game:"E:\\game\\Riot Games\\League of Legends\\Game"
- * --opts:none
+ * 挂载 overlay 不再用 `mod-tools.exe runoverlay`（它已经不认新版游戏了），
+ * 改由 ltk_patcher_host.exe 接管。顺序很重要：
+ *   1. 先启动 host 并 start scan —— DLL 只对「扫描开始之后启动」的游戏生效
+ *   2. 再让 mod-tools.exe 生成 overlay（host 的 prefix 指向同一个目录）
+ *   3. host 常驻；游戏退出后它会自己回到扫描状态，由 stopOverlay() 收尾
  */
+const applyOverlayWithLtkPatcher = async (
+  overlayDir: string,
+  uniqueId: string,
+  buildOverlay: () => Promise<unknown> | void
+) => {
+  // startLtkPatcher 会建好 prefix 目录，并等 host 确认 config/start scan；
+  // 被拒绝（比如路径非法、文件缺失）时直接返回失败，不会再白跑 mkoverlay
+  const started = await modToolsWrapper.startLtkPatcher(getModToolsPath(), overlayDir);
+  if (!started.ok) {
+    MessageUtil.error(started.error ?? 'LTK patcher 启动失败');
+    return;
+  }
+
+  try {
+    await buildOverlay();
+  } catch (msg) {
+    MessageUtil.error(msg);
+  }
+
+  const abort = async (msg: string) => {
+    MessageUtil.error(msg);
+    await modToolsWrapper.stopOverlay();
+  };
+
+  // DLL 是按 <prefix>/**/*.wad.client 递归找 overlay 的，这里用同一套规则确认
+  const wads = findOverlayWads(overlayDir);
+  if (wads.length === 0) {
+    await abort('overlay 里没有生成任何 wad，已停止 LTK patcher');
+    return;
+  }
+
+  // cslol-manager 分支的 mod-tools 会写出 ChaCha20 加密的 CLST overlay，
+  // ltk_patcher_dll 不认识这种格式，游戏也挂不上
+  if (wads.some(isEncryptedOverlay)) {
+    await abort(
+      `overlay 是加密的（CLST），LTK patcher 无法挂载。请把 ${Path.basename(
+        getModToolsPath()
+      )} 换成 cslol-tools 官方未加密版本后再试`
+    );
+    return;
+  }
+
+  // 自 16.19 起游戏会把签名/校验和不对的 wad 判成损坏，把原版头部拷回去
+  const header = restoreWadHeaders(overlayDir, getGamePath());
+  if (header.restored === 0) {
+    MessageUtil.warning(
+      `overlay wad 头部未修复（共 ${header.total} 个，跳过 ${header.skipped} 个），皮肤可能不生效`
+    );
+  }
+
+  showToast(`LTK patcher 已接管 --${uniqueId}--成功`);
+};
+
 export const loadSkin = async (heroId: string, skinId: string, skinImage: string) => {
-  await mkOverlay(heroId, skinId, skinImage);
-  const { command, uniqueId, overlayPath, overlayPathConfig, gamePath } = useConstData(
-    heroId,
-    skinId
-  );
-  fs.writeFileSync(overlayPathConfig, JSON.stringify([skinId]), { flag: 'w', encoding: 'utf-8' });
-  await modToolsWrapper
-    .runOverlay(command, [
-      'runoverlay',
-      Path.normalize(overlayPath),
-      Path.normalize(overlayPathConfig),
-      `--game:${Path.normalize(gamePath)}`,
-      '--opts:none',
-    ])
-    .catch((msg) => {
-      MessageUtil.error(msg);
+  const { uniqueId, overlayPath, overlayPathConfig } = useConstData(heroId, skinId);
+  await applyOverlayWithLtkPatcher(overlayPath, uniqueId, () => {
+    // host 不读这个文件，保留只是记录当前挂载的皮肤
+    fs.writeFileSync(overlayPathConfig, JSON.stringify([skinId]), {
+      flag: 'w',
+      encoding: 'utf-8',
     });
-  showToast(`runoverlay --${uniqueId}--成功`);
+    return mkOverlay(heroId, skinId, skinImage);
+  });
 };
 
 export const mkOverlay = async (heroId: string, skinId: string, skinImage: string) => {
@@ -294,7 +338,9 @@ export const mkOverlay = async (heroId: string, skinId: string, skinImage: strin
     showToast(`已经安装过:${uniqueId}`);
   }
 
-  if (!existsSync(overlayPath)) {
+  // 注意不能用「目录存在」判断是否建好：LTK patcher 要求 prefix 目录先存在，
+  // 所以空目录是常态，只有真的找到 wad 才算建好过
+  if (findOverlayWads(overlayPath).length === 0) {
     await modToolsWrapper
       .execToolWithTimeout(
         command,
@@ -313,7 +359,7 @@ export const mkOverlay = async (heroId: string, skinId: string, skinImage: strin
         MessageUtil.error(msg);
       });
   } else {
-    showToast(`mkoverlay --${uniqueId}--成功`);
+    showToast(`复用已有 overlay:${uniqueId}`);
   }
 };
 function copyRecursive(src: string, dest: string) {
@@ -352,19 +398,10 @@ function copyRecursive(src: string, dest: string) {
 }
 
 export const loadSkins = async () => {
-  const command = getModToolsPath();
   const overlayPath = getOverlayPath();
   const overlayPathAll = Path.join(overlayPath, 'all');
   const overlayPathConfig = getOverlayConfigPath();
-  const gamePath = getGamePath();
 
-  // 确保 all 是目录，而不是文件
-  if (!fs.existsSync(overlayPathAll)) {
-    fs.mkdirSync(overlayPathAll, { recursive: true });
-  }
-
-  // 清空 all 目录
-  emptyDir(overlayPathAll);
   // 获取同级目录（排除 all）
   const folders = fs
     .readdirSync(overlayPath, { withFileTypes: true })
@@ -388,31 +425,25 @@ export const loadSkins = async () => {
     showToast('没有皮肤');
     return;
   }
-  // 复制每个文件夹内容到 all
-  folders.forEach((folder) => {
-    const folderPath = Path.join(overlayPath, folder);
-    copyRecursive(folderPath, overlayPathAll);
-  });
-
-  // 写入配置
-  fs.writeFileSync(overlayPathConfig, JSON.stringify(skinIds), {
-    encoding: 'utf-8',
-    flag: 'w',
-  });
-
-  await modToolsWrapper.forceKillModTools();
-  await modToolsWrapper
-    .runOverlay(command, [
-      'runoverlay',
-      Path.normalize(overlayPathAll),
-      Path.normalize(overlayPathConfig),
-      `--game:${Path.normalize(gamePath)}`,
-      '--opts:none',
-    ])
-    .catch((msg) => {
-      MessageUtil.error(msg);
+  // 先把 host 挂起来扫描，再准备 all 目录
+  await applyOverlayWithLtkPatcher(overlayPathAll, 'all', () => {
+    // 确保 all 是目录，而不是文件
+    if (!fs.existsSync(overlayPathAll)) {
+      fs.mkdirSync(overlayPathAll, { recursive: true });
+    }
+    // 清空 all 目录
+    emptyDir(overlayPathAll);
+    // 复制每个文件夹内容到 all
+    folders.forEach((folder) => {
+      const folderPath = Path.join(overlayPath, folder);
+      copyRecursive(folderPath, overlayPathAll);
     });
-  showToast(`runoverlay --all--成功`);
+    // host 不读这个文件，保留只是记录当前挂载的皮肤
+    fs.writeFileSync(overlayPathConfig, JSON.stringify(skinIds), {
+      encoding: 'utf-8',
+      flag: 'w',
+    });
+  });
 };
 export const getAllLoadSkins = () => {
   const overlayPath = getOverlayPath();
@@ -626,7 +657,8 @@ export const importLeagueSkinsPackage = async () => {
 };
 
 export const shoutDownModTools = async () => {
-  await modToolsWrapper.forceKillModTools();
+  // 会把 LTK patcher host 一起停掉
+  await modToolsWrapper.stopOverlay();
   MessageUtil.success('已关闭ModTools');
 };
 export const unpackWadFileTo = async (fullWadPath) => {
