@@ -4,6 +4,9 @@ import {
   f_getGamePath,
   f_getInstalledPath,
   f_getModToolsPath,
+  f_getMultiKillCaptureDebug,
+  f_getMultiKillCaptureDelay,
+  f_getMultiKillCaptureWindow,
   f_getOverlayConfigPath,
   f_getOverlayPath,
   f_getSkinDefaultSuffix,
@@ -17,6 +20,9 @@ export default () => {
     skinPath,
     skinDefaultSuffix,
     screenshotPath,
+    multiKillCaptureDelay,
+    multiKillCaptureWindow,
+    multiKillCaptureDebug,
     gamePath,
     overlayPath,
     overlayConfigPath,
@@ -31,6 +37,9 @@ export default () => {
     skinPath.value = await f_getSkinPath();
     skinDefaultSuffix.value = await f_getSkinDefaultSuffix();
     screenshotPath.value = await f_getScreenshotPath();
+    multiKillCaptureDelay.value = await f_getMultiKillCaptureDelay();
+    multiKillCaptureWindow.value = await f_getMultiKillCaptureWindow();
+    multiKillCaptureDebug.value = await f_getMultiKillCaptureDebug();
     gamePath.value = await f_getGamePath();
     overlayPath.value = await f_getOverlayPath();
     overlayConfigPath.value = await f_getOverlayConfigPath();

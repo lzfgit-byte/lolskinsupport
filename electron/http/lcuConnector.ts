@@ -7,7 +7,12 @@ import { promisify } from 'node:util';
 import WebSocket from 'ws';
 import { app } from 'electron';
 import axios from 'axios';
-import { captureAppScreenshot } from '../utils/screenshot';
+import { captureScreenBurst } from '../utils/screenshot';
+import {
+  getMultiKillCaptureDebug,
+  getMultiKillCaptureDelay,
+  getMultiKillCaptureWindow,
+} from '../utils/screenshot-config';
 import { LogMsgUtil } from '../utils/message';
 import { getLockfile } from './connect-league-legends';
 
@@ -511,12 +516,30 @@ export class LCUConnector extends EventEmitter {
     const subDir = killDirMap[killStreak] || 'multikill';
     const prefix = `${subDir}-${killStreak}kills`;
 
-    // 连杀数越高，等待 UI 横幅完全展开并覆盖旧播报的时间越长（如 3 杀及以上等待 300ms）
-    const uiRenderDelay = killStreak > 2 ? (killStreak > 4 ? 500 : 300) : 150;
-    await new Promise((resolve) => setTimeout(resolve, uiRenderDelay));
+    // 连杀等级越高，游戏内横幅越可能排在前一条播报之后显示，额外补一点等待时间（毫秒）
+    const streakExtraDelay: Record<number, number> = { 2: 0, 3: 100, 4: 200, 5: 400 };
+    const initialDelayMs = Math.min(
+      getMultiKillCaptureDelay() + (streakExtraDelay[killStreak] ?? 0),
+      8000
+    );
+    const windowMs = getMultiKillCaptureWindow();
 
-    // 传入 prefix 和对应的子目录名称
-    const file = await captureAppScreenshot(prefix, subDir);
+    LogMsgUtil.sendLogMsg(
+      `[MultiKill] ${killStreak} kills, capture after ${initialDelayMs}ms (window ${windowMs}ms)`
+    );
+
+    // 先等横幅渲染完成，再连拍若干帧并保存最后一帧：
+    // 横幅在屏幕上会停留数秒，"晚一点截"远比"早一点截"安全，
+    // 连拍取最后一帧还能避开独占全屏下 desktopCapturer 返回旧帧的问题。
+    const file = await captureScreenBurst({
+      prefix,
+      subDir,
+      initialDelayMs,
+      windowMs,
+      intervalMs: 250,
+      saveAllFrames: getMultiKillCaptureDebug(),
+    });
+
     if (file) {
       this.emit('screenshot-created', file);
     }

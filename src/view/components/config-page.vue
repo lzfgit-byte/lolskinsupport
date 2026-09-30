@@ -44,6 +44,30 @@
             <a-button size="small" @click="setScreenshotPath">设置文件地址</a-button>
           </a-space>
           <br /><br />
+          多杀截图等待：
+          <a-space>
+            <a-input-number
+              v-model:value="multiKillCaptureDelay"
+              size="small"
+              :min="0"
+              :max="8000"
+              :step="100"
+            />
+            <span>ms 后开始连拍</span>
+            连拍时长：
+            <a-input-number
+              v-model:value="multiKillCaptureWindow"
+              size="small"
+              :min="0"
+              :max="5000"
+              :step="100"
+            />
+            <span>ms</span>
+            <a-button size="small" @click="setMultiKillCapture">保存截图时机</a-button>
+            <a-switch v-model:checked="multiKillCaptureDebug" @change="setMultiKillCaptureDebug" />
+            <span>保存每一帧(调试用)</span>
+          </a-space>
+          <br /><br />
           游戏路径：{{ gamePath }}
           <a-space>
             <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
@@ -228,6 +252,9 @@
     f_selectPathOrFile,
     f_setConfig,
     f_setIsUseCommand,
+    f_setMultiKillCaptureDebug,
+    f_setMultiKillCaptureDelay,
+    f_setMultiKillCaptureWindow,
     f_shoutDownModTools,
     f_startLocaleWatcher,
     f_stopLocaleWatcher,
@@ -242,6 +269,9 @@
     skinPath,
     skinDefaultSuffix,
     screenshotPath,
+    multiKillCaptureDelay,
+    multiKillCaptureWindow,
+    multiKillCaptureDebug,
     gamePath,
     toolsPath,
     overlayPath,
@@ -297,6 +327,15 @@
     await f_setConfig(SCREENSHOT_PATH, path);
     await loadFilePath();
     message.success('截图保存路径设置成功');
+  };
+  const setMultiKillCapture = async () => {
+    multiKillCaptureDelay.value = await f_setMultiKillCaptureDelay(multiKillCaptureDelay.value);
+    multiKillCaptureWindow.value = await f_setMultiKillCaptureWindow(multiKillCaptureWindow.value);
+    message.success('多杀截图时机设置成功');
+  };
+  const setMultiKillCaptureDebug = async (checked: boolean) => {
+    multiKillCaptureDebug.value = await f_setMultiKillCaptureDebug(checked);
+    message.success(checked ? '已开启：每帧都会保存' : '已关闭调试模式');
   };
   const handleImportLeagueSkinsPackage = async () => {
     logDrawOpen.value = true;

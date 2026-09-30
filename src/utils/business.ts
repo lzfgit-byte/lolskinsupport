@@ -17,6 +17,45 @@ export const f_getScreenshotPath = async (): Promise<string> => {
   return executeFunction('getScreenshotPath');
 };
 /**
+ * export const getMultiKillCaptureDelay = () => {
+ * 多杀截图：事件后等待多少毫秒再开始连拍
+ */
+export const f_getMultiKillCaptureDelay = async (): Promise<number> => {
+  return executeFunction('getMultiKillCaptureDelay');
+};
+/**
+ * export const setMultiKillCaptureDelay = () => {
+ */
+export const f_setMultiKillCaptureDelay = async (value: number): Promise<number> => {
+  return executeFunction('setMultiKillCaptureDelay', value);
+};
+/**
+ * export const getMultiKillCaptureWindow = () => {
+ * 多杀截图：连拍总时长
+ */
+export const f_getMultiKillCaptureWindow = async (): Promise<number> => {
+  return executeFunction('getMultiKillCaptureWindow');
+};
+/**
+ * export const setMultiKillCaptureWindow = () => {
+ */
+export const f_setMultiKillCaptureWindow = async (value: number): Promise<number> => {
+  return executeFunction('setMultiKillCaptureWindow', value);
+};
+/**
+ * export const getMultiKillCaptureDebug = () => {
+ * 多杀截图：是否保存连拍过程中的每一帧（调试用）
+ */
+export const f_getMultiKillCaptureDebug = async (): Promise<boolean> => {
+  return executeFunction('getMultiKillCaptureDebug');
+};
+/**
+ * export const setMultiKillCaptureDebug = () => {
+ */
+export const f_setMultiKillCaptureDebug = async (value: boolean): Promise<boolean> => {
+  return executeFunction('setMultiKillCaptureDebug', value);
+};
+/**
  * export const getSkinDefaultSuffix = () => {
  */
 export const f_getSkinDefaultSuffix = async (): Promise<string> => {

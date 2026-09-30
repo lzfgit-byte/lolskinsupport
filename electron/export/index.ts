@@ -40,6 +40,7 @@ export * from '../http';
 export * from './locale-watcher';
 export * from './launch-game';
 export * from './match-history';
+export * from '../utils/screenshot-config';
 const idName = {};
 const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
 const defaultSkinSuffix = 'leagueSkins';
