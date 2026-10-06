@@ -207,19 +207,25 @@
   const searchValue = ref('');
 
   watchEffect(() => {
-    if (!searchValue.value) {
+    const keyword = searchValue.value.trim();
+    if (!keyword) {
       mainIMg.value = [];
       currentPage.value = 1;
       return;
     }
+    // 输入 all 时展示全部英雄，不做过滤
+    if (keyword.toLowerCase() === 'all') {
+      mainIMg.value = heros_;
+      currentPage.value = 1;
+      return;
+    }
+    const searchLower = keyword.toLowerCase();
     const filtered = heros_.filter((item) => {
-      if (!searchValue.value) return true;
-      const searchLower = searchValue.value.toLowerCase();
       // 搜索名字、别名、关键词
       return (
         item.name.toLowerCase().includes(searchLower) ||
         item.alias.toLowerCase().includes(searchLower) ||
-        (item.keywords && item.keywords.includes(searchValue.value))
+        (item.keywords && item.keywords.includes(keyword))
       );
     });
     mainIMg.value = filtered;
