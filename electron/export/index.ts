@@ -484,7 +484,7 @@ export const openPath = (path_: string) => {
     console.error('路径不存在或无法访问:', err);
   }
 };
-export const emptyPah = async (path_: string) => {
+export const emptyPah = async (path_: string, silent = false) => {
   const normalized = Path.normalize(path_);
   try {
     if (!fs.existsSync(normalized)) {
@@ -499,9 +499,11 @@ export const emptyPah = async (path_: string) => {
     MessageUtil.error(`清空文件夹：${err.message}`);
     return;
   }
-  MessageUtil.success(`清空文件夹:${path_}`);
+  if (!silent) {
+    MessageUtil.success(`清空文件夹:${path_}`);
+  }
 };
-export const removePath = async (path_: string) => {
+export const removePath = async (path_: string, silent = false) => {
   const normalized = Path.normalize(path_);
   try {
     if (!fs.existsSync(normalized)) {
@@ -521,7 +523,9 @@ export const removePath = async (path_: string) => {
     MessageUtil.error(`删除失败${err.message}`);
     return;
   }
-  MessageUtil.success(`删除成功:${path_}`);
+  if (!silent) {
+    MessageUtil.success(`删除成功:${path_}`);
+  }
 };
 export const openUrl = (url: string) => {
   shell.openExternal(url);

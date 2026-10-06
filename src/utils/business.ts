@@ -130,8 +130,8 @@ export const f_openPath = async (path_: string) => {
 /**
  * export const emptyPah = (path_: string) => {
  */
-export const f_emptyPah = async (path_: string) => {
-  return executeFunction('emptyPah', path_);
+export const f_emptyPah = async (path_: string, silent = false) => {
+  return executeFunction('emptyPah', path_, silent);
 };
 /**
  * export const confirmChoseSkin = async (msg: string, imageSrc: string) => {
@@ -148,8 +148,8 @@ export const f_showToast = async (msg: string) => {
 /**
  * export const removePath = (path_: string) => {
  */
-export const f_removePath = async (path_: string) => {
-  return executeFunction('removePath', path_);
+export const f_removePath = async (path_: string, silent = false) => {
+  return executeFunction('removePath', path_, silent);
 };
 /**
  * export const request_string_get = (url: string, suffix = FileType.TEXT): Promise<string> => {

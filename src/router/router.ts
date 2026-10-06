@@ -28,6 +28,13 @@ export const staticRoutes: RouterType[] = [
     showInMenu: true,
     component: () => import('@/view/match-history/match-history-page.vue'),
   },
+  {
+    path: '/skin-in-use',
+    name: 'skinInUse',
+    aliasZH: '已使用的皮肤',
+    showInMenu: true,
+    component: () => import('@/view/skin-in-use/skin-in-use-page.vue'),
+  },
 ];
 
 const router = createRouter({

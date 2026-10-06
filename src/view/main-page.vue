@@ -1,13 +1,21 @@
 <template>
   <div class="skin-page">
-    <button
-      v-if="!heroId"
-      class="mh-entry-btn"
-      title="战绩查询"
-      @click="router.push('/match-history')"
-    >
-      🏆 战绩查询
-    </button>
+    <div v-if="!heroId" class="top-entry-group">
+      <button
+        class="mh-entry-btn"
+        title="已使用的皮肤"
+        @click="router.push('/skin-in-use')"
+      >
+        🎨 已使用皮肤
+      </button>
+      <button
+        class="mh-entry-btn"
+        title="战绩查询"
+        @click="router.push('/match-history')"
+      >
+        🏆 战绩查询
+      </button>
+    </div>
     <main class="skin-panel">
       <DoLolskinChoseSkin v-if="heroId" :key="heroId"></DoLolskinChoseSkin>
       <div v-else class="empty-panel">
@@ -529,12 +537,18 @@
     font-size: 14px;
   }
 
-  /* 战绩查询入口 */
-  .mh-entry-btn {
+  /* 首页右上角入口按钮组 */
+  .top-entry-group {
     position: fixed;
     top: 14px;
     right: 16px;
     z-index: 1001;
+    display: flex;
+    gap: 8px;
+  }
+
+  /* 战绩查询/已使用皮肤入口 */
+  .mh-entry-btn {
     padding: 8px 16px;
     font-size: 13px;
     font-weight: 600;

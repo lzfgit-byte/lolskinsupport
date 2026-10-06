@@ -132,34 +132,12 @@
           </a-space>
           <br /><br />
           <a-space>
-            <a-button size="small" danger @click="deleteSkinCache">清理皮肤缓存</a-button>
             <a-button size="small" danger @click="f_shoutDownModTools()">
               杀掉modTools[{{ modToolsState }}]
             </a-button>
             <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
             <a-button size="small" @click="testNotify">测试通知</a-button>
-            <a-button size="small" @click="f_loadSkins()">加载所有皮肤</a-button>
           </a-space>
-          <br />
-          <transition-group
-            enter-active-class="animate__animated animate__fadeIn"
-            leave-active-class="animate__animated animate__fadeOut"
-            :duration="200"
-          >
-            <div
-              v-for="item in skinImages"
-              :key="item.skinId"
-              style="margin: 10px; display: inline-block"
-            >
-              <a-image width="200px" :src="item.src">
-                <template #previewMask>
-                  <a-button size="small" @click="deleteSkinCache(item.heroId, item.skinId)">
-                    清理
-                  </a-button>
-                </template>
-              </a-image>
-            </div>
-          </transition-group>
         </a-tab-pane>
         <a-tab-pane key="locale" tab="语言自动修复">
           <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px">
@@ -231,19 +209,14 @@
   import useGlobalState from '@/hooks/use-global-state';
   import {
     f_checkCanAutoConfirm,
-    f_clearSkinImage,
     f_confirmChoseSkin,
     f_detectLocaleConfigFile,
-    f_emptyPah,
-    f_getAllLoadSkins,
     f_getGamePath,
     f_getLocaleCodes,
     f_getLocaleWatcherState,
-    f_getSkinImage,
     f_importLeagueSkinsPackage,
     f_loadSkinDataByFilePath,
     f_loadSkinDataIdName,
-    f_loadSkins,
     f_openPath,
     f_openUrl,
     f_removePath,
@@ -278,7 +251,6 @@
     overlayConfigPath,
     installedPath,
     lcuState,
-    loadSkinIds,
     logDrawOpen,
     modToolsState,
     isUseCommand,
@@ -345,29 +317,6 @@
     } finally {
       importLeagueSkinsLoading.value = false;
     }
-  };
-  const deleteSkinCache = async (heroId?: string, skinId?: string) => {
-    if (skinId && heroId) {
-      await f_removePath(`${installedPath.value}\\${heroId}_${skinId}`);
-      await f_removePath(`${overlayPath.value}\\${heroId}_${skinId}`);
-    } else {
-      await f_emptyPah(`${installedPath.value}`);
-      await f_emptyPah(`${overlayPath.value}`);
-    }
-
-    await f_clearSkinImage(skinId);
-    await getAllChoseSkin();
-  };
-  const skinImages = ref<{ heroId: string; skinId: string; src: string }[]>([]);
-  const getAllChoseSkin = async () => {
-    skinImages.value = [];
-    loadSkinIds.value = [];
-    loadSkinIds.value = await f_getAllLoadSkins();
-    loadSkinIds.value.forEach((item) => {
-      f_getSkinImage(item[1]).then((res) => {
-        skinImages.value.push({ heroId: item[0], skinId: item[1], src: res });
-      });
-    });
   };
   const chuckValue = ref(20);
   const handleLoadAllSkinData = async () => {
@@ -444,7 +393,6 @@
   };
   watchEffect(() => {
     if (drawerOpen.value) {
-      getAllChoseSkin();
       refreshLocaleWatcher();
     }
   });
