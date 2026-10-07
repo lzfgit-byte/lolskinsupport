@@ -1,5 +1,5 @@
 /**
- * 多杀截图的时机配置（延迟 / 连拍时长 / 调试开关）
+ * 多杀截图的开关与时机配置（总开关 / 延迟 / 连拍时长 / 调试开关）
  *
  * 这些配置直接读写 config.json，避免和 export/index.ts 相互引用产生循环依赖。
  */
@@ -7,10 +7,12 @@ import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extr
 import {
   MULTIKILL_CAPTURE_DEBUG,
   MULTIKILL_CAPTURE_DELAY,
+  MULTIKILL_CAPTURE_ENABLED,
   MULTIKILL_CAPTURE_WINDOW,
   configPath,
   defaultMultiKillCaptureDebug,
   defaultMultiKillCaptureDelay,
+  defaultMultiKillCaptureEnabled,
   defaultMultiKillCaptureWindow,
 } from '../const';
 
@@ -66,6 +68,17 @@ function readBooleanConfig(key: string, defaultValue: boolean): boolean {
 
   return defaultValue;
 }
+
+/** 多杀截图总开关：关闭后不再自动截图（仍会广播 multikill 事件） */
+export const getMultiKillCaptureEnabled = (): boolean => {
+  return readBooleanConfig(MULTIKILL_CAPTURE_ENABLED, defaultMultiKillCaptureEnabled);
+};
+
+export const setMultiKillCaptureEnabled = (value: boolean): boolean => {
+  const next = value === true || `${value}`.toLowerCase() === 'true';
+  writeConfigValue(MULTIKILL_CAPTURE_ENABLED, next);
+  return next;
+};
 
 /** 多杀事件后、开始连拍前的等待时间（毫秒） */
 export const getMultiKillCaptureDelay = (): number => {

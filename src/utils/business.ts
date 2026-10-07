@@ -17,6 +17,19 @@ export const f_getScreenshotPath = async (): Promise<string> => {
   return executeFunction('getScreenshotPath');
 };
 /**
+ * export const getMultiKillCaptureEnabled = () => {
+ * 多杀截图：总开关
+ */
+export const f_getMultiKillCaptureEnabled = async (): Promise<boolean> => {
+  return executeFunction('getMultiKillCaptureEnabled');
+};
+/**
+ * export const setMultiKillCaptureEnabled = () => {
+ */
+export const f_setMultiKillCaptureEnabled = async (value: boolean): Promise<boolean> => {
+  return executeFunction('setMultiKillCaptureEnabled', value);
+};
+/**
  * export const getMultiKillCaptureDelay = () => {
  * 多杀截图：事件后等待多少毫秒再开始连拍
  */

@@ -11,6 +11,7 @@ import { captureScreenBurst } from '../utils/screenshot';
 import {
   getMultiKillCaptureDebug,
   getMultiKillCaptureDelay,
+  getMultiKillCaptureEnabled,
   getMultiKillCaptureWindow,
 } from '../utils/screenshot-config';
 import { LogMsgUtil } from '../utils/message';
@@ -504,6 +505,11 @@ export class LCUConnector extends EventEmitter {
 
     this.lastMultiKillKey = key;
     this.emit('multikill', event);
+
+    // 总开关：关闭后只广播事件，不再自动截图
+    if (!getMultiKillCaptureEnabled()) {
+      return;
+    }
 
     // 根据连杀数量划分目录：2->doublekill, 3->triplekill, 4->quadrakill, 5->pentakill
     const killDirMap: Record<number, string> = {

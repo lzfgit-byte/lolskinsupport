@@ -25,12 +25,16 @@ export const defaultModToolsPath = path.join(temp_dir, 'mod-tools\\mod-tools.exe
 export const defaultInstalledPath = path.join(temp_dir, 'installed');
 export const defaultScreenshotPath = path.join(app.getPath('pictures'), 'lolskinsupport');
 export const SKIN_IMAGE_KEY = 'SKIN_IMAGE';
+/** 多杀截图：是否启用自动截图 */
+export const defaultMultiKillCaptureEnabled = true;
 /** 多杀截图：收到多杀事件后、开始连拍前的等待时间（毫秒） */
 export const defaultMultiKillCaptureDelay = 1200;
 /** 多杀截图：连拍总时长（毫秒），最终保存最后一帧 */
 export const defaultMultiKillCaptureWindow = 800;
 /** 多杀截图：调试模式，把连拍过程中的每一帧都保存下来 */
 export const defaultMultiKillCaptureDebug = false;
+/** 多杀截图：总开关配置项 key */
+export const MULTIKILL_CAPTURE_ENABLED = 'MULTIKILL_CAPTURE_ENABLED';
 /** 多杀截图：等待时间配置项 key */
 export const MULTIKILL_CAPTURE_DELAY = 'MULTIKILL_CAPTURE_DELAY';
 /** 多杀截图：连拍时长配置项 key */

@@ -13,7 +13,7 @@
       <h1>设置信息</h1>
 
       <a-tabs v-model:active-key="activeTab">
-        <a-tab-pane key="basic" tab="基础设置">
+        <a-tab-pane key="skin" tab="皮肤设置">
           皮肤存储路径：
           {{ skinPath }}
           <a-space>
@@ -38,10 +38,32 @@
             <a-button size="small" @click="setSkinDefaultSuffix">设置目录名称</a-button>
           </a-space>
           <br /><br />
+          线程数：
+          <a-space>
+            <a-input-number v-model:value="chuckValue" size="small" :min="1" :max="100" />
+            <a-button size="small" danger @click="handleLoadAllSkinData()"
+              >创建所有皮肤数据</a-button
+            >
+          </a-space>
+        </a-tab-pane>
+        <a-tab-pane key="screenshot" tab="截图设置">
+          <div style="font-size: 12px; color: #999; margin-bottom: 8px">
+            多杀（双杀~五杀）时会自动截图。等待时间越长越容易截到游戏内横幅，
+            可以先打开“保存每一帧”跑一局，再从文件名里的 -t 时间挑合适的值。
+          </div>
           截图保存路径：{{ screenshotPath }}
           <a-space>
             <a-button size="small" @click="f_openPath(screenshotPath)">打开文件路径</a-button>
             <a-button size="small" @click="setScreenshotPath">设置文件地址</a-button>
+          </a-space>
+          <br /><br />
+          多杀自动截图：
+          <a-space>
+            <a-switch
+              v-model:checked="multiKillCaptureEnabled"
+              @change="handleMultiKillCaptureToggle"
+            />
+            <span>{{ multiKillCaptureEnabled ? '已开启' : '已关闭' }}</span>
           </a-space>
           <br /><br />
           多杀截图等待：
@@ -52,6 +74,7 @@
               :min="0"
               :max="8000"
               :step="100"
+              :disabled="!multiKillCaptureEnabled"
             />
             <span>ms 后开始连拍</span>
             连拍时长：
@@ -61,13 +84,19 @@
               :min="0"
               :max="5000"
               :step="100"
+              :disabled="!multiKillCaptureEnabled"
             />
             <span>ms</span>
             <a-button size="small" @click="setMultiKillCapture">保存截图时机</a-button>
-            <a-switch v-model:checked="multiKillCaptureDebug" @change="setMultiKillCaptureDebug" />
+            <a-switch
+              v-model:checked="multiKillCaptureDebug"
+              :disabled="!multiKillCaptureEnabled"
+              @change="setMultiKillCaptureDebug"
+            />
             <span>保存每一帧(调试用)</span>
           </a-space>
-          <br /><br />
+        </a-tab-pane>
+        <a-tab-pane key="path" tab="路径设置">
           游戏路径：{{ gamePath }}
           <a-space>
             <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
@@ -119,17 +148,10 @@
               打开url地址
             </a-button>
           </a-space>
-          <br /><br />
+        </a-tab-pane>
+        <a-tab-pane key="debug" tab="其他">
           lcuState：{{ lcuState }}<span m-l-4 m-r-4>isUseCommand:</span>
           <a-switch v-model:checked="isUseCommand" @change="f_setIsUseCommand($event)"></a-switch>
-          <br /><br />
-          <a-space>
-            <span>线程数：</span>
-            <a-input-number v-model:value="chuckValue" size="small" :min="1" :max="100" />
-            <a-button size="small" danger @click="handleLoadAllSkinData()"
-              >创建所有皮肤数据</a-button
-            >
-          </a-space>
           <br /><br />
           <a-space>
             <a-button size="small" danger @click="f_shoutDownModTools()">
@@ -227,6 +249,7 @@
     f_setIsUseCommand,
     f_setMultiKillCaptureDebug,
     f_setMultiKillCaptureDelay,
+    f_setMultiKillCaptureEnabled,
     f_setMultiKillCaptureWindow,
     f_shoutDownModTools,
     f_startLocaleWatcher,
@@ -242,6 +265,7 @@
     skinPath,
     skinDefaultSuffix,
     screenshotPath,
+    multiKillCaptureEnabled,
     multiKillCaptureDelay,
     multiKillCaptureWindow,
     multiKillCaptureDebug,
@@ -257,7 +281,7 @@
   } = useGlobalState();
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const importLeagueSkinsLoading = ref(false);
-  const activeTab = ref('basic');
+  const activeTab = ref('skin');
   const testSlideWin = () => {
     f_checkCanAutoConfirm({
       title: '提示',
@@ -304,6 +328,10 @@
     multiKillCaptureDelay.value = await f_setMultiKillCaptureDelay(multiKillCaptureDelay.value);
     multiKillCaptureWindow.value = await f_setMultiKillCaptureWindow(multiKillCaptureWindow.value);
     message.success('多杀截图时机设置成功');
+  };
+  const handleMultiKillCaptureToggle = async (checked: boolean) => {
+    multiKillCaptureEnabled.value = await f_setMultiKillCaptureEnabled(checked);
+    message.success(checked ? '已开启多杀自动截图' : '已关闭多杀自动截图');
   };
   const setMultiKillCaptureDebug = async (checked: boolean) => {
     multiKillCaptureDebug.value = await f_setMultiKillCaptureDebug(checked);

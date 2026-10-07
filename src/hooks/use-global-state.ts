@@ -13,6 +13,7 @@ const heroAlias = ref('');
 const skinPath = ref('');
 const skinDefaultSuffix = ref('');
 const screenshotPath = ref('');
+const multiKillCaptureEnabled = ref(true);
 const multiKillCaptureDelay = ref(1200);
 const multiKillCaptureWindow = ref(800);
 const multiKillCaptureDebug = ref(false);
@@ -97,6 +98,7 @@ export default () => ({
   skinPath,
   skinDefaultSuffix,
   screenshotPath,
+  multiKillCaptureEnabled,
   multiKillCaptureDelay,
   multiKillCaptureWindow,
   multiKillCaptureDebug,
