@@ -26,11 +26,12 @@
 
 <script setup lang="ts">
   import { computed, onMounted, ref, watchEffect } from 'vue';
+  import { message } from 'ant-design-vue';
   import HeroCard from './hero-card.vue';
-  import http from '@/utils/http';
   import type { mainHeroInfo } from '@/type/type';
   import useGlobalState from '@/hooks/use-global-state';
   import bus from '@/utils/bus';
+  import { HERO_LIST_CACHE_KEY, LOL_DATA, fetchJsonWithCache } from '@/utils/remote-cache';
   import { f_setIdName } from '@/utils/business';
 
   const mainIMg = ref<mainHeroInfo[]>([]);
@@ -53,17 +54,27 @@
     return mainIMg.value.slice(start, end);
   });
 
-  http.axios
-    .get('https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js')
-    .then((res: any) => {
-      mainIMg.value = res.hero || [];
-      heros_ = res.hero || [];
-      heros.value = res.hero || [];
-      f_setIdName(res.hero);
-      res.hero?.forEach((item) => {
-        heroIdAliasMap[item.heroId] = item.alias;
-      });
+  // 获取英雄数据（优先读随包 JSON，后台自动刷新）
+  const loadHeroList = async () => {
+    const res = await fetchJsonWithCache<{ hero: mainHeroInfo[] }>(
+      'https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js',
+      HERO_LIST_CACHE_KEY,
+      { localFile: LOL_DATA.heroList }
+    ).catch(() => null);
+    if (!res) {
+      message.error('英雄列表加载失败，请检查网络后重试');
+      return;
+    }
+    const heroList = res.data?.hero || [];
+    mainIMg.value = heroList;
+    heros_ = heroList;
+    heros.value = heroList;
+    f_setIdName(heroList);
+    heroList.forEach((item) => {
+      heroIdAliasMap[item.heroId] = item.alias;
     });
+  };
+  loadHeroList();
 
   const handlerClickHero = (heroId_: string, heroAlias_) => {
     heroId.value = heroId_;

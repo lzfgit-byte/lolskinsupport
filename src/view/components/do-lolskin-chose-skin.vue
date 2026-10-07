@@ -22,17 +22,34 @@
     <div class="skin-content">
       <!-- 左侧：皮肤列表（保留图片与下方的皮肤名字节点） -->
       <aside class="skin-list">
-        <div
-          v-for="item in allSkins"
-          :key="item.skinId"
-          class="skin-card"
-          :class="{ active: isChose(item) }"
-          :title="item.description"
-          @click="handleChoseSkin(item)"
-          @dblclick="applySelectedSkin"
-        >
-          <img :src="item.mainImg" loading="lazy" />
-          <div class="skin-name" :title="item.name">{{ item.name }}</div>
+        <template v-if="allSkins.length > 0">
+          <div
+            v-for="item in allSkins"
+            :key="item.skinId"
+            class="skin-card"
+            :class="{ active: isChose(item) }"
+            :title="item.description"
+            @click="handleChoseSkin(item)"
+            @dblclick="applySelectedSkin"
+          >
+            <img :src="item.mainImg" loading="lazy" />
+            <div class="skin-name" :title="item.name">{{ item.name }}</div>
+          </div>
+        </template>
+
+        <!-- 加载中 / 加载失败（可重试）/ 无数据 -->
+        <div v-else class="skin-list-state">
+          <template v-if="skinLoading">
+            <div class="state-title">正在加载皮肤数据...</div>
+          </template>
+          <template v-else-if="skinError">
+            <div class="state-title">{{ skinError }}</div>
+            <div class="state-desc">{{ skinTip }}</div>
+            <a-button class="state-btn" size="small" @click="getSkins()"> 重新加载 </a-button>
+          </template>
+          <template v-else>
+            <div class="state-title">暂无皮肤数据</div>
+          </template>
         </div>
       </aside>
 
@@ -99,9 +116,9 @@
   import type { Ref } from 'vue';
   import { computed, onMounted, ref } from 'vue';
   import { message } from 'ant-design-vue';
-  import http from '@/utils/http';
-  import type { skinInfo } from '@/type/type';
+  import type { heroInfo, skinInfo } from '@/type/type';
   import useGlobalState, { LogUtil } from '@/hooks/use-global-state';
+  import { fetchJsonWithCache, heroSkinsCacheKey, LOL_DATA } from '@/utils/remote-cache';
   import {
     f_checkHasSkins,
     f_clearSkinImage,
@@ -137,6 +154,12 @@
   const allSkins = ref<skinInfo[]>([]);
   const choseSkinId = ref('');
   const showChromas = ref(false);
+  /** 皮肤数据加载状态 */
+  const skinLoading = ref(false);
+  const skinError = ref('');
+  const skinTip = ref('');
+  /** 请求序号，切换英雄后丢弃过期响应 */
+  let skinReqToken = 0;
 
   const choseSkin = computed(() => {
     if (choseSkinId.value) {
@@ -175,35 +198,82 @@
     return a;
   };
 
-  const getSkins = () => {
-    const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId.value}.js`;
+  /** 应用皮肤数据：本地 JSON 与后台刷新结果共用此逻辑 */
+  const applySkins = (list: skinInfo[]) => {
+    skins_.value = list || [];
+    allSkins.value = skins_.value.filter((item: skinInfo) => item.chromasBelongId === '0');
+  };
+
+  /** 拉取英雄皮肤列表：直接读随包 JSON，不发网络请求；本地缺失时才会回源 */
+  const getSkins = async () => {
     if (!heroId.value) {
       message.warn('请选择英雄');
       return;
     }
-    http.axios
-      .get(REQ_URL)
-      .then((res: any) => {
-        skins_.value = res.skins || [];
-        allSkins.value = skins_.value.filter((item: skinInfo) => item.chromasBelongId === '0');
-        return f_getHeroChoseSkin(heroId.value);
-      })
-      .then((id) => {
-        choseSkinId.value = id || allSkins.value[0]?.skinId || '';
-        if (!choseSkinId.value) {
+    const REQ_URL = `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId.value}.js`;
+    const token = ++skinReqToken;
+    skinLoading.value = true;
+    skinError.value = '';
+    skinTip.value = '';
+    showChromas.value = false;
+    applySkins([]);
+    choseSkinId.value = '';
+
+    const res = await fetchJsonWithCache<heroInfo>(REQ_URL, heroSkinsCacheKey(heroId.value), {
+      timeout: 8000,
+      retries: 1,
+      localFile: LOL_DATA.heroSkins(heroId.value),
+      // 后台刷新拿到新数据时无感更新列表（保留当前选中皮肤）
+      onUpdate: (fresh) => {
+        if (token !== skinReqToken || !fresh?.skins?.length) {
           return;
         }
-        if (lcuState.value && autoChose.value && !choseSkinId.value?.endsWith('00')) {
-          f_confirmChoseSkin(
-            `选择皮肤【${choseSkin.value?.name}】`,
-            choseSkin.value.mainImg || getSkinChromaUrl(choseSkin.value)
-          ).then(async (res) => {
-            if (res) {
-              await applySelectedSkin();
-            }
-          });
+        applySkins(fresh.skins);
+      },
+    }).catch(() => null);
+
+    // 已切换到其它英雄，丢弃过期结果
+    if (token !== skinReqToken) {
+      return;
+    }
+    skinLoading.value = false;
+    if (!res) {
+      skinError.value = '皮肤数据加载失败';
+      skinTip.value = '请检查网络后重试';
+      return;
+    }
+
+    applySkins(res.data?.skins || []);
+    if (allSkins.value.length === 0) {
+      skinError.value = '皮肤数据加载失败';
+      skinTip.value = '接口未返回皮肤数据，请稍后重试';
+      return;
+    }
+
+    let choseId = '';
+    try {
+      choseId = (await f_getHeroChoseSkin(heroId.value)) || '';
+    } catch {
+      choseId = '';
+    }
+    if (token !== skinReqToken) {
+      return;
+    }
+
+    choseSkinId.value = choseId || allSkins.value[0]?.skinId || '';
+    if (!choseSkinId.value) {
+      return;
+    }
+    if (lcuState.value && autoChose.value && !choseSkinId.value?.endsWith('00')) {
+      f_confirmChoseSkin(
+        `选择皮肤【${choseSkin.value?.name}】`,
+        choseSkin.value.mainImg || getSkinChromaUrl(choseSkin.value)
+      ).then(async (res) => {
+        if (res) {
+          await applySelectedSkin();
         }
       });
+    }
   };
 
   const isChose = (item: skinInfo) => {
@@ -487,6 +557,39 @@
     line-height: 18px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* 列表加载中 / 加载失败 / 无数据 */
+  .skin-list-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 48px 12px;
+    text-align: center;
+
+    .state-title {
+      color: #fff2c7;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .state-desc {
+      color: #7f8b97;
+      font-size: 13px;
+    }
+
+    .state-btn {
+      border-color: #5e8d3a;
+      background: #15221b;
+      color: #f2e6bb;
+
+      &:hover {
+        border-color: #8fc85d;
+        color: #ffffff;
+      }
+    }
   }
 
   /* 右侧容器：大图展示 + 底部按钮 */

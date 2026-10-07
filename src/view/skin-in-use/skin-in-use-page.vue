@@ -48,8 +48,13 @@
 <script setup lang="ts">
   import { onMounted, ref } from 'vue';
   import { message } from 'ant-design-vue';
-  import http from '@/utils/http';
   import useGlobalState from '@/hooks/use-global-state';
+  import {
+    HERO_LIST_CACHE_KEY,
+    LOL_DATA,
+    fetchJsonWithCache,
+    heroSkinsCacheKey,
+  } from '@/utils/remote-cache';
   import {
     f_clearSkinImage,
     f_emptyPah,
@@ -101,10 +106,12 @@
       return;
     }
     try {
-      const res: any = await http.axios.get(
-        'https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js'
+      const res = await fetchJsonWithCache<{ hero: any[] }>(
+        'https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js',
+        HERO_LIST_CACHE_KEY,
+        { silent: true, localFile: LOL_DATA.heroList }
       );
-      (res.hero || []).forEach((h: any) => {
+      (res?.data?.hero || []).forEach((h: any) => {
         const id = `${h.heroId}`;
         heroInfoMap.value[id] = { name: h.name || h.alias || '', alias: h.alias || '' };
       });
@@ -115,16 +122,22 @@
 
   /** 拉取英雄的皮肤列表，得到 skinId -> 皮肤名 映射 */
   const ensureSkinNames = async (heroIds: string[]) => {
+    let usedCache = false;
     await Promise.all(
       heroIds
         .filter((id) => id && !loadedHeroIds.has(id))
         .map(async (heroId) => {
           loadedHeroIds.add(heroId);
           try {
-            const res: any = await http.axios.get(
-              `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId}.js`
+            const res = await fetchJsonWithCache<{ skins: any[] }>(
+              `https://game.gtimg.cn/images/lol/act/img/js/hero/${heroId}.js`,
+              heroSkinsCacheKey(heroId),
+              { silent: true, localFile: LOL_DATA.heroSkins(heroId) }
             );
-            (res.skins || []).forEach((s: any) => {
+            if (res?.source === 'cache') {
+              usedCache = true;
+            }
+            (res?.data?.skins || []).forEach((s: any) => {
               if (s?.skinId) {
                 skinNameMap.value[`${s.skinId}`] = s.name || '';
               }
@@ -134,6 +147,9 @@
           }
         })
     );
+    if (usedCache) {
+      message.warn('网络请求失败，部分皮肤名称来自本地缓存');
+    }
   };
 
   const loadUsedSkins = async () => {

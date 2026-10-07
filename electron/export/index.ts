@@ -39,7 +39,9 @@ import { findOverlayWads, isEncryptedOverlay, restoreWadHeaders } from './overla
 export * from '../http';
 export * from './locale-watcher';
 export * from './launch-game';
+export * from './lol-data';
 export * from './match-history';
+export * from './remote-cache';
 export * from '../utils/screenshot-config';
 const idName = {};
 const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
