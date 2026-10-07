@@ -147,9 +147,7 @@ function readLocal(filePath) {
 
 function readVersion() {
   try {
-    const pkg = JSON.parse(
-      readFileSync(join(__dirname, '../package.json'), { encoding: 'utf-8' })
-    );
+    const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), { encoding: 'utf-8' }));
     return pkg.version;
   } catch {
     return '';
