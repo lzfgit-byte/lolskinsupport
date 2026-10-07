@@ -77,21 +77,25 @@
               <span class="chroma-title">炫彩皮肤 ({{ skinChild.length }} 个)</span>
               <div class="chroma-toggle-btn" :class="{ expanded: showChromas }">
                 <span class="toggle-text">{{ showChromas ? '收起' : '展开' }}</span>
-                <span class="toggle-icon">{{ showChromas ? '▼' : '▲' }}</span>
+                <span class="toggle-icon">▲</span>
               </div>
             </div>
 
-            <div v-if="showChromas" class="chroma-list">
-              <button
-                v-for="item in skinChild"
-                :key="item.skinId"
-                class="chroma-item"
-                :class="{ active: item.skinId === choseSkinId }"
-                :title="item.name"
-                @click="handleChoseSkin(item)"
-              >
-                <img :src="getSkinChromaUrl(item)" />
-              </button>
+            <!-- 列表始终挂载（图片预加载，展开无跳变），展开动画靠 transform/opacity -->
+            <div class="chroma-body" :class="{ expanded: showChromas }">
+              <div class="chroma-list">
+                <button
+                  v-for="(item, index) in skinChild"
+                  :key="item.skinId"
+                  class="chroma-item"
+                  :class="{ active: item.skinId === choseSkinId }"
+                  :title="item.name"
+                  :style="{ '--chroma-delay': `${Math.min(index, 8) * 20}ms` }"
+                  @click="handleChoseSkin(item)"
+                >
+                  <img :src="getSkinChromaUrl(item)" />
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -658,14 +662,15 @@
     bottom: 8px;
     right: 12px;
     width: 150px; /* 收起状态下：极简精致小巧外框 */
-    background: rgba(16, 22, 29, 0.92);
-    backdrop-filter: blur(8px);
+    background: rgba(16, 22, 29, 0.96);
     border: 1px solid #2e3e4d;
     border-radius: 4px;
     padding: 5px 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-    transition: width 0.2s ease-in-out; /* 展开/收起过渡 */
-    backface-visibility: hidden;
+    /* 只过渡宽度；不再用 backdrop-filter，避免逐帧重新模糊背景导致掉帧 */
+    transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    /* 把布局/绘制影响锁在面板内部，减小动画时的重排范围 */
+    contain: layout paint style;
 
     &.expanded {
       width: 400px; /* 展开状态下：面板扩大放宽 */
@@ -698,10 +703,13 @@
       color: #8fc85d;
       font-size: 10px;
       font-weight: 700;
-      transition: all 0.16s ease;
+      transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 
       .toggle-icon {
         font-size: 8px;
+        line-height: 1;
+        /* 图标旋转代替换字符，不会突然跳一下 */
+        transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       &:hover {
@@ -714,7 +722,32 @@
         background: #203325;
         border-color: #5e8d3a;
         color: #a3e070;
+
+        .toggle-icon {
+          transform: rotate(180deg);
+        }
       }
+    }
+  }
+
+  /* 展开/收起动画容器：max-height 负责撑开，视觉过渡交给 transform/opacity */
+  .chroma-body {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(6px);
+    transform-origin: right top;
+    pointer-events: none;
+    transition:
+      max-height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.22s ease,
+      transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+
+    &.expanded {
+      max-height: 480px;
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
     }
   }
 
@@ -749,7 +782,14 @@
     cursor: pointer;
     border-radius: 4px;
     overflow: hidden;
-    transition: border-color 0.14s ease, box-shadow 0.14s ease;
+    /* 逐个渐入，延迟由 --chroma-delay 控制（只作用于 opacity/transform，不影响 hover） */
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+    transition:
+      opacity 0.22s ease var(--chroma-delay, 0ms),
+      transform 0.3s cubic-bezier(0.22, 1, 0.36, 1) var(--chroma-delay, 0ms),
+      border-color 0.14s ease,
+      box-shadow 0.14s ease;
 
     &:hover {
       border-color: #8fc85d;
@@ -767,6 +807,11 @@
       aspect-ratio: 1 / 1;
       object-fit: cover;
     }
+  }
+
+  .chroma-body.expanded .chroma-item {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 
   /* 底部平铺按钮区域 */
