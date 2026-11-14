@@ -279,6 +279,34 @@ export const f_setIsUseCommand = async (isUseCommand: boolean) => {
   return executeFunction('setIsUseCommand', isUseCommand);
 };
 /**
+ * 把选中的皮肤写入 R3nzSkin（替代原来的 mod 挂载）
+ * export const publishSkinToR3nzSkin = (heroId: string, skinId: string) => {
+ */
+export const f_publishSkinToR3nzSkin = async (heroId: string, skinId: string) => {
+  return executeFunction('publishSkinToR3nzSkin', heroId, skinId);
+};
+/**
+ * R3nzSkin 配置状态（目录是否可写、已配置英雄数量）
+ */
+export const f_getR3nzSkinStatus = async () => {
+  return executeFunction('getR3nzSkinStatus');
+};
+/**
+ * 取消某个英雄的皮肤预选（删除 R3nzSkin 配置里的对应键）
+ */
+export const f_clearChampionSkinSelection = async (heroId: string) => {
+  return executeFunction('clearChampionSkinSelection', heroId);
+};
+/**
+ * 自动应用开关（锁定英雄/打开皮肤页时自动写入 R3nzSkin）
+ */
+export const f_getAutoApplySetting = async () => {
+  return executeFunction('getAutoApplySetting');
+};
+export const f_setAutoApplySetting = async (enabled: boolean) => {
+  return executeFunction('setAutoApplySetting', enabled);
+};
+/**
  * 语言自动修复（迁移自 LOLauncher）
  */
 /** export const getLocaleCodes = () => {} */

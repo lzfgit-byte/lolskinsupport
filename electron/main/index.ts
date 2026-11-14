@@ -19,6 +19,12 @@ const indexHtml = join(process.env.DIST, 'index.html');
 let execFuncOnClose = [];
 
 async function createWindow() {
+  // R3nzSkin 的配置目录取自系统「文档」已知文件夹（可能被 OneDrive 重定向）
+  try {
+    process.env.R3NZSKIN_DIR = join(app.getPath('documents'), 'R3nzSkin');
+  } catch {
+    // 取不到时由 r3nzskin-sync 回退到 %USERPROFILE%\Documents\R3nzSkin
+  }
   win = new BrowserWindow({
     title: 'ghs',
     width: 1400,

@@ -8,14 +8,13 @@
           <span class="hero-name">{{ heroAlias }}</span>
           <span class="hero-id">ID: {{ heroId }}_{{ mkSkinId }}</span>
         </div>
+        <div class="r3nz-chip" :title="r3nzStatusTitle">{{ r3nzStatusText }}</div>
       </div>
       <div class="header-actions">
-        <a-button class="header-action-btn" size="small" @click="openHeroSkinPath">
-          打开皮肤目录
+        <a-button class="header-action-btn" size="small" @click="openR3nzSkinDir">
+          R3nzSkin 配置目录
         </a-button>
-        <a-button class="header-action-btn" size="small" @click="doUnPackWadFile">
-          解压 WAD
-        </a-button>
+        <a-button class="header-action-btn" size="small" @click="refreshStatus"> 刷新状态 </a-button>
       </div>
     </header>
 
@@ -102,14 +101,18 @@
 
         <!-- 底部平铺操作按钮栏 -->
         <footer class="bottom-actions-bar">
-          <a-button class="action-btn-ghost" @click="doMkCurrentHero">
-            （多个）全部皮肤文件
+          <a-button class="action-btn-ghost" @click="openR3nzSkinDir"> 打开配置目录 </a-button>
+          <a-button class="action-btn-ghost" :disabled="!choseSkinId" @click="clearPreselect">
+            取消该英雄预选
           </a-button>
-          <a-button class="action-btn-ghost" @click="doMkCurrentSkin">
-            （一个）当前皮肤文件
+          <a-button
+            class="action-btn-primary"
+            :loading="publishing"
+            :disabled="!choseSkinId"
+            @click="applySelectedSkin"
+          >
+            应用到 R3nzSkin
           </a-button>
-          <a-button class="action-btn-secondary" @click="doMkOverlay"> 构建 overlay </a-button>
-          <a-button class="action-btn-primary" @click="applySelectedSkin"> 点击使用皮肤 </a-button>
         </footer>
       </main>
     </div>
@@ -124,40 +127,24 @@
   import useGlobalState, { LogUtil } from '@/hooks/use-global-state';
   import { fetchJsonWithCache, heroSkinsCacheKey, LOL_DATA } from '@/utils/remote-cache';
   import {
-    f_checkHasSkins,
-    f_clearSkinImage,
-    f_confirmChoseSkin,
+    f_clearChampionSkinSelection,
     f_getHeroChoseSkin,
-    f_loadSkin,
-    f_loadSkinDataByFilePath,
-    f_mkOverlay,
+    f_getR3nzSkinStatus,
     f_openPath,
-    f_removePath,
-    f_selectPathOrFile,
+    f_publishSkinToR3nzSkin,
     f_setHeroChoseSkin,
-    f_unpackWadFileTo,
   } from '@/utils/business';
-  import { showFrontendConfirm } from '@/utils/kit-utils';
 
-  const {
-    heroId,
-    autoChose,
-    buildSkinZipBeforeApply,
-    heroAlias,
-    lcuState,
-    gamePath,
-    installedPath,
-    logDrawOpen,
-    overlayPath,
-    skinPath,
-    skinDefaultSuffix,
-    choseDrawerOpen,
-  } = useGlobalState();
+  const { heroId, heroAlias, choseDrawerOpen, autoChose, lcuState } = useGlobalState();
   let skins_ = ref<skinInfo[]>([]);
   let skinIdImg = {};
   const allSkins = ref<skinInfo[]>([]);
   const choseSkinId = ref('');
   const showChromas = ref(false);
+  /** 正在写入 R3nzSkin */
+  const publishing = ref(false);
+  /** R3nzSkin 配置状态 */
+  const r3nzStatus = ref<any>(null);
   /** 皮肤数据加载状态 */
   const skinLoading = ref(false);
   const skinError = ref('');
@@ -265,19 +252,7 @@
     }
 
     choseSkinId.value = choseId || allSkins.value[0]?.skinId || '';
-    if (!choseSkinId.value) {
-      return;
-    }
-    if (lcuState.value && autoChose.value && !choseSkinId.value?.endsWith('00')) {
-      f_confirmChoseSkin(
-        `选择皮肤【${choseSkin.value?.name}】`,
-        choseSkin.value.mainImg || getSkinChromaUrl(choseSkin.value)
-      ).then(async (res) => {
-        if (res) {
-          await applySelectedSkin();
-        }
-      });
-    }
+    await autoApplyChosenSkin();
   };
 
   const isChose = (item: skinInfo) => {
@@ -299,62 +274,82 @@
     if (item.chromasBelongId === '0') {
       showChromas.value = false;
     }
-    const res = await f_checkHasSkins(heroId.value, item.skinId);
-    if (!res) {
-      message.warn('请先下载英雄皮肤');
-    }
     await preChose();
+    // 开了自动应用就立刻写进 R3nzSkin，不用再点按钮
+    if (autoChose.value && lcuState.value) {
+      await applySelectedSkin();
+    }
   };
 
-  const ensureBuildSkinZipBeforeApply = async () => {
-    if (!buildSkinZipBeforeApply.value) {
-      return;
-    }
-
-    await f_removePath(`${installedPath.value}\${heroId.value}_${choseSkinId.value}`);
-    await f_removePath(`${overlayPath.value}\${heroId.value}_${choseSkinId.value}`);
-    await f_clearSkinImage(choseSkinId.value);
-
-    const wadPath = `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`;
-    if (!wadPath) {
-      message.warn('未找到当前英雄的 WAD 文件，无法构建皮肤 zip');
-      return;
-    }
-
-    await f_loadSkinDataByFilePath(wadPath, +mkSkinId.value);
-    logDrawOpen.value = true;
-  };
-
+  /** 写入 R3nzSkin：把当前皮肤作为该英雄的预选（不再挂载 mod） */
   const applySelectedSkin = async () => {
-    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
-    if (!res) {
-      message.warn('请先下载英雄皮肤');
+    if (!choseSkinId.value) {
+      message.warn('请先选择一个皮肤');
       return;
     }
-    await ensureBuildSkinZipBeforeApply();
-    await f_loadSkin(heroId.value, choseSkin.value.skinId, getSkinImage());
+    publishing.value = true;
+    try {
+      const res = await f_publishSkinToR3nzSkin(heroId.value, choseSkinId.value);
+      if (!res?.ok) {
+        message.error(res?.reason ?? '写入 R3nzSkin 失败');
+        return;
+      }
+      await preChose();
+      await refreshStatus();
+    } catch (error: any) {
+      message.error(`写入 R3nzSkin 失败：${error?.message ?? error}`);
+    } finally {
+      publishing.value = false;
+    }
   };
 
-  const doMkOverlay = async () => {
-    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
-    if (!res) {
-      message.warn('请先下载英雄皮肤');
+  /** 原版行为：LCU 已连接且开启「自动应用」时，打开皮肤页即自动应用该英雄已选的皮肤 */
+  const autoApplyChosenSkin = async () => {
+    if (!choseSkinId.value || !lcuState.value || !autoChose.value) {
       return;
     }
-    await f_mkOverlay(heroId.value, choseSkin.value.skinId, getSkinImage());
+    // 基础皮肤不需要改，原版同样跳过
+    if (choseSkinId.value.endsWith('00')) {
+      return;
+    }
+    await applySelectedSkin();
   };
 
-  const getSkinImage = () => {
-    return choseSkinMainImg.value;
-  };
-
+  /** 记住这个英雄的选择；锁定英雄时主进程会用这份选择自动写入 R3nzSkin */
   const preChose = async () => {
-    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
-    if (!res) {
-      message.warn('请先下载英雄皮肤');
+    if (!heroId.value || !choseSkinId.value) {
       return;
     }
     await f_setHeroChoseSkin(heroId.value, choseSkinId.value);
+  };
+
+  const refreshStatus = async () => {
+    try {
+      r3nzStatus.value = await f_getR3nzSkinStatus();
+    } catch {
+      r3nzStatus.value = null;
+    }
+  };
+
+  const openR3nzSkinDir = () => {
+    const dir = r3nzStatus.value?.dir;
+    if (!dir) {
+      message.warn('还没拿到 R3nzSkin 配置目录，请先点「刷新状态」');
+      return;
+    }
+    f_openPath(dir);
+  };
+
+  const clearPreselect = async () => {    if (!heroId.value) {
+      return;
+    }
+    const res = await f_clearChampionSkinSelection(heroId.value).catch(() => null);
+    if (res?.ok) {
+      message.success(`已清除 ${res.alias} 的皮肤预选`);
+      await refreshStatus();
+    } else {
+      message.warn('清除预选失败');
+    }
   };
 
   const mkSkinId = computed(() => {
@@ -364,47 +359,33 @@
     return parseInt(choseSkinId.value?.replace(heroId.value, '')).toString();
   });
 
-  const doMkCurrentSkin = async () => {
-    const path = await f_selectPathOrFile(
-      'openFile',
-      `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`
-    );
-    if (path) {
-      f_loadSkinDataByFilePath(path, +mkSkinId.value);
-      logDrawOpen.value = true;
+  const r3nzStatusText = computed(() => {
+    const status = r3nzStatus.value;
+    if (!status) {
+      return 'R3nzSkin：未检测到';
     }
-  };
-
-  const doMkCurrentHero = async () => {
-    showFrontendConfirm('确认创建当前英雄皮肤').then(async () => {
-      const path = await f_selectPathOrFile(
-        'openFile',
-        `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`
-      );
-      if (path) {
-        f_loadSkinDataByFilePath(path);
-        logDrawOpen.value = true;
-      }
-    });
-  };
-
-  const doUnPackWadFile = async () => {
-    const path = await f_selectPathOrFile(
-      'openFile',
-      `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`
-    );
-    if (path) {
-      f_unpackWadFileTo(path);
-      logDrawOpen.value = true;
+    if (!status.configExists) {
+      return 'R3nzSkin：配置未创建';
     }
-  };
+    return `R3nzSkin：已配置 ${status.configuredChampions} 个英雄`;
+  });
 
-  const openHeroSkinPath = () => {
-    f_openPath(`${skinPath.value}\\${skinDefaultSuffix.value}\\${heroId.value}`);
-  };
+  const r3nzStatusTitle = computed(() => {
+    const status = r3nzStatus.value;
+    if (!status) {
+      return '读取 R3nzSkin 配置失败';
+    }
+    return [
+      `配置目录：${status.dir}`,
+      `配置文件：${status.configExists ? '已存在' : '尚未创建'}`,
+      `已配置英雄：${status.configuredChampions} 个`,
+      '写入后需要重新注入 R3nzSkin 才会生效（首次注入在进游戏前）',
+    ].join('\n');
+  });
 
   onMounted(() => {
     getSkins();
+    refreshStatus();
   });
 </script>
 
@@ -471,6 +452,16 @@
   .hero-id {
     color: #7f8b97;
     font-size: 13px;
+  }
+
+  /* R3nzSkin 同步状态 */
+  .r3nz-chip {
+    padding: 2px 10px;
+    border: 1px solid #2f4a3a;
+    background: #101b15;
+    color: #9fd08a;
+    font-size: 12px;
+    white-space: nowrap;
   }
 
   .header-actions {
@@ -817,7 +808,7 @@
   /* 底部平铺按钮区域 */
   .bottom-actions-bar {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     padding: 12px;
     border: 1px solid @border-color;

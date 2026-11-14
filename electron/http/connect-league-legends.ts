@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { webContents } from 'electron';
 import { getGamePath } from '../export';
+import { autoSyncOnChampionSelected, setChampionSkinListProvider } from '../export/r3nzskin-sync';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { IS_USE_COMMAND, modToolsWrapper } from '../const';
 import { gameflowMonitor } from './gameflowMonitor';
@@ -30,8 +31,29 @@ const safeSend = (win: BrowserWindow, channel: string, ...args: any[]) => {
 export const initLcu = async (win: BrowserWindow) => {
   lcuConnector.startAutoConnect();
   await gameflowMonitor.start();
+  // R3nzSkin 同步用：读取客户端自己的英雄皮肤数据（当前补丁/地区最准确）
+  setChampionSkinListProvider(async (heroId: string) => {
+    if (!lcuConnector.isConnected()) {
+      return null;
+    }
+    try {
+      return await lcuConnector.request(
+        'GET',
+        `/lol-game-data/assets/v1/champions/${heroId}.json`
+      );
+    } catch (error: any) {
+      LogMsgUtil.sendLogMsg(
+        `[R3nzSkin] 读取客户端皮肤列表失败（回退到内置皮肤库）：${error?.message ?? error}`
+      );
+      return null;
+    }
+  });
   gameflowMonitor.on('champion-selected', (args) => {
     safeSend(win, 'champion-selected', args?.championId);
+    // 锁定英雄后立刻把「这个英雄上次选的皮肤」写给 R3nzSkin，进游戏即生效
+    autoSyncOnChampionSelected(args?.championId).catch((error: any) => {
+      LogMsgUtil.sendLogMsg(`[R3nzSkin] 自动同步异常：${error?.message ?? error}`);
+    });
   });
   gameflowMonitor.on('phase-changed', (phase, previousPhase) => {});
   setInterval(() => {

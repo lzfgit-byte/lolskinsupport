@@ -5,25 +5,46 @@
         <CarOutlined />
       </button>
     </a-tooltip>
-    <a-tooltip title="切换自动应用" placement="left">
+    <a-tooltip
+      title="自动应用：锁定英雄或打开皮肤页时，自动把该英雄已选的皮肤写入 R3nzSkin"
+      placement="left"
+    >
       <div class="float-switch">
-        <a-switch v-model:checked="autoChose" size="small" />
-      </div>
-    </a-tooltip>
-    <a-tooltip title="应用前先构建皮肤 zip" placement="left">
-      <div class="float-switch">
-        <a-switch v-model:checked="buildSkinZipBeforeApply" size="small" />
+        <a-switch v-model:checked="autoChose" size="small" @change="persistAutoChose" />
       </div>
     </a-tooltip>
   </div>
 </template>
 <script setup lang="ts">
+  import { onMounted } from 'vue';
   import { CarOutlined } from '@ant-design/icons-vue';
   import useGlobalState from '@/hooks/use-global-state';
+  import { f_getAutoApplySetting, f_setAutoApplySetting } from '@/utils/business';
+
   defineProps({
     handleDrawOpen: Function,
   });
-  const { autoChose, buildSkinZipBeforeApply } = useGlobalState();
+
+  const { autoChose } = useGlobalState();
+
+  onMounted(async () => {
+    try {
+      const setting = await f_getAutoApplySetting();
+      if (setting && typeof setting.enabled === 'boolean') {
+        autoChose.value = setting.enabled;
+      }
+    } catch {
+      // 读取失败就用默认值（开）
+    }
+  });
+
+  const persistAutoChose = async () => {
+    try {
+      await f_setAutoApplySetting(!!autoChose.value);
+    } catch {
+      // 持久化失败不影响本次会话
+    }
+  };
 </script>
 
 <style scoped lang="less">

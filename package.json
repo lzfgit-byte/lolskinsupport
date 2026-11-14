@@ -23,11 +23,11 @@
   },
   "scripts": {
     "app:dev": "vite",
-    "app:build": "npm version patch && vite build && electron-builder",
+    "app:build": "vite build && electron-builder",
     "app:prebuild": "vite build && node script/build.js && electron-builder",
     "app:elbuild": "electron-builder",
     "app:preview": "vite preview",
-    "data:gen": "node script/gen-lol-data.mjs"
+    "data:gen": "node script/gen-lol-data.mjs --force"
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",

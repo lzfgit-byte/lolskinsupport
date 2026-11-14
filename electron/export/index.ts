@@ -40,6 +40,7 @@ export * from '../http';
 export * from './locale-watcher';
 export * from './launch-game';
 export * from './lol-data';
+export * from './r3nzskin-sync';
 export * from './match-history';
 export * from './remote-cache';
 export * from '../utils/screenshot-config';
