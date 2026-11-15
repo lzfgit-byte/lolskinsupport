@@ -4,7 +4,8 @@ import type { BrowserWindow } from 'electron';
 import { webContents } from 'electron';
 import { getGamePath } from '../export';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
-import { IS_USE_COMMAND, modToolsWrapper } from '../const';
+import { IS_USE_COMMAND } from '../const';
+import { ltfInjector } from '../export/ltfSession';
 import { gameflowMonitor } from './gameflowMonitor';
 import { lcuConnector } from './lcuConnector';
 
@@ -36,7 +37,7 @@ export const initLcu = async (win: BrowserWindow) => {
   gameflowMonitor.on('phase-changed', (phase, previousPhase) => {});
   setInterval(() => {
     safeSend(win, 'notify-lcu-connect', lcuConnector.isConnected());
-    safeSend(win, 'notify-mod-tools-connect', modToolsWrapper.isRunning());
+    safeSend(win, 'notify-mod-tools-connect', ltfInjector.isRunning());
     safeSend(win, 'notify-state', { IS_USE_COMMAND });
   }, 1000);
 };

@@ -12,7 +12,7 @@
       <div class="siu-header-actions">
         <a-button size="small" @click="loadUsedSkins">刷新</a-button>
         <a-button size="small" type="primary" @click="handleLoadAllSkins">加载所有皮肤</a-button>
-        <a-button size="small" @click="openOverlayDir">打开 overlay 目录</a-button>
+        <a-button size="small" @click="openOverlayDir">打开皮肤记录目录</a-button>
         <a-button size="small" danger @click="clearAllSkinCache">清理皮肤缓存</a-button>
       </div>
     </header>

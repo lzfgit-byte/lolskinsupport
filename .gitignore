@@ -8,3 +8,7 @@ lsl-cache
 release
 pnpm-lock.yaml
 package-lock.json
+# LTF 桥的构建产物（npm run ltf:build 生成，打包时作为 extraResources 带上）
+native/ltf/build/
+# 桥协议测试的中间产物
+test/.tmp/

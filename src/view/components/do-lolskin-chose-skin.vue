@@ -108,7 +108,7 @@
           <a-button class="action-btn-ghost" @click="doMkCurrentSkin">
             （一个）当前皮肤文件
           </a-button>
-          <a-button class="action-btn-secondary" @click="doMkOverlay"> 构建 overlay </a-button>
+          <a-button class="action-btn-secondary" @click="doMkOverlay"> 构建并注入 </a-button>
           <a-button class="action-btn-primary" @click="applySelectedSkin"> 点击使用皮肤 </a-button>
         </footer>
       </main>

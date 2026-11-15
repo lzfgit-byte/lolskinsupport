@@ -155,7 +155,7 @@
           <br /><br />
           <a-space>
             <a-button size="small" danger @click="f_shoutDownModTools()">
-              杀掉modTools[{{ modToolsState }}]
+              停止注入[{{ modToolsState }}]
             </a-button>
             <a-button size="small" @click="testSlideWin">测试侧边弹窗</a-button>
             <a-button size="small" @click="testNotify">测试通知</a-button>

@@ -12,6 +12,14 @@
     "dist-electron",
     "dist"
   ],
+  // LTF 桥（ltk_launcher.exe + LeagueToolFlop.dll），先 npm run ltf:build 生成
+  "extraResources": [
+    {
+      "from": "native/ltf/build",
+      "to": "ltf",
+      "filter": ["ltk_launcher.exe", "LeagueToolFlop.dll"]
+    }
+  ],
   "mac": {
     "artifactName": "${productName}_${version}.${ext}",
     "target": [
