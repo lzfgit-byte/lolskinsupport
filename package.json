@@ -27,7 +27,7 @@
     "app:prebuild": "vite build && node script/build.js && electron-builder",
     "app:elbuild": "electron-builder",
     "app:preview": "vite preview",
-    "data:gen": "node script/gen-lol-data.mjs",
+    "data:gen": "node script/gen-lol-data.mjs --force",
     "ltf:build": "node script/build-ltf.mjs",
     "ltf:test": "node node_modules/esbuild/bin/esbuild electron/export/ltfBridge.ts --bundle --platform=node --format=esm --outfile=test/.tmp/ltfBridge.mjs && node test/ltf-bridge.test.mjs",
     "ltf:session:test": "node node_modules/esbuild/bin/esbuild electron/export/ltfSession.ts --bundle --platform=node --format=esm --outfile=test/.tmp/ltfSession.mjs && node node_modules/esbuild/bin/esbuild electron/export/ltfBridge.ts --bundle --platform=node --format=esm --outfile=test/.tmp/ltfBridge.mjs && node test/ltf-session.test.mjs",
