@@ -13,6 +13,7 @@ import net from 'node:net';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -143,19 +144,31 @@ const check = async (name, fn) => {
   }
 };
 
+/** 本机有真的 LTK Manager 在跑时，全局桥（注册表里的那个）属于它，别去抢 */
+const realManagerRunning = await new Promise((resolve) => {
+  execFile('tasklist', ['/FI', 'IMAGENAME eq ltk-manager.exe', '/NH'], (error, stdout) => {
+    resolve(!error && /ltk-manager/i.test(stdout || ''));
+  });
+});
+
 try {
   await new Promise((resolve) => server.listen(PORT, '127.0.0.1', resolve));
 
-  await check('发现桥并按 pid 过滤', async () => {
-    const found = await findBridge();
-    assert.ok(found, '没有找到桥');
-    assert.equal(found.port, PORT);
-    assert.equal(found.hello.pid, process.pid);
-    const wrongPid = await findBridge(process.pid + 1);
-    assert.equal(wrongPid, null, 'pid 不符时不该认');
-  });
+  if (realManagerRunning) {
+    console.log('  skip 发现桥的用例：本机有真的 LTK Manager 在运行，注册表指向它');
+  } else {
+    await check('发现桥并按 pid 过滤', async () => {
+      const found = await findBridge();
+      assert.ok(found, '没有找到桥');
+      assert.equal(found.port, PORT);
+      assert.equal(found.hello.pid, process.pid);
+      const wrongPid = await findBridge(process.pid + 1);
+      assert.equal(wrongPid, null, 'pid 不符时不该认');
+    });
+  }
 
-  const bridge = new LtkBridge();
+  // 命令本身用显式端口，不受本机真实桥的影响
+  const bridge = new LtkBridge(PORT, process.pid);
   await bridge.connect();
 
   await check('hello / ping', async () => {
