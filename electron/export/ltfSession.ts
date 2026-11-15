@@ -9,7 +9,9 @@
  *      这样 overlay 里只有我们选的皮肤；
  *   4. 让 LTK Manager 启动它自己的 patcher —— 由它构建 overlay、扫描游戏进程；
  *   5. 结束时停 patcher、删掉本次导入、把用户的模组开回去；只关闭自己启动的
- *      LTK Manager，用户手动打开的那个不碰。
+ *      LTK Manager，用户手动打开的那个不碰；
+ *   6. 程序退出走 shutdown()：和上面一样收尾，但有硬超时 —— 桥不响应就直接结束
+ *      LTK Manager，没删掉的条目记进 ltf_session.json，下次启动补清。
  *
  * LTK Manager 按内容给模组去重：同一份皮肤再导入一次会回 alreadyInstalled，
  * 并把已有条目放在 `response.value.mod` 里。那种条目是用户自己的，结束时只恢复
@@ -20,7 +22,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import {
   BridgeCommandError,
@@ -56,6 +58,12 @@ const CDP_READY_POLL_MS = 500;
 const PATCHER_STOP_WAIT_MS = 20000;
 const PATCHER_STOP_POLL_MS = 400;
 const MANAGER_EXIT_GRACE_MS = 3000;
+/** 退出清理的总预算：超时就直接结束 LTK Manager，不能让程序关不掉 */
+const SHUTDOWN_DEADLINE_MS = 15000;
+/** 退出清理时给管理器的退出时间（正常情况 3 秒够了） */
+const SHUTDOWN_MANAGER_GRACE_MS = 1500;
+/** 桥命令的默认超时（与 ltfBridge 的 DEFAULT_TIMEOUT_MS 对齐） */
+const BRIDGE_COMMAND_TIMEOUT_MS = 60000;
 
 const ALREADY_OPEN_REASON =
   'LTK Manager 已经开着，但它里面没有 Rose 的桥。请先把它关掉（托盘里也要退出）再试';
@@ -194,6 +202,50 @@ const waitPidGone = async (pid: number | null, timeoutMs: number): Promise<void>
   }
 };
 
+/**
+ * 让 LTK Manager 退出：先请它自己退（桥的 kill），等不到就走 taskkill。
+ * 只对 *pid* 真的是 ltk-manager.exe 时才动手（killManagerPid 会再校验一次）。
+ */
+const closeManager = async (
+  bridge: LtkBridge | null,
+  pid: number | null,
+  graceMs = MANAGER_EXIT_GRACE_MS
+): Promise<void> => {
+  if (bridge) {
+    try {
+      await bridge.kill();
+    } catch {
+      // 应答可能回不来
+    }
+  }
+  await waitPidGone(pid, graceMs);
+  if (await isPidRunning(pid)) {
+    await killManagerPid(pid);
+  }
+};
+
+// ==================== 收尾预算 ====================
+
+/**
+ * 一次收尾能花多少时间。用户手动「停止注入」时可以慢慢等（Infinity），
+ * 程序退出时必须有上限：桥不响应也要先把 LTK Manager 关掉再退。
+ */
+interface Budget {
+  deadline: number;
+}
+
+const UNLIMITED: Budget = { deadline: Number.POSITIVE_INFINITY };
+
+const budgetLeft = (budget: Budget): number => budget.deadline - Date.now();
+
+const budgetExpired = (budget: Budget): boolean => budgetLeft(budget) <= 0;
+
+/** 单条桥命令的超时：不超过预算剩下的时间，再少也得给 1.5 秒把命令发出去 */
+const budgetTimeout = (budget: Budget, fallback = BRIDGE_COMMAND_TIMEOUT_MS): number =>
+  Number.isFinite(budget.deadline)
+    ? Math.max(1500, Math.min(fallback, budgetLeft(budget)))
+    : fallback;
+
 // ==================== 会话状态 ====================
 
 /** 一次会话导入的条目：LTK Manager 新建的会在结束时删掉，复用的只恢复开关 */
@@ -265,6 +317,21 @@ const clearSessionState = (): void => {
   }
 };
 
+/**
+ * 把还没收尾的部分记下来：这次没删掉的导入、没开回去的模组。
+ *
+ * LTK Manager 的模组库是它自己的持久化数据，管理器关了条目还在 —— 只有等
+ * 下次启动、桥可用时才能删。记下来，下次 `sweepPrevious()` 接着清。
+ */
+const persistLeftovers = (state: SessionState): void => {
+  writeSessionState({
+    managerPid: state.managerPid,
+    startedByUs: state.startedByUs,
+    imports: state.imports,
+    disabled: state.disabled,
+  });
+};
+
 // ==================== 注入器 ====================
 
 export interface SkinArchive {
@@ -280,6 +347,8 @@ const errText = (error: unknown): string =>
 export class LtfInjector {
   private session: Session | null = null;
   private applying = false;
+  /** 程序正在退出：不再接受新的注入 */
+  private shuttingDown = false;
 
   /** 注入是否在跑（patcher 已经启动） */
   isRunning(): boolean {
@@ -301,6 +370,9 @@ export class LtfInjector {
     }
     if (this.applying) {
       return { ok: false, error: '正在应用另一个皮肤，请稍候' };
+    }
+    if (this.shuttingDown) {
+      return { ok: false, error: '程序正在退出，不再注入' };
     }
     this.applying = true;
     let session: Session | null = null;
@@ -330,7 +402,9 @@ export class LtfInjector {
       return { ok: true };
     } catch (error) {
       const message = errText(error);
-      MessageUtil.error(`注入失败：${message}`);
+      if (!this.shuttingDown) {
+        MessageUtil.error(`注入失败：${message}`);
+      }
       if (session) {
         await this.endSession(session, false);
       }
@@ -351,47 +425,86 @@ export class LtfInjector {
     await this.endSession(session, true);
   }
 
+  /**
+   * 程序退出时的收尾：做和 stop() 一样的事，但每一步都有时间预算。
+   *
+   * 程序关掉后 LTK Manager / patcher 不能留着 —— 桥要是没应答，就按记录里的
+   * pid 直接结束它；库里没来得及删的条目记在 ltf_session.json，下次启动再删。
+   */
+  async shutdown(deadlineMs = SHUTDOWN_DEADLINE_MS): Promise<void> {
+    this.shuttingDown = true;
+    const session = this.session;
+    this.session = null;
+    const budget: Budget = { deadline: Date.now() + deadlineMs };
+    try {
+      if (session) {
+        await this.endSession(session, false, budget);
+        await this.forceCloseManager(session);
+      } else {
+        await this.recoverLeftovers(budget);
+      }
+    } catch (error) {
+      console.warn('[LTF] 退出清理失败:', error);
+      if (session) {
+        await this.forceCloseManager(session);
+      }
+    }
+  }
+
+  /** 兜底：本该关掉的 LTK Manager 还活着，就直接结束进程 */
+  private async forceCloseManager(session: Session): Promise<void> {
+    if (!session.startedByUs || !session.managerPid) {
+      return;
+    }
+    if (!(await isPidRunning(session.managerPid))) {
+      return;
+    }
+    await killManagerPid(session.managerPid);
+  }
+
   /** 异常退出残留的清理：把上次没撤掉的导入删掉、把用户模组开回去 */
-  async recoverLeftovers(): Promise<void> {
+  async recoverLeftovers(budget: Budget = UNLIMITED): Promise<void> {
     const state = readSessionState();
     if (!state) {
       return;
     }
+    let found: Awaited<ReturnType<typeof findBridge>> = null;
     try {
-      const found = await findBridge();
-      if (found) {
-        const bridge = new LtkBridge(found.port, (found.hello.pid as number) ?? null);
-        try {
-          await bridge.stopPatcher();
-        } catch {
-          // 上次没有 patcher 在跑
-        }
-        for (const tracked of state.imports) {
-          try {
-            if (tracked.created) {
-              await bridge.uninstall(tracked.id);
-            } else {
-              await bridge.toggle(tracked.id, tracked.wasEnabled);
-            }
-          } catch {
-            // 可能已经被用户删掉了
-          }
-        }
-        for (const id of state.disabled) {
-          try {
-            await bridge.toggle(id, true);
-          } catch {
-            // 同上
-          }
-        }
-        LogMsgUtil.sendLogMsg('[LTF] 已清理上一次注入留下的模组');
-      } else if (state.startedByUs && state.managerPid) {
+      found = await findBridge();
+    } catch (error) {
+      console.warn('[LTF] 找不到桥:', error);
+    }
+    if (!found) {
+      // 管理器已经关了，库里的条目只能等下次启动、有桥之后再删
+      if (state.startedByUs) {
         await killManagerPid(state.managerPid);
+      }
+      persistLeftovers(state);
+      return;
+    }
+
+    const bridge = new LtkBridge(found.port, (found.hello.pid as number) ?? null);
+    try {
+      if (await this.patcherIsRunning(bridge)) {
+        await this.stopPatcherOn(bridge, budget);
+      }
+      const leftover = await this.dropRecorded(bridge, state, budget);
+      if (leftover) {
+        persistLeftovers(leftover);
+        LogMsgUtil.sendLogMsg('[LTF] 上次注入还有模组没撤掉，已记下来下次再清');
+      } else {
+        clearSessionState();
+        LogMsgUtil.sendLogMsg('[LTF] 已清理上一次注入留下的模组');
       }
     } catch (error) {
       console.warn('[LTF] 清理残留失败:', error);
-    } finally {
-      clearSessionState();
+      persistLeftovers(state);
+    }
+    if (state.startedByUs) {
+      const graceMs = Number.isFinite(budget.deadline)
+        ? SHUTDOWN_MANAGER_GRACE_MS
+        : MANAGER_EXIT_GRACE_MS;
+      await closeManager(bridge, state.managerPid ?? bridge.pid, graceMs);
     }
   }
 
@@ -403,29 +516,32 @@ export class LtfInjector {
     }
     this.session = null;
 
-    // 上一次注入留下的东西先撤掉（记录里的 pid 用来判断管理器是不是我们起的）
+    if (this.shuttingDown) {
+      throw new Error('程序正在退出，不再注入');
+    }
+
+    // 上一次注入留下的记录：拿到桥之后再清 —— 没有桥就删不掉 LTK 库里的模组
     const previous = readSessionState();
-    await this.recoverLeftovers();
 
     const existing = await findBridge();
     if (existing) {
       const pid = (existing.hello.pid as number) ?? null;
       const startedByUs = !!previous?.startedByUs && previous.managerPid === pid;
-      const bridge = new LtkBridge(existing.port, pid);
-      LogMsgUtil.sendLogMsg(
-        `[LTF] 复用已运行的 LTK Manager（桥端口 ${existing.port}${
-          startedByUs ? '，由本程序启动' : ''
-        }）`
-      );
       const session: Session = {
-        bridge,
+        bridge: new LtkBridge(existing.port, pid),
         managerPid: pid,
         startedByUs,
         imports: [],
         disabled: [],
         patcherRunning: false,
       };
-      await this.healthCheckOff(bridge);
+      LogMsgUtil.sendLogMsg(
+        `[LTF] 复用已运行的 LTK Manager（桥端口 ${existing.port}${
+          startedByUs ? '，由本程序启动' : ''
+        }）`
+      );
+      await this.healthCheckOff(session.bridge);
+      await this.sweepPrevious(previous, session);
       writeSessionState(session);
       this.session = session;
       return session;
@@ -481,13 +597,49 @@ export class LtfInjector {
       disabled: [],
       patcherRunning: false,
     };
-    writeSessionState(session);
+    // 先把管理器的 pid 记下来：启动途中崩溃的话，下次也知道该关哪个进程
+    writeSessionState(
+      previous ? { ...session, imports: previous.imports, disabled: previous.disabled } : session
+    );
     // 上一次会话的暂存包：LTK Manager 已经装进自己的库了
     await fsp.rm(stagingDir(), { recursive: true, force: true });
     await this.waitForCdp(bridge);
     await this.healthCheckOff(bridge);
+    await this.sweepPrevious(previous, session);
+    writeSessionState(session);
     this.session = session;
     return session;
+  }
+
+  /**
+   * 清掉上一次会话留下的记录。
+   *
+   * 只有拿到桥之后才能做：模组库存在 LTK Manager 里，管理器已经关了的时候
+   * 只能等下次启动。清不掉的（预算用完 / 命令失败）继续记着，下次再试。
+   */
+  private async sweepPrevious(previous: SessionState | null, session: Session): Promise<void> {
+    if (!previous) {
+      return;
+    }
+    if (previous.startedByUs && previous.managerPid && previous.managerPid !== session.managerPid) {
+      // 上次那个管理器已经不用了：还活着就顺手关掉，别让它一直挂在托盘
+      await killManagerPid(previous.managerPid);
+    }
+    if (previous.imports.length === 0 && previous.disabled.length === 0) {
+      clearSessionState();
+      return;
+    }
+    if (await this.patcherIsRunning(session.bridge)) {
+      await this.stopPatcherOn(session.bridge);
+    }
+    const leftover = await this.dropRecorded(session.bridge, previous);
+    if (leftover) {
+      persistLeftovers(leftover);
+      LogMsgUtil.sendLogMsg('[LTF] 上次注入还有模组没撤掉，已记下来下次再清');
+    } else {
+      clearSessionState();
+      LogMsgUtil.sendLogMsg('[LTF] 已清理上一次注入留下的模组');
+    }
   }
 
   private runLauncher(
@@ -643,22 +795,94 @@ export class LtfInjector {
 
   /** 撤掉本次导入：新建的删掉，复用的恢复原开关 */
   private async dropImports(session: Session): Promise<void> {
-    const tracked = [...session.imports];
+    const leftover = await this.dropRecorded(session.bridge, session);
     session.imports = [];
-    for (const item of tracked) {
+    if (leftover) {
+      persistLeftovers(leftover);
+    }
+  }
+
+  /**
+   * 把记录里的导入撤干净：新建的卸载、复用的恢复开关，用户的模组开回去。
+   *
+   * 返回仍没收尾的部分（预算用完 / 命令失败 / 库里还查得到），null 表示干净。
+   * 条目已经被用户自己删掉的，算撤干净。
+   */
+  private async dropRecorded(
+    bridge: LtkBridge,
+    state: SessionState,
+    budget: Budget = UNLIMITED
+  ): Promise<SessionState | null> {
+    const pendingImports: TrackedImport[] = [];
+    for (const item of state.imports) {
+      if (budgetExpired(budget)) {
+        pendingImports.push(item);
+        continue;
+      }
       try {
         if (item.created) {
-          await session.bridge.uninstall(item.id);
+          await bridge.uninstall(item.id, budgetTimeout(budget));
         } else {
-          await session.bridge.toggle(item.id, item.wasEnabled);
+          await bridge.toggle(item.id, item.wasEnabled, budgetTimeout(budget));
         }
-      } catch {
-        // 可能已经被用户删掉了
+      } catch (error) {
+        pendingImports.push(item);
+        console.warn(`[LTF] 没能撤掉导入 ${item.id}:`, error);
       }
+    }
+
+    const pendingDisabled: string[] = [];
+    for (const id of state.disabled) {
+      if (budgetExpired(budget)) {
+        pendingDisabled.push(id);
+        continue;
+      }
+      try {
+        await bridge.toggle(id, true, budgetTimeout(budget));
+      } catch (error) {
+        pendingDisabled.push(id);
+        console.warn(`[LTF] 没能把用户的模组 ${id} 开回去:`, error);
+      }
+    }
+
+    if (pendingImports.length === 0 && pendingDisabled.length === 0) {
+      return null;
+    }
+
+    // 读一次库核对：已经不存在的条目不用再记账（下次会一直删失败）
+    try {
+      const ids = new Set((await bridge.library()).map((entry) => String(entry.id)));
+      const imports = pendingImports.filter((item) => ids.has(item.id));
+      const disabled = pendingDisabled.filter((id) => ids.has(id));
+      if (imports.length === 0 && disabled.length === 0) {
+        return null;
+      }
+      return {
+        managerPid: state.managerPid,
+        startedByUs: state.startedByUs,
+        imports,
+        disabled,
+      };
+    } catch {
+      return {
+        managerPid: state.managerPid,
+        startedByUs: state.startedByUs,
+        imports: pendingImports,
+        disabled: pendingDisabled,
+      };
     }
   }
 
   // ---- patcher --------------------------------------------------------
+
+  private async patcherIsRunning(bridge: LtkBridge): Promise<boolean> {
+    try {
+      const value = (await bridge.patcherStatus())?.response?.value;
+      return !!(value && typeof value === 'object' && value.running);
+    } catch {
+      return false;
+    }
+  }
 
   private async startPatcher(session: Session): Promise<void> {
     try {
@@ -702,17 +926,36 @@ export class LtfInjector {
   }
 
   /** 停 patcher，并等它真的停下（它停下之前不会接受库的改动） */
-  private async stopPatcher(session: Session): Promise<void> {
+  private async stopPatcher(session: Session, budget: Budget = UNLIMITED): Promise<void> {
+    await this.stopPatcherOn(session.bridge, budget, session);
+  }
+
+  /**
+   * 停 patcher 并轮询到 `running=false`。
+   *
+   * 预算用完就直接返回：退出程序时不能为了等它而卡住，剩下的交给
+   * 「关掉 LTK Manager」—— 管理器一关，它的 patcher 也跟着没。
+   */
+  private async stopPatcherOn(
+    bridge: LtkBridge,
+    budget: Budget = UNLIMITED,
+    session?: Session
+  ): Promise<void> {
     try {
-      await session.bridge.stopPatcher();
+      await bridge.stopPatcher(budgetTimeout(budget, PATCHER_STOP_WAIT_MS));
     } catch (error) {
       console.debug('[LTF] 停止 patcher:', error);
     }
-    session.patcherRunning = false;
-    const deadline = Date.now() + PATCHER_STOP_WAIT_MS;
+    if (session) {
+      session.patcherRunning = false;
+    }
+    const waitMs = Number.isFinite(budget.deadline)
+      ? Math.min(PATCHER_STOP_WAIT_MS, Math.max(budgetLeft(budget), 0))
+      : PATCHER_STOP_WAIT_MS;
+    const deadline = Date.now() + waitMs;
     while (Date.now() < deadline) {
       try {
-        const value = (await session.bridge.patcherStatus())?.response?.value;
+        const value = (await bridge.patcherStatus())?.response?.value;
         if (!value || typeof value !== 'object' || !value.running) {
           return;
         }
@@ -727,62 +970,75 @@ export class LtfInjector {
 
   /**
    * 结束会话：停 patcher → 删掉本次导入 → 把用户的模组开回去 → 关闭自己启动的
-   * LTK Manager。*graceful* 为 false 时（注入失败）也照做，只是不提示。
+   * LTK Manager。*graceful* 为 false 时（注入失败 / 程序退出）也照做，只是不提示。
+   *
+   * 给*budget* 时每步都受时间限制；没做完的部分会留在 ltf_session.json 里，
+   * 下次启动接着清。
    */
-  private async endSession(session: Session, graceful: boolean): Promise<void> {
+  private async endSession(
+    session: Session,
+    graceful: boolean,
+    budget: Budget = UNLIMITED
+  ): Promise<void> {
     if (!(await session.bridge.alive())) {
+      // 桥没了：库里我们装的条目只能等下次启动再删
+      persistLeftovers(session);
       if (session.startedByUs) {
         await killManagerPid(session.managerPid);
       }
-      clearSessionState();
       return;
     }
 
-    await this.stopPatcher(session);
-
-    for (const item of [...session.imports]) {
-      try {
-        if (item.created) {
-          await session.bridge.uninstall(item.id);
-        } else {
-          await session.bridge.toggle(item.id, item.wasEnabled);
-        }
-      } catch (error) {
-        if (graceful) {
-          console.warn(`[LTF] 没能撤掉本次导入 ${item.id}:`, error);
-        }
-      }
+    if (await this.patcherIsRunning(session.bridge)) {
+      await this.stopPatcher(session, budget);
+    } else {
+      session.patcherRunning = false;
     }
+    const leftover = await this.dropRecorded(session.bridge, session, budget);
     session.imports = [];
-
-    for (const id of [...session.disabled]) {
-      try {
-        await session.bridge.toggle(id, true);
-      } catch (error) {
-        if (graceful) {
-          console.warn(`[LTF] 没能把用户的模组 ${id} 开回去:`, error);
-        }
-      }
-    }
     session.disabled = [];
 
     if (session.startedByUs) {
-      try {
-        await session.bridge.kill();
-      } catch {
-        // 应答可能回不来
-      }
-      await waitPidGone(session.managerPid, MANAGER_EXIT_GRACE_MS);
-      if (await isPidRunning(session.managerPid)) {
-        await killManagerPid(session.managerPid);
-      }
+      const graceMs = Number.isFinite(budget.deadline)
+        ? SHUTDOWN_MANAGER_GRACE_MS
+        : MANAGER_EXIT_GRACE_MS;
+      await closeManager(session.bridge, session.managerPid, graceMs);
     }
-    clearSessionState();
+
+    if (leftover) {
+      persistLeftovers(leftover);
+    } else {
+      clearSessionState();
+    }
     if (graceful) {
-      LogMsgUtil.sendLogMsg('[LTF] 已停止注入');
+      LogMsgUtil.sendLogMsg(
+        leftover ? '[LTF] 已停止注入（有模组没撤掉，下次启动再清）' : '[LTF] 已停止注入'
+      );
     }
   }
 }
+
+/** 进程马上要退出时的同步兜底：把我们启动、还没关掉的 LTK Manager 结束掉 */
+export const killLeftoverManagerSync = (): void => {
+  const state = readSessionState();
+  if (!state?.startedByUs || !state.managerPid) {
+    return;
+  }
+  const pid = state.managerPid;
+  try {
+    const check = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], {
+      windowsHide: true,
+      encoding: 'utf-8',
+    });
+    if (!`${check.stdout || ''}`.toLowerCase().includes('ltk-manager')) {
+      return;
+    }
+    spawnSync('taskkill', ['/PID', `${pid}`, '/T', '/F'], { windowsHide: true });
+    console.warn(`[LTF] 退出兜底：已结束 LTK Manager（PID ${pid}）`);
+  } catch (error) {
+    console.warn('[LTF] 退出兜底失败:', error);
+  }
+};
 
 const entryName = (entry: LibraryEntry): string =>
   String(entry.displayName || entry.name || entry.id || '未知模组');

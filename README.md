@@ -67,8 +67,13 @@ mod-tools\
 - **Windows 10/11 x64**；英雄联盟能在这台机器上正常启动。
 - 以**普通权限**运行本程序即可；**英雄联盟和 LTK Manager 都不要设成「以管理员身份运行」**，
   否则 LTK 的 patcher 会拒绝（提示 `LEAGUE_ELEVATED` / `MANAGER_ELEVATED`）。
-- 注入前**不要自己开着 LTK Manager**：程序会自己以隐藏方式启动一个带桥的实例，结束后再关掉。
+- 注入前**不要自己开着 LTK Manager**：程序会自己以隐藏方式启动一个带桥的实例，结束时再关掉。
   已经开着的会被拒绝（提示先关掉，托盘里也要退出）。
+- **关掉本程序（点窗口 X / 结束进程）时会自动收尾**：停 patcher、撤掉本次皮肤、把你自己在
+  LTK Manager 里开的模组恢复，并关掉本程序启动的那个 LTK Manager —— 不会留一个「Profile
+  Patched」的托盘图标。你自己手动打开的 LTK Manager 不会被关。
+- 反过来说，**游戏进行中关掉本程序，本局皮肤会失效**（patcher 被停掉了，和 Rose 一样）。
+  想继续用皮肤就别关程序；下一局前重新点「使用皮肤」即可。
 - 首次加载英雄/皮肤名称与图片需要联网。
 - 杀毒软件可能隔离 `ltk_launcher.exe` / `LeagueToolFlop.dll`（它们要注入进程），
   如果提示缺少这两个文件，先看隔离区。
@@ -87,7 +92,7 @@ mod-tools\
 | `mod-tools\` | cslol-tools（仅生成皮肤） | 你提供 |
 | `logs\ltk\ltk_launcher.log` | LTK Manager 启动日志（排查注入问题看这里） | 程序自动 |
 | `ltf_staging\` | 导入 LTK Manager 前的暂存包（会自动清） | 程序自动 |
-| `ltf_session.json` | 注入会话记录，崩溃后下次启动据此清理残留 | 程序自动 |
+| `ltf_session.json` | 注入会话记录；正常退出会删掉，崩溃残留的下次启动补清 | 程序自动 |
 
 程序安装目录下的 `resources\ltf\` 必须有 `ltk_launcher.exe` 和 `LeagueToolFlop.dll`——这两个
 文件把桥注入 LTK Manager，是整个注入链路的入口。
@@ -104,6 +109,7 @@ mod-tools\
 | 注入成功但游戏里没变化 | 皮肤只对**注入之后新开的一局**生效；重开一局（或换皮肤后重开） |
 | 导入整包报「空间不足」 | 导入前会检查磁盘，需要约 4 GB 余量；换个皮肤目录到空间大的盘 |
 | 导入后英雄页看不到皮肤 | 确认文件在 `skins\<皮肤目录>\<英雄ID>\<英雄ID>_<序号>.zip`；「皮肤使用中」只列点过「使用皮肤」的 |
+| 关掉程序后 LTK Manager 还在跑 | 正常情况不会：退出时会先停注入再关掉它。若用的是「你自己先开的」LTK Manager，本程序不会关它；真遇到残留，退出后用任务管理器结束 `ltk-manager.exe` / `ltk_patcher_host.exe`，下次启动会自动补清上次没撤掉的皮肤 |
 
 ---
 

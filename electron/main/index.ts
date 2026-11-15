@@ -10,13 +10,44 @@ import { LogMsgUtil, MessageUtil, useGlobalMessage } from '../utils/message';
 import { initLcu } from '../http/connect-league-legends';
 import { lcuConnector } from '../http/lcuConnector';
 import { gameflowMonitor } from '../http/gameflowMonitor';
-import useHtmlGetWin from '../http/use-html-get-win';
 import { initLocaleWatcher, stopLocaleWatcher } from '../export/locale-watcher';
+import { killLeftoverManagerSync } from '../export/ltfSession';
+import { isShutdownFinished, shutdown } from '../export/shutdown';
 // 启动服务
 let win: BrowserWindow | null = null;
 const url = process.env.VITE_DEV_SERVER_URL;
 const indexHtml = join(process.env.DIST, 'index.html');
 let execFuncOnClose = [];
+/** 退出清理做完了，窗口可以真的关掉 */
+let closeAllowed = false;
+/** 退出流程只跑一次（关窗口和 before-quit 会同时进来） */
+let quitting = false;
+
+/**
+ * 关窗口 / 退出程序都走这里：先把注入收干净再真退。
+ *
+ * 注入会话跑在 LTK Manager 里，主进程一退它就没人管了 —— 所以必须等
+ * `shutdown()`（停 patcher、撤掉本次导入、关掉本程序启动的 LTK Manager）
+ * 做完才销毁窗口。清理本身有硬超时，不会把程序卡死。
+ */
+async function quitAfterCleanup(): Promise<void> {
+  if (quitting) {
+    return;
+  }
+  quitting = true;
+  MessageUtil.info('正在停止注入并关闭 LTK Manager…');
+  try {
+    await shutdown();
+  } catch (error) {
+    console.warn('[EXIT] 退出清理失败:', error);
+  }
+  closeAllowed = true;
+  if (win && !win.isDestroyed()) {
+    // destroy：不再触发 close，避免又进一次退出流程
+    win.destroy();
+  }
+  app.quit();
+}
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -29,6 +60,14 @@ async function createWindow() {
       nodeIntegration: true,
       contextIsolation: false,
     },
+  });
+  win.on('close', (event) => {
+    if (closeAllowed) {
+      return;
+    }
+    // 用户点 X：先清理再关，否则 LTK Manager 和 patcher 会留在后台
+    event.preventDefault();
+    void quitAfterCleanup();
   });
   useGlobalShortcut(win);
   useGlobalMessage(win);
@@ -63,6 +102,17 @@ app.on('window-all-closed', () => {
   }
 });
 /**
+ * 退出前先收尾：窗口已经关掉（比如被系统关掉）时也不能直接退出，
+ * 否则 LTK Manager 会一直挂在托盘里。
+ */
+app.on('before-quit', (event) => {
+  if (closeAllowed || isShutdownFinished()) {
+    return;
+  }
+  event.preventDefault();
+  void quitAfterCleanup();
+});
+/**
  *两个实例，想要再次隐形
  */
 app.on('second-instance', () => {
@@ -83,6 +133,25 @@ app.on('activate', () => {
     allWindows[0].focus();
   } else {
     createWindow();
+  }
+});
+
+// Ctrl+C / 被要求结束时也先清理（开发时最常见）
+const quitOnSignal = (signal: string) => {
+  LogMsgUtil.sendLogMsg(`[EXIT] 收到 ${signal}，先清理注入`);
+  void quitAfterCleanup().finally(() => {
+    app.exit(0);
+  });
+};
+process.on('SIGINT', () => quitOnSignal('SIGINT'));
+process.on('SIGTERM', () => quitOnSignal('SIGTERM'));
+/**
+ * 最后一道保险：走到 process.exit / app.exit 而清理没做完时，
+ * 同步结束本程序启动的 LTK Manager（spawnSync 才来得及）。
+ */
+process.on('exit', () => {
+  if (!isShutdownFinished()) {
+    killLeftoverManagerSync();
   }
 });
 

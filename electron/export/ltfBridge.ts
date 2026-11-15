@@ -479,12 +479,16 @@ export class LtkBridge {
     return this.ok({ cmd: 'import', data_b64: data.toString('base64'), name }, IMPORT_TIMEOUT_MS);
   }
 
-  toggle(target: string, enabled = true): Promise<Record<string, any>> {
-    return this.ok({ cmd: 'toggle', target, enabled });
+  toggle(
+    target: string,
+    enabled = true,
+    timeoutMs = DEFAULT_TIMEOUT_MS
+  ): Promise<Record<string, any>> {
+    return this.ok({ cmd: 'toggle', target, enabled }, timeoutMs);
   }
 
-  uninstall(target: string): Promise<Record<string, any>> {
-    return this.ok({ cmd: 'uninstall', target });
+  uninstall(target: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Record<string, any>> {
+    return this.ok({ cmd: 'uninstall', target }, timeoutMs);
   }
 
   // ---- 设置 -----------------------------------------------------------
@@ -498,8 +502,8 @@ export class LtkBridge {
     return this.ok({ cmd: 'start_patcher' });
   }
 
-  stopPatcher(): Promise<Record<string, any>> {
-    return this.ok({ cmd: 'stop_patcher' });
+  stopPatcher(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Record<string, any>> {
+    return this.ok({ cmd: 'stop_patcher' }, timeoutMs);
   }
 
   patcherStatus(): Promise<Record<string, any>> {

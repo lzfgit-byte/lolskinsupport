@@ -42,6 +42,7 @@ Electron 主进程 ──(TCP JSON, 127.0.0.1:46321-46340)──> LeagueToolFlop
 | `electron/http/gameflowMonitor.ts` | 解析 gameflow 阶段与选人会话，发出 `champion-selected` |
 | `electron/export/index.ts` | IPC 门面：`loadSkin` / `loadSkins` / `shoutDownModTools` / 配置读写 |
 | `electron/export/ltfSession.ts` | 注入会话：启动 LTK Manager、导入、开关、启停 patcher、收尾 |
+| `electron/export/shutdown.ts` | 退出清理：关窗口 / 退出时收尾，硬超时后强制关掉 LTK Manager |
 | `electron/export/ltfBridge.ts` | 桥客户端：端口/令牌发现、逐行 JSON 协议 |
 | `electron/export/league-skins-import.ts` | LeagueSkins 整包导入（流式、去重、预检） |
 | `electron/utils/zip-archive.ts` | 流式 ZIP 读取器（ZIP64，>2 GiB 可用） |
@@ -111,17 +112,41 @@ writeSessionState() 写入 ltf_session.json
 
 ### 3.5 收尾
 
-点「停止注入」、或程序正常退出时 `ltfInjector.stop()`：
+**两条路都会走到 `LtfInjector` 的收尾**，区别只是等不等得起：
+
+| 触发 | 入口 | 时间预算 |
+|---|---|---|
+| 点「停止注入」 / 换皮肤 | `shutdownModTools()` → `ltfInjector.stop()` | 不催，慢慢等 |
+| 关窗口、`app.quit()`、Ctrl+C | `shutdown()`（`electron/export/shutdown.ts`） | 15 秒硬上限，超时强杀 |
+
+收尾顺序：
 
 ```
-stop_patcher() → 轮询 patcher_status 直到 running=false
+stop_patcher() → 轮询 patcher_status 直到 running=false（预算用完就不等了）
 撤掉本次导入：新建的 uninstall，复用的恢复原 enabled 状态
 把 disableOtherMods 关掉的用户模组重新开回来
-如果这个 LTK Manager 是自己启动的：kill() → 3s 内没退就 taskkill /PID
-删掉 ltf_session.json
+如果这个 LTK Manager 是自己启动的：kill() → 1.5~3s 内没退就 taskkill /PID <pid> /T /F
+删掉 ltf_session.json；没撤完的部分留在里面，下次启动补清
 ```
 
-用户自己手动打开的 LTK Manager **不会被关闭**（`startedByUs=false`）。
+**程序退出是怎么接上的**（`electron/main/index.ts`）：
+
+- 窗口 `close` 事件先 `preventDefault()`，等 `shutdown()` 做完再 `win.destroy()`；
+- 窗口被系统/其他途径关掉时，`before-quit` 也会拦一次，做完清理再 `app.quit()`；
+- `SIGINT` / `SIGTERM` 走同一条路；
+- 最后一道保险 `process.on('exit')`：真走到 `app.exit()` / `process.exit()` 而清理没做完，
+  就同步 `taskkill` 掉 `ltf_session.json` 里记录的、本程序启动的 LTK Manager。
+
+清理期间界面会弹一条「正在停止注入并关闭 LTK Manager…」。正常一次退出约 1~2 秒
+（停 patcher + 删条目 + 关管理器）；桥没应答时最多等 15 秒，然后强杀。
+
+> 代价：关掉程序 = 停掉 patcher，**游戏进行中关程序，本局皮肤就不再生效**（Rose 也一样）。
+
+用户自己手动打开的 LTK Manager **不会被关闭**（`startedByUs=false`），只会恢复它的模组开关。
+
+> 退出时如果来不及删掉本次导入（比如预算用完），条目会留在 `ltf_session.json` 里；
+> 下次启动 `ensureSession()` 拿到桥之后由 `sweepPrevious()` 删掉 —— 不会在 LTK
+> Manager 的模组库里越积越多。
 
 ---
 
@@ -186,8 +211,13 @@ DLL 在 LTK Manager 进程内起一个 TCP 服务，用 CDP 驱动它自己的�
 }
 ```
 
-程序崩溃/被强杀后，下次 `ensureSession()` 会先按它清理：停 patcher、卸载 `created=true` 的条目、
-恢复其它条目的开关、必要时关掉残留的 LTK Manager。
+程序崩溃/被强杀后 —— 或者退出时没来得及删完（预算用完）—— `ltf_session.json` 会留下来。
+下次 `ensureSession()` 先启动/复用 LTK Manager，**拿到桥之后**由 `sweepPrevious()` 按它清理：
+停 patcher、卸载 `created=true` 的条目、恢复其它条目的开关，然后才装这一次的皮肤。
+
+> 为什么要等桥：模组库存在 LTK Manager 里，管理器没起来就没有能删条目的接口。
+> 所以记录不会被「清不掉就丢掉」，而是留着下次继续；`dropRecorded()` 还会读一次
+> 库核对，已经被用户自己删掉的条目直接从记录里去掉。
 
 ---
 
@@ -269,6 +299,8 @@ DLL 在 LTK Manager 进程内起一个 TCP 服务，用 CDP 驱动它自己的�
 | 上一个 patcher 还在构建 | `ALREADY_RUNNING` | 自动 stop → 轮询到 idle → 重试一次 |
 | 游戏已开始才注入 | 本局无效果 | 下一局生效 |
 | 导入中途崩溃 | 残留 `.part` / 未登记文件 | 下次导入按大小判断覆盖；`.part` 不会被当成皮肤 |
+| 退出清理超时（桥不应答） | 最多等 15 秒后强制结束 LTK Manager | 看日志 `[EXIT]`；未删掉的条目留在 `ltf_session.json`，下次启动补清 |
+| 关程序后仍有 `ltk-manager.exe` | 见第 3.5 节 | 那是你手动开的实例，本程序不关；确认是残留就结束它，下次启动补清 |
 
 ---
 
