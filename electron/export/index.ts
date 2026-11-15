@@ -457,12 +457,18 @@ export const importLeagueSkinsPackage = async () => {
   if (imported.failed > 0 && imported.count === 0) {
     MessageUtil.error(`导入失败：${imported.failed} 个皮肤都没能写入，详见日志`);
   } else if (imported.count === 0) {
-    MessageUtil.error('未找到可导入的 LeagueSkins 皮肤文件');
+    MessageUtil.error(
+      imported.skipped > 0
+        ? `无需导入：${imported.skipped} 个皮肤的内容已经和压缩包里一致`
+        : '未找到可导入的 LeagueSkins 皮肤文件'
+    );
   } else {
     MessageUtil.success(
-      `导入 LeagueSkins 皮肤成功：${imported.count} 个${
-        imported.skipped ? `，已存在 ${imported.skipped} 个` : ''
-      }${imported.failed ? `，失败 ${imported.failed} 个` : ''}`
+      `导入 LeagueSkins 皮肤成功：写入 ${imported.count} 个${
+        imported.replaced ? `（其中覆盖 ${imported.replaced} 个）` : ''
+      }${imported.skipped ? `，内容一致跳过 ${imported.skipped} 个` : ''}${
+        imported.failed ? `，失败 ${imported.failed} 个` : ''
+      }`
     );
   }
 

@@ -5,8 +5,8 @@
  * classic 条目和无关文件），跑一遍导入，检查：
  *   - 文件按 <英雄>/<英雄>_<序号>.zip 落盘，内容逐字节一致；
  *   - classic 等不认识的条目被跳过但计入统计；
- *   - 重复导入时全部命中「已存在」，不重写；
- *   - 目标文件大小不一致时会覆盖。
+ *   - 内容一致（大小 + CRC32）时跳过、不重写；
+ *   - 大小相同但内容不同、或大小不同时，覆盖成压缩包里的版本。
  *
  * 运行：node test/league-skins-import.test.mjs
  */
@@ -90,6 +90,7 @@ await check('首次导入：4 个皮肤落盘，classic 被跳过', async () => 
   });
   assert.equal(result.count, 4, `count=${result.count}`);
   assert.equal(result.skipped, 0);
+  assert.equal(result.replaced, 0);
   assert.equal(result.failed, 0);
   assert.equal(result.unrecognized, 1, 'classic 应计为未识别');
   return `count=${result.count} unrecognized=${result.unrecognized}`;
@@ -113,7 +114,7 @@ await check('落盘路径与内容都正确', async () => {
   return Object.keys(expected).join(', ');
 });
 
-await check('重复导入：全部命中已存在，不重写', async () => {
+await check('重复导入：内容一致才跳过，不重写', async () => {
   const outDir = path.join(skinRoot, 'wad_skins');
   const before = fs.statSync(path.join(outDir, '1', '1_1.zip')).mtimeMs;
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -125,9 +126,33 @@ await check('重复导入：全部命中已存在，不重写', async () => {
   });
   assert.equal(result.count, 0);
   assert.equal(result.skipped, 4);
+  assert.equal(result.replaced, 0);
   const after = fs.statSync(path.join(outDir, '1', '1_1.zip')).mtimeMs;
-  assert.equal(after, before, '已存在的文件不该被重写');
+  assert.equal(after, before, '内容一致的文件不该被重写');
   return `skipped=${result.skipped}`;
+});
+
+await check('大小相同但内容不同：覆盖', async () => {
+  const outDir = path.join(skinRoot, 'wad_skins');
+  const target = path.join(outDir, '2', '2_1.zip');
+  const original = contents['skins/2/2001/2001.fantome'];
+  // 造一个「长度一样、内容不同」的旧文件，模拟被改过/旧版本的皮肤
+  const stale = Buffer.alloc(original.length, 0x41);
+  assert.equal(stale.length, original.length);
+  assert.notDeepEqual(stale, original);
+  fs.writeFileSync(target, stale);
+
+  const result = await importLeagueSkinsFromZip({
+    zipPath: packPath,
+    skinRoot,
+    suffix: 'wad_skins',
+    log: () => {},
+  });
+  assert.equal(result.count, 1, '应该重写这一个');
+  assert.equal(result.replaced, 1, '应记为覆盖');
+  assert.equal(result.skipped, 3);
+  assert.deepEqual(fs.readFileSync(target), original, '内容应被压缩包里的版本覆盖');
+  return 'overwritten by CRC mismatch';
 });
 
 await check('目标大小不一致时覆盖', async () => {
@@ -141,6 +166,7 @@ await check('目标大小不一致时覆盖', async () => {
     log: () => {},
   });
   assert.equal(result.count, 1);
+  assert.equal(result.replaced, 1);
   assert.equal(result.skipped, 3);
   assert.deepEqual(fs.readFileSync(target), contents['skins/1/1001/1001.fantome']);
   return 'overwritten';

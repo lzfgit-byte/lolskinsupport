@@ -98,7 +98,12 @@ const configuredLtkManager = (): string | null => {
 };
 
 const ltkManagerInstallDirs = (): string[] => {
-  const bases = [process.env.ProgramW6432, process.env.ProgramFiles, process.env.LOCALAPPDATA];
+  const bases = [
+    process.env.ProgramW6432,
+    process.env.ProgramFiles,
+    process.env.LOCALAPPDATA,
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs') : undefined,
+  ];
   const dirs: string[] = [];
   for (const base of bases) {
     if (!base) {

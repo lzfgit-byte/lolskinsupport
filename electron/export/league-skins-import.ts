@@ -8,6 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { ZipArchive, type ZipEntry } from '../utils/zip-archive';
 
 export interface ImportLeagueSkinsOptions {
@@ -23,8 +24,12 @@ export interface ImportLeagueSkinsOptions {
 
 export interface ImportLeagueSkinsResult {
   canceled: boolean;
+  /** 实际写入（含覆盖）的文件数 */
   count: number;
+  /** 内容与压缩包一致、没有重写的文件数 */
   skipped: number;
+  /** 其中覆盖了已有文件的数量 */
+  replaced: number;
   failed: number;
   unrecognized: number;
   outDir: string;
@@ -35,6 +40,45 @@ const diskFreeBytes = (dir: string): number | null => {
   try {
     const stats = fs.statfsSync(dir);
     return Number(stats.bavail) * Number(stats.bsize);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * CRC32（zlib 的实现在 Node 22 才有；类型定义按 Node 18 编译，所以做一层探测）。
+ * 没有原生实现时退回到查表版本，慢一些但不影响正确性。
+ */
+const nativeCrc32 = (zlib as unknown as { crc32?: (data: Buffer, value?: number) => number }).crc32;
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+const crc32Js = (data: Buffer, value = 0): number => {
+  let crc = (value ^ 0xffffffff) >>> 0;
+  for (let i = 0; i < data.length; i++) {
+    crc = CRC_TABLE[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+};
+const crc32 = (data: Buffer, value = 0): number =>
+  (nativeCrc32 ? nativeCrc32(data, value) : crc32Js(data, value)) >>> 0;
+
+/** 本地文件的 CRC32；读不了返回 null（读不了就当作内容不同，重写一遍） */
+const fileCrc32 = async (file: string): Promise<number | null> => {
+  let crc = 0;
+  try {
+    for await (const chunk of fs.createReadStream(file)) {
+      crc = crc32(chunk as Buffer, crc);
+    }
+    return crc >>> 0;
   } catch {
     return null;
   }
@@ -91,7 +135,15 @@ export const importLeagueSkinsFromZip = async (
     archive = await ZipArchive.open(zipPath);
   } catch (error) {
     log(`[LeagueSkins导入] 读取压缩包失败: ${error?.message ?? error}`);
-    return { canceled: false, count: 0, skipped: 0, failed: 0, unrecognized: 0, outDir };
+    return {
+      canceled: false,
+      count: 0,
+      skipped: 0,
+      replaced: 0,
+      failed: 0,
+      unrecognized: 0,
+      outDir,
+    };
   }
 
   // 目标文件 -> 条目，同一个英雄皮肤只留一份
@@ -112,19 +164,26 @@ export const importLeagueSkinsFromZip = async (
     plan.set(target, { entry, target });
   }
 
-  // 已经导入过（大小一致）的跳过
+  // 已存在的按内容比对：大小 + CRC32 都一致才算「已经有了」，否则覆盖
   const todo: { entry: ZipEntry; target: string }[] = [];
   let skipped = 0;
+  let replaced = 0;
   for (const item of plan.values()) {
-    let existing = -1;
+    let existingSize = -1;
     try {
-      existing = fs.statSync(item.target).size;
+      existingSize = fs.statSync(item.target).size;
     } catch {
       // 还没有导入过
     }
-    if (existing === item.entry.size && item.entry.size > 0) {
-      skipped++;
-      continue;
+    if (existingSize >= 0) {
+      if (existingSize === item.entry.size && item.entry.size > 0) {
+        const localCrc = await fileCrc32(item.target);
+        if (localCrc !== null && localCrc === item.entry.crc32 >>> 0) {
+          skipped++;
+          continue;
+        }
+      }
+      replaced++;
     }
     todo.push(item);
   }
@@ -133,7 +192,8 @@ export const importLeagueSkinsFromZip = async (
   const free = diskFreeBytes(fs.existsSync(outDir) ? outDir : skinRoot);
   log(
     `[LeagueSkins导入] fantome ${fantomeCount} 个，可导入 ${plan.size} 个，` +
-      `已存在 ${skipped} 个，待写入 ${(bytesNeeded / GB).toFixed(2)} GB${
+      `内容一致跳过 ${skipped} 个，待覆盖 ${replaced} 个，` +
+      `待写入 ${(bytesNeeded / GB).toFixed(2)} GB${
         free === null ? '' : `，磁盘剩余 ${(free / GB).toFixed(1)} GB`
       }`
   );
@@ -150,7 +210,7 @@ export const importLeagueSkinsFromZip = async (
       `空间不足：需要约 ${(bytesNeeded / GB).toFixed(1)} GB，` +
       `只剩 ${(free / GB).toFixed(1)} GB`;
     log(`[LeagueSkins导入] ${message}`);
-    return { canceled: false, count: 0, skipped, failed: 0, unrecognized, outDir };
+    return { canceled: false, count: 0, skipped, replaced, failed: 0, unrecognized, outDir };
   }
 
   let count = 0;
@@ -171,9 +231,9 @@ export const importLeagueSkinsFromZip = async (
   }
 
   log(
-    `[LeagueSkins导入] 完成: 成功 ${count}，已存在 ${skipped}，失败 ${failed}，` +
-      `未识别 ${unrecognized}/${fantomeCount}`
+    `[LeagueSkins导入] 完成: 写入 ${count}（覆盖 ${replaced}），内容一致跳过 ${skipped}，` +
+      `失败 ${failed}，未识别 ${unrecognized}/${fantomeCount}`
   );
 
-  return { canceled: false, count, skipped, failed, unrecognized, outDir };
+  return { canceled: false, count, skipped, replaced, failed, unrecognized, outDir };
 };

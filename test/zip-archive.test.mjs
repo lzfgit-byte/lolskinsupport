@@ -241,6 +241,24 @@ if (fs.existsSync(realZip)) {
     fs.rmSync(out, { force: true });
     return `${entry.name}（${(written / 1024 / 1024).toFixed(1)} MB，内含 ${inner.entries.length} 个条目）`;
   });
+
+  await check('真实条目的 CRC 与落盘内容一致（导入跳过逻辑的判据）', async () => {
+    const samples = archive.entries
+      .filter((item) => !item.isDirectory && item.name.endsWith('.fantome'))
+      .slice(0, 3);
+    assert.equal(samples.length, 3, '样本不足');
+    for (const entry of samples) {
+      const out = path.join(TMP, `zip-crc-${path.basename(entry.name)}`);
+      await archive.extractTo(entry, out);
+      let crc = 0;
+      for await (const chunk of fs.createReadStream(out)) {
+        crc = zlib.crc32(chunk, crc);
+      }
+      assert.equal(crc >>> 0, entry.crc32, `${entry.name} 的 CRC 不符`);
+      fs.rmSync(out, { force: true });
+    }
+    return `3 个样本一致`;
+  });
 } else {
   console.log(`  skip 真实整包（不存在: ${realZip}）`);
 }
