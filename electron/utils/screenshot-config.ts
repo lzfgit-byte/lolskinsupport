@@ -2,8 +2,8 @@
  * 多杀截图的开关与时机配置（总开关 / 延迟 / 连拍时长 / 调试开关）
  *
  * 这些配置直接读写 config.json，避免和 export/index.ts 相互引用产生循环依赖。
+ * 读写统一走 json-config：容忍 BOM、坏文件先备份、原子写，不会把整份配置冲掉。
  */
-import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
 import {
   MULTIKILL_CAPTURE_DEBUG,
   MULTIKILL_CAPTURE_DELAY,
@@ -15,24 +15,15 @@ import {
   defaultMultiKillCaptureEnabled,
   defaultMultiKillCaptureWindow,
 } from '../const';
+import { patchJsonConfig, readJsonConfig } from './json-config';
 
 function readConfigObject(): Record<string, any> {
-  try {
-    if (!existsSync(configPath)) {
-      ensureFileSync(configPath);
-      writeFileSync(configPath, JSON.stringify({}));
-    }
-    return JSON.parse(readFileSync(configPath, { encoding: 'utf-8' })) ?? {};
-  } catch {
-    return {};
-  }
+  return readJsonConfig(configPath);
 }
 
 function writeConfigValue(key: string, value: any): void {
   try {
-    const config = readConfigObject();
-    config[key] = value;
-    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    patchJsonConfig(configPath, { [key]: value });
   } catch (error) {
     console.error(`[ScreenshotConfig] Failed to write ${key}:`, error);
   }

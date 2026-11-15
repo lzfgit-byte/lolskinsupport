@@ -285,6 +285,11 @@ DLL 在 LTK Manager 进程内起一个 TCP 服务，用 CDP 驱动它自己的�
 | `ltf_session.json` | 注入会话记录（崩溃恢复用） |
 | `logs\ltk\ltk_launcher.log` | launcher 启动过程、注入失败原因 |
 
+`config.json` 的读写统一走 `electron/utils/json-config.ts`：容忍 UTF-8 BOM、坏文件先备份成
+`config.json.broken-<时间>` 再当空配置、写入「临时文件 + rename」。以前各模块自己
+`JSON.parse(readFileSync(...))`，解析失败就返回 `{}` 再整份写回 —— 文件一带 BOM，用户的
+`HERO_SKIN`（每个英雄上次选的皮肤）、皮肤目录后缀、游戏路径就会被一份只有默认值的配置覆盖。
+
 ---
 
 ## 8. 失败与恢复

@@ -12,21 +12,12 @@ import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import yaml from 'js-yaml';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
+import { readJsonConfig } from '../utils/json-config';
 import { RIOT_CLIENT_PATH, configPath } from '../const';
 import { detectLocaleConfigFile, startLocaleWatcher } from './locale-watcher';
 
 // ===================== 配置读写（与 locale-watcher 保持一致，避免循环依赖） =====================
-const readConfig = (): Record<string, any> => {
-  try {
-    if (!existsSync(configPath)) {
-      return {};
-    }
-    return JSON.parse(readFileSync(configPath, 'utf8'));
-  } catch (e) {
-    console.error('[LaunchGame] readConfig error:', e);
-    return {};
-  }
-};
+const readConfig = (): Record<string, any> => readJsonConfig(configPath);
 
 /** 读取语言配置文件的 product_install_root（游戏安装根目录） */
 const readProductInstallRoot = (filePath: string): string | null => {

@@ -2,7 +2,7 @@ import fs, { appendFileSync } from 'node:fs';
 import { exec } from 'node:child_process';
 import Path from 'node:path';
 import { dialog, shell } from 'electron';
-import { ensureFileSync, existsSync, readFileSync, writeFileSync } from 'fs-extra';
+import { ensureFileSync, existsSync, writeFileSync } from 'fs-extra';
 import {
   GAME_PATH,
   HERO_SKIN,
@@ -32,6 +32,7 @@ import {
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { lcuConnector } from '../http/lcuConnector';
+import { patchJsonConfig, readJsonConfig } from '../utils/json-config';
 import { loadSkinData, loadSkinDataByFile, setConfigData, unpackWadFile } from './load-skin-data';
 import { ltfInjector } from './ltfSession';
 import { importLeagueSkinsFromZip } from './league-skins-import';
@@ -61,17 +62,9 @@ export const loadSkinDataByFilePath = async (fullWadPath: string, current = -1) 
   setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   await loadSkinDataByFile(idName, fullWadPath, null, current);
 };
-export const readConfig = () => {
-  if (!existsSync(configPath)) {
-    ensureFileSync(configPath);
-    writeFileSync(configPath, JSON.stringify({}));
-  }
-  return JSON.parse(readFileSync(configPath, { encoding: 'utf-8' }));
-};
+export const readConfig = () => readJsonConfig(configPath);
 export const setConfig = (key: string, value: string) => {
-  const config = readConfig();
-  config[key] = value;
-  writeFileSync(configPath, JSON.stringify(config, null, 2));
+  patchJsonConfig(configPath, { [key]: value });
 };
 export const readConfigValue = (key: string) => {
   const config = readConfig();

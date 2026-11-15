@@ -1,10 +1,11 @@
-import { promises as fs, readFileSync } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { desktopCapturer, screen } from 'electron';
 import type { NativeImage } from 'electron';
 import { SCREENSHOT_PATH } from '@ghs/constant';
 import { configPath, defaultScreenshotPath } from '../const';
+import { readJsonConfig } from './json-config';
 
 /**
  * 获取当前本地时间的 YYYY-MM-DD 格式字符串
@@ -32,13 +33,9 @@ function getFormattedTime(): string {
  * 读取配置中设置的截图保存根目录，未设置时回退到默认目录
  */
 function getScreenshotBaseDir(): string {
-  try {
-    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
-    const configured = config[SCREENSHOT_PATH];
-    return configured || defaultScreenshotPath;
-  } catch {
-    return defaultScreenshotPath;
-  }
+  const config = readJsonConfig(configPath);
+  const configured = config[SCREENSHOT_PATH];
+  return configured || defaultScreenshotPath;
 }
 
 function delay(ms: number): Promise<void> {

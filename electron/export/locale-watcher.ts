@@ -24,6 +24,7 @@ import path from 'node:path';
 import { type FSWatcher, watch } from 'chokidar';
 import yaml from 'js-yaml';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
+import { patchJsonConfig, readJsonConfig } from '../utils/json-config';
 import {
   LOCALE_WATCHER_ENABLED,
   LOCALE_WATCHER_FILE,
@@ -78,23 +79,12 @@ let updateTimer: NodeJS.Timeout | null = null;
 // 兜底：定期检查一次语言，防止漏掉文件事件
 let checkTimer: NodeJS.Timeout | null = null;
 
-// ===================== 配置读写（本地实现，避免循环依赖） =====================
-const readConfig = (): Record<string, any> => {
-  try {
-    if (!existsSync(configPath)) {
-      writeFileSync(configPath, '{}', 'utf8');
-      return {};
-    }
-    return JSON.parse(readFileSync(configPath, 'utf8'));
-  } catch (e) {
-    console.error('[LocaleWatcher] readConfig error:', e);
-    return {};
-  }
-};
+// ===================== 配置读写 =====================
+// 统一走 utils/json-config：容忍 BOM、坏文件先备份、原子写。
+// 以前这里解析失败会返回 {} 并整份写回，BOM 一来就把用户设置全冲掉。
+const readConfig = (): Record<string, any> => readJsonConfig(configPath);
 const setConfig = (key: string, value: string) => {
-  const config = readConfig();
-  config[key] = value;
-  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+  patchJsonConfig(configPath, { [key]: value });
 };
 
 // ===================== YAML 辅助函数 =====================
