@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -6,7 +7,10 @@ import Path from 'node:path';
 import AdmZip from 'adm-zip';
 import { IS_USE_COMMAND, modToolsWrapper } from '../const';
 import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
-import { extractWadSkinBins } from './extract-wad-chunks';
+import { wadPathHash } from '../utils/wad-hash';
+import { extractWadByHash, extractWadSkinBins } from './extract-wad-chunks';
+import { readAudioBlocks, type AudioBlocks } from './skin-audio';
+import { readSkinMeshRefs, rebaseSkinPy } from './skin-rebase';
 
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -120,6 +124,94 @@ const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
   } catch (err) {
     logData(` [修改失败] 处理 ${pyPath} 时出错:`, err.message);
   }
+};
+
+/** 该角色 base 皮肤的身份（championSkinName + 音频段），每个角色只读一次游戏 skin0.bin */
+const baseSkinCache = new Map<string, { name: string; audio: AudioBlocks | null }>();
+
+/**
+ * 从游戏 WAD 解出来的 skin0.bin 里读 base 皮肤的 championSkinName（如 VayneBase）
+ * 和音频身份的两段（tagEventList / bankUnits）。
+ *
+ * 不能靠拼字符串猜：不同英雄叫法不一样（VayneBase / Jade_VayneBase / AnnieBase…），
+ * Rose 的 baseskin 也是从游戏数据里取的。
+ */
+const readBaseSkinData = async (
+  characterDir: string,
+  character: string
+): Promise<{ name: string; audio: AudioBlocks | null }> => {
+  const cached = baseSkinCache.get(character);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const baseBin = path.join(characterDir, 'skins', 'skin0.bin');
+  if (!fs.existsSync(baseBin)) {
+    baseSkinCache.set(character, { name: '', audio: null });
+    return { name: '', audio: null };
+  }
+  try {
+    await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), false, baseBin);
+    const basePy = baseBin.replace(/\.bin$/, '.py');
+    const text = fs.existsSync(basePy) ? fs.readFileSync(basePy, 'utf-8') : '';
+    const matched = /championSkinName:\s*string\s*=\s*"([^"]*)"/.exec(text);
+    const name = matched ? matched[1] : '';
+    const audio = readAudioBlocks(text);
+    if (fs.existsSync(basePy)) {
+      fs.unlinkSync(basePy);
+    }
+    logData(
+      ` [base-skin] ${character} 的 base 皮肤: ${name || '(没找到)'}` +
+        `，音频段 ${audio ? '已读到' : '没读到'}`
+    );
+    const result = { name, audio };
+    baseSkinCache.set(character, result);
+    return result;
+  } catch (error) {
+    logData(` [base-skin] 读取 ${character} base 皮肤数据失败:`, error?.message ?? error);
+    const result = { name: '', audio: null };
+    baseSkinCache.set(character, result);
+    return result;
+  }
+};
+
+/**
+ * 从游戏 WAD 里按路径取出网格/骨架（SKN/SKL）。
+ *
+ * 生成流程解包用的是 extractWadSkinBins，只拿 `data/characters/<champ>/skins/skin*.bin`，
+ * 里面没有 `assets/` 的网格文件 —— 所以这里按路径哈希直接从原 WAD 取。
+ */
+const extractMeshAssets = async (wadPath: string, refs: string[]): Promise<Map<string, Buffer>> => {
+  const assets = new Map<string, Buffer>();
+  if (refs.length === 0) {
+    return assets;
+  }
+  const outputDir = path.join(
+    os.tmpdir(),
+    `lol-skin-mesh-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
+  try {
+    const result = await extractWadByHash({
+      wadPath,
+      files: refs.map((filePath) => ({ hash: wadPathHash(filePath), filePath })),
+      outputDir,
+    });
+    for (const item of result.files as Array<{
+      filePath?: string;
+      outputPath?: string;
+      error?: string;
+    }>) {
+      if (item.error || !item.filePath || !item.outputPath || !fs.existsSync(item.outputPath)) {
+        logData(` [base-skin] 取网格失败 ${item.filePath ?? ''}: ${item.error ?? '没有输出'}`);
+        continue;
+      }
+      assets.set(item.filePath.replace(/\\/g, '/').toLowerCase(), fs.readFileSync(item.outputPath));
+    }
+  } catch (error) {
+    logData(` [base-skin] 从游戏 WAD 取网格出错:`, error?.message ?? error);
+  } finally {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  }
+  return assets;
 };
 
 const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
@@ -335,6 +427,35 @@ export const loadSkinDataByFile = async (
       const pyPath = destBinPath.replace('.bin', '.py');
       patchPyFile(heroNameInLine, pyPath, skinId);
       logData(` [处理完成 py文件修改] ${pyPath}`);
+      // 按 Rose 的方式补 base skin 身份：复制 SKN/SKL 到 base 路径 + 改 championSkinName/骨架引用，
+      // 否则 LTK 的 patcher 会把这个皮肤当成 skinhack，整局 overlay 被关掉。
+      const baseSkin = await readBaseSkinData(
+        path.join(charactersDir, heroNameInLine),
+        heroNameInLine
+      );
+      if (baseSkin.name) {
+        const meshRefs = readSkinMeshRefs(pyPath);
+        const assets = await extractMeshAssets(fullWadPath, meshRefs);
+        const rebase = rebaseSkinPy({
+          pyPath,
+          character: heroNameInLine,
+          baseChampionSkinName: baseSkin.name,
+          baseAudio: baseSkin.audio ?? undefined,
+          extractRoot: currentExtraPath,
+          assets,
+          outputRoot: path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`),
+          log: logData,
+        });
+        if (rebase) {
+          logData(
+            ` [base-skin] 已重建网格: ${rebase.meshes
+              .map((item) => `${item.path}(${item.added})`)
+              .join(', ')}`
+          );
+        }
+      } else {
+        logData(` [base-skin] 跳过 ${heroNameInLine}：没有读到 base 皮肤名`);
+      }
       deleteFile(destBinPath);
       await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), true, pyPath);
       logData(` [封包完成 ritobin] ${pyPath}`);

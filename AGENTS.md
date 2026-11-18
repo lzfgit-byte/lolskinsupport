@@ -1,5 +1,13 @@
 # 给 AI / 协作者的操作约定
 
+## 〇、改哪里：只有 lolskinsupport，Rose 只是参考
+
+- 这个会话里的**所有代码修改都落在 `D:\projects\lolskinsupport`**；这就是我们的项目。
+- `D:\projects\Rose`（以及安装目录 `D:\Program Files\Rose`）**只是参考实现**：
+  可以去读、去 `git log/show/diff`、对照它的逻辑，但**不要修改它**、不要提交、不要动它的工作区。
+- 从 Rose 抄逻辑时：移植到 TS 并适配本项目的目录结构 / 配置，注释里写清「对应 Rose 的哪个文件/提交」，
+  不要把 Rose 的 Python 代码或运行时文件直接放进本项目。
+
 ## 一、用户数据：未经我确认，一律不许动
 
 `%LOCALAPPDATA%\lol-skin-ll\` 是用户的真实数据，**不是测试场地**：
@@ -34,3 +42,18 @@
   （`readJsonConfig` / `writeJsonConfig` / `patchJsonConfig`）。新增代码**不要**再写
   `JSON.parse(readFileSync(configPath))` 或 `writeFileSync(configPath, ...)`。
   测试：`npm run config:test`。
+
+## 三、base-skin / LTK 检查（2026-11-18）
+
+- LTK 的 patcher 认 base 皮肤要过两道：**网格内容**和**名字**。规则在 LTK 的
+  `crates/ltk-manager-problems/src/rules/bin_skinhack/mod.rs`（本机在
+  `%TEMP%\ltk-src`，只读参考）。
+- **补 16 个 0 字节没用**：patcher 比较「是不是别的皮肤的网格」时按对方文件的长度比前缀，
+  追加的尾巴被忽略。必须真改内容 —— 我们的做法（照 Rose 1.5.9）是骨架加 `null_bone` 关节、
+  网格加末顶点拷贝，见 `electron/export/skin-mesh.ts`。
+- 名字也要换：`ChampionSkinName`、`TagEventList`、`BankUnits[].Name`、非 voiceOver 单位的
+  事件名，见 `electron/export/skin-audio.ts`。
+- 改源文件**不要**用 PowerShell 的 `Get-Content`/`Set-Content` 改写（会把 UTF-8 读成 ANSI，
+  整篇变乱码、中文串破坏语法）；用编辑工具或 `write`。
+- 改完重建包后，可以先用 `%TEMP%\harness\check-ltk.mjs`（离线复刻检查规则）验证，再去游戏里试。
+- 测试：`npm run mesh:test`、`npm run audio:test`、`npm run rebase:test`。

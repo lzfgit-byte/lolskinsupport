@@ -302,6 +302,34 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
 工具目录（`MOD_TOOLS_PATH` 的父目录）需要 `wad-make.exe`、`wad-extract.exe`、
 `ritobin\bin\ritobin_cli.exe`、`hashes.game.txt`。**注入本身完全不需要它。**
 
+生成时会对皮肤 bin 做一次 **base-skin 改写**（`electron/export/skin-rebase.ts` +
+`skin-mesh.ts` + `skin-audio.ts`，对齐 Rose 1.5.9 `injection/baseskin`，提交 `2c64012d`），
+否则 LTK 的 patcher 会把它当 skinhack。patcher 的规则在 LTK 的
+`crates/ltk-manager-problems/src/rules/bin_skinhack/mod.rs`：网格和名字都查。
+
+1. **网格重建**（`skin-mesh.ts`，照抄 Rose 的 `mesh.py`）：把皮肤自己的 SKN/SKL
+   **重建**后写到 `assets/characters/<champ>/skins/base/<champ>.skn|skl` ——
+   骨架多一根没人用的 `null_bone` 根部关节，网格多一个末顶点的拷贝（索引不动，
+   没有三角形用它）。文件与游戏自带 base 网格不再是同一内容，但模型和动画完全一样。
+   bin 里 `skeleton` / `simpleSkin` 指向这两个 base 路径。
+   > 旧实现是往文件末尾补 16 个 0 字节：patcher 比较时**忽略追加的尾巴**，所以补 0
+   > 等于没补，包照样被判成「skin0 的网格是别的皮肤的」。Rose 1.5.9 也是因为这个
+   > 才改成重建；我们照它改。已经补过 0 的老文件会先把 16 字节削掉再重建。
+2. **名字改写**：`championSkinName` 改成该英雄 base 皮肤的名字（从游戏 `skin0.bin` 读，
+   例如 `VayneBase`），去掉 `championSkinId`；`SkinAudioProperties` 的
+   `tagEventList` / `bankUnits` 整段换成游戏 base 皮肤的（`Vayne_Base_SFX`、
+   `Play_sfx_Vayne_...`）。patcher 还会查 `TagEventList`、`BankUnits[].Name`
+   （`<英雄>_Skin<n>_SFX`）和非 voiceOver 单位的事件名（`Play_sfx_<英雄>Skin<n>_...`），
+   这些名字留在包里就还是 skinhack。
+
+音效的代价：换成 base 皮肤的音频身份后，游戏按 base 皮肤去加载 base 的 bank，
+**皮肤专属音效/语音会退回 base 皮肤的**。Rose 的做法是把皮肤自己的 bank 换个路径塞进
+包里、并在 bank 里加 base 名字的事件别名（`audio.py` 的 merge + `META/rose_sounds.json`，
+语音还需要多语言 WAD），从而既过检查又保住专属音效；那一步要写 BNK/WPK，还没移植。
+
+还没做的另一步：把 48 个内嵌 VFX 条目精简掉（Rose 输出只留 `Skin0` + `Resources` 两个条目），
+不影响 LTK 的检查。
+
 ---
 
 ## 7. 数据目录一览
