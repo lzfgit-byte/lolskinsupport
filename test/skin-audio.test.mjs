@@ -18,9 +18,8 @@ if (!fs.existsSync(BUNDLE)) {
   throw new Error(`缺少 ${BUNDLE}，先运行 npm run audio:test 的构建步骤`);
 }
 
-const { readAudioBlocks, replaceAudioBlocks, skinAudioMarkers } = await import(
-  `file:///${BUNDLE.replace(/\\/g, '/')}`
-);
+const { readAudioBlocks, replaceAudioBlocks, skinAudioMarkers, parseBankUnits, rewriteBankUnits } =
+  await import(`file:///${BUNDLE.replace(/\\/g, '/')}`);
 
 const SKIN = `entries: map[hash,embed] = {
     "Characters/Vayne/Skins/Skin0" = SkinCharacterDataProperties {
@@ -153,6 +152,79 @@ step('base 皮肤自己的音频段不算命中', () => {
   assert.ok(base);
   assert.deepEqual(skinAudioMarkers(`${base.tagEventList}\n${base.bankUnits}`, 'vayne'), []);
   return '无命中';
+});
+
+step('bank 路径里的 Skin<n> 不算命中', () => {
+  const markers = skinAudioMarkers(
+    '"ASSETS/Sounds/Wwise2016/SFX/Characters/Vayne/Skins/Skin11/Vayne_Skin11_SFX_audio.bnk"',
+    'vayne'
+  );
+  assert.deepEqual(markers, []);
+  return '路径被忽略';
+});
+
+step('解析出两个 BankUnit 和它们的字段', () => {
+  const blocks = readAudioBlocks(SKIN);
+  assert.ok(blocks);
+  const units = parseBankUnits(blocks.bankUnits);
+  assert.equal(units.length, 2);
+  assert.equal(units[0].name, 'Vayne_Skin11_SFX');
+  assert.equal(units[0].voiceOver, false);
+  assert.equal(units[0].paths.length, 1);
+  assert.deepEqual(units[0].events, ['Play_sfx_VayneSkin11_VayneTumble_OnCast']);
+  assert.equal(units[1].name, 'Vayne_Skin11_VO');
+  assert.equal(units[1].voiceOver, true);
+  return `${units.length} 个单位`;
+});
+
+step('重写单位：改名 + 换事件 + 丢掉语音单位', () => {
+  const blocks = readAudioBlocks(SKIN);
+  assert.ok(blocks);
+  const units = parseBankUnits(blocks.bankUnits);
+  const rewritten = rewriteBankUnits(blocks.bankUnits, units, [
+    { name: 'Vayne_Base_SFX', events: ['Play_sfx_Vayne_A', 'Play_sfx_Vayne_B'] },
+    null,
+  ]);
+  const result = parseBankUnits(rewritten);
+  assert.equal(result.length, 1, '语音单位被丢掉');
+  assert.equal(result[0].name, 'Vayne_Base_SFX');
+  assert.deepEqual(result[0].events, ['Play_sfx_Vayne_A', 'Play_sfx_Vayne_B']);
+  assert.equal(result.some((unit) => unit.name === 'Vayne_Skin11_SFX'), false, '旧单位名不该留');
+  const lines = rewritten.split('\n');
+  assert.equal(lines[lines.length - 1], '            }', 'bankUnits 的收尾缩进要对');
+  return '1 个单位';
+});
+
+step('追加现成的单位（base 皮肤的语音）', () => {
+  const blocks = readAudioBlocks(SKIN);
+  const base = readAudioBlocks(BASE);
+  assert.ok(blocks && base);
+  const units = parseBankUnits(blocks.bankUnits);
+  const rewritten = rewriteBankUnits(
+    blocks.bankUnits,
+    units,
+    [{ name: 'Vayne_Base_SFX' }, null],
+    [base.bankUnits.slice(base.bankUnits.indexOf('BankUnit')).replace(/\s+$/, '')]
+  );
+  const result = parseBankUnits(rewritten);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].name, 'Vayne_Base_SFX');
+  assert.equal(result[1].name, 'Vayne_Base_SFX');
+  const lines = rewritten.split('\n');
+  assert.equal(lines[lines.length - 1], '            }');
+  return '2 个单位';
+});
+
+step('只改名不动事件', () => {
+  const blocks = readAudioBlocks(SKIN);
+  assert.ok(blocks);
+  const units = parseBankUnits(blocks.bankUnits);
+  const rewritten = rewriteBankUnits(blocks.bankUnits, units, [{ name: 'Vayne_Base_SFX' }, null]);
+  const result = parseBankUnits(rewritten);
+  assert.equal(result[0].name, 'Vayne_Base_SFX');
+  assert.deepEqual(result[0].events, units[0].events);
+  assert.equal(rewritten.includes('VayneSimple') , false);
+  return '事件保持';
 });
 
 console.log(failures === 0 ? '\n音频身份改写测试通过' : `\n${failures} 个环节失败`);

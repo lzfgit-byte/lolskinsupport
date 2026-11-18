@@ -303,9 +303,10 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
 `ritobin\bin\ritobin_cli.exe`、`hashes.game.txt`。**注入本身完全不需要它。**
 
 生成时会对皮肤 bin 做一次 **base-skin 改写**（`electron/export/skin-rebase.ts` +
-`skin-mesh.ts` + `skin-audio.ts`，对齐 Rose 1.5.9 `injection/baseskin`，提交 `2c64012d`），
-否则 LTK 的 patcher 会把它当 skinhack。patcher 的规则在 LTK 的
-`crates/ltk-manager-problems/src/rules/bin_skinhack/mod.rs`：网格和名字都查。
+`skin-mesh.ts` + `skin-audio.ts` + `skin-banks.ts` + `bnk.ts`，对齐 Rose 1.5.9
+`injection/baseskin`，提交 `2c64012d`），否则 LTK 的 patcher 会把它当 skinhack。
+patcher 的规则在 LTK 的 `crates/ltk-manager-problems/src/rules/bin_skinhack/mod.rs`：
+网格和名字都查。
 
 1. **网格重建**（`skin-mesh.ts`，照抄 Rose 的 `mesh.py`）：把皮肤自己的 SKN/SKL
    **重建**后写到 `assets/characters/<champ>/skins/base/<champ>.skn|skl` ——
@@ -322,10 +323,29 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
    （`<英雄>_Skin<n>_SFX`）和非 voiceOver 单位的事件名（`Play_sfx_<英雄>Skin<n>_...`），
    这些名字留在包里就还是 skinhack。
 
-音效的代价：换成 base 皮肤的音频身份后，游戏按 base 皮肤去加载 base 的 bank，
-**皮肤专属音效/语音会退回 base 皮肤的**。Rose 的做法是把皮肤自己的 bank 换个路径塞进
-包里、并在 bank 里加 base 名字的事件别名（`audio.py` 的 merge + `META/rose_sounds.json`，
-语音还需要多语言 WAD），从而既过检查又保住专属音效；那一步要写 BNK/WPK，还没移植。
+音效（`skin-banks.ts` + `bnk.ts`，对齐 Rose 的 `audio.py`）：皮肤的 `tagEventList`
+是优先级链，`{"Vayne", "VayneSkin11"}` 里最后有同名事件的 tag 赢，所以皮肤实际放的是
+`Play_sfx_VayneSkin11_...`。作为 base 皮肤运行时链上只剩 base tag，游戏会去找
+`Play_sfx_Vayne_...`，皮肤的 bank 里没有这个名字，音效就没了。所以：
+
+1. 在皮肤自己的事件 bank（`<英雄>_Skin<n>_SFX_events.bnk`）里，为每个靠皮肤 tag 才
+   够得到的事件补一个 **base 名字的别名 Event**，指向同一批 Action；
+2. base 皮肤自己的事件 bank 里同 id 的 Event 删掉（两个加载中的 bank 定义同一个 id，
+   客户端只会留一个），改过的 bank 随包一起走 —— 这样音效还是皮肤自己的；
+3. bin 里单位名 `<英雄>_Skin<n>_SFX` → `<英雄>_Base_SFX`，事件列表换成别名，
+   `Skin<n>` 的老名字不再列出来（列出来就会被 patcher 抓）；事件 bank 里原来的
+   `Skin<n>` 事件保留，因为动画/VFX 的 bin 会按全名 post 它们。
+
+bank 不搬家：音频 bank 留在游戏原来的路径上（游戏本来就有），包里只多两个十几 KB 的
+事件 bank（皮肤的自己一份 + base 的改过一份）。Rose 是把 bank 整个搬到 base 路径
+（包大 1 MB 级），我们这样省体积。
+
+语音（voiceOver）：本地化 bank 每个语言一份、mod 装不全，所以换成游戏 base 皮肤的
+VO 单位，语音走 base 的（同一个人配音，差别很小）。
+
+音效核对方式：`%TEMP%\harness\check-ltk.mjs`（离线复刻 patcher 的检查）、
+`check-audio.mjs`（单位列的事件都能被包里的 bank 解析）、`check-alias-actions.mjs`
+（别名指向的 Action 与游戏原始 bank 一致）。
 
 还没做的另一步：把 48 个内嵌 VFX 条目精简掉（Rose 输出只留 `Skin0` + `Resources` 两个条目），
 不影响 LTK 的检查。

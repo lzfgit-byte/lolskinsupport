@@ -53,7 +53,13 @@
   网格加末顶点拷贝，见 `electron/export/skin-mesh.ts`。
 - 名字也要换：`ChampionSkinName`、`TagEventList`、`BankUnits[].Name`、非 voiceOver 单位的
   事件名，见 `electron/export/skin-audio.ts`。
+- 音效别名（保住皮肤专属音效）：`electron/export/skin-banks.ts` 在皮肤自己的事件 bank 里
+  补 base 名字的别名 Event，并删掉 base 事件 bank 里同 id 的 Event；bank 读写是
+  `electron/export/bnk.ts`（照 Rose 的 `bnk.py`，没改过的 bank 必须逐字节写回）。
+  bank 不搬到 base 路径（省体积），所以包里只多两个十几 KB 的事件 bank。
 - 改源文件**不要**用 PowerShell 的 `Get-Content`/`Set-Content` 改写（会把 UTF-8 读成 ANSI，
   整篇变乱码、中文串破坏语法）；用编辑工具或 `write`。
-- 改完重建包后，可以先用 `%TEMP%\harness\check-ltk.mjs`（离线复刻检查规则）验证，再去游戏里试。
-- 测试：`npm run mesh:test`、`npm run audio:test`、`npm run rebase:test`。
+- 改完重建包后，可以先用 `%TEMP%\harness\check-ltk.mjs`（离线复刻检查规则）验证，再去游戏里试；
+  音效再用 `check-audio.mjs`（事件都有 bank 提供）、`check-alias-actions.mjs`（别名 Action 一致）。
+- 测试：`npm run mesh:test`、`npm run audio:test`、`npm run bnk:test`、`npm run banks:test`、
+  `npm run rebase:test`。

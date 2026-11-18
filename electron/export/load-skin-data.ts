@@ -10,7 +10,8 @@ import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
 import { wadPathHash } from '../utils/wad-hash';
 import { extractWadByHash, extractWadSkinBins } from './extract-wad-chunks';
 import { readAudioBlocks, type AudioBlocks } from './skin-audio';
-import { readSkinMeshRefs, rebaseSkinPy } from './skin-rebase';
+import { collectBankPaths, planBankAliases } from './skin-banks';
+import { findCaseInsensitive, readSkinMeshRefs, rebaseSkinPy } from './skin-rebase';
 
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -175,24 +176,42 @@ const readBaseSkinData = async (
 };
 
 /**
- * 从游戏 WAD 里按路径取出网格/骨架（SKN/SKL）。
+ * 从游戏 WAD 里按路径取出若干文件（网格、骨架、声音 bank）。
  *
  * 生成流程解包用的是 extractWadSkinBins，只拿 `data/characters/<champ>/skins/skin*.bin`，
- * 里面没有 `assets/` 的网格文件 —— 所以这里按路径哈希直接从原 WAD 取。
+ * 里面没有 `assets/` 下的文件 —— 所以这里按路径哈希直接从原 WAD 取；如果解包目录里
+ * 已经有（`IS_USE_COMMAND` 走 wad-extract.exe 时会有），直接读磁盘。
  */
-const extractMeshAssets = async (wadPath: string, refs: string[]): Promise<Map<string, Buffer>> => {
+const extractWadAssets = async (
+  wadPath: string,
+  refs: string[],
+  extractRoot?: string,
+  label = '资源'
+): Promise<Map<string, Buffer>> => {
   const assets = new Map<string, Buffer>();
-  if (refs.length === 0) {
+  const wanted: string[] = [];
+  for (const ref of refs) {
+    if (assets.has(ref.toLowerCase())) {
+      continue;
+    }
+    const local = extractRoot ? findCaseInsensitive(extractRoot, ref) : null;
+    if (local) {
+      assets.set(ref.replace(/\\/g, '/').toLowerCase(), fs.readFileSync(local));
+      continue;
+    }
+    wanted.push(ref);
+  }
+  if (wanted.length === 0) {
     return assets;
   }
   const outputDir = path.join(
     os.tmpdir(),
-    `lol-skin-mesh-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    `lol-skin-assets-${Date.now()}-${Math.random().toString(16).slice(2)}`
   );
   try {
     const result = await extractWadByHash({
       wadPath,
-      files: refs.map((filePath) => ({ hash: wadPathHash(filePath), filePath })),
+      files: wanted.map((filePath) => ({ hash: wadPathHash(filePath), filePath })),
       outputDir,
     });
     for (const item of result.files as Array<{
@@ -201,13 +220,13 @@ const extractMeshAssets = async (wadPath: string, refs: string[]): Promise<Map<s
       error?: string;
     }>) {
       if (item.error || !item.filePath || !item.outputPath || !fs.existsSync(item.outputPath)) {
-        logData(` [base-skin] 取网格失败 ${item.filePath ?? ''}: ${item.error ?? '没有输出'}`);
+        logData(` [base-skin] 取${label}失败 ${item.filePath ?? ''}: ${item.error ?? '没有输出'}`);
         continue;
       }
       assets.set(item.filePath.replace(/\\/g, '/').toLowerCase(), fs.readFileSync(item.outputPath));
     }
   } catch (error) {
-    logData(` [base-skin] 从游戏 WAD 取网格出错:`, error?.message ?? error);
+    logData(` [base-skin] 从游戏 WAD 取${label}出错:`, error?.message ?? error);
   } finally {
     fs.rmSync(outputDir, { recursive: true, force: true });
   }
@@ -434,16 +453,55 @@ export const loadSkinDataByFile = async (
         heroNameInLine
       );
       if (baseSkin.name) {
+        const packDir = path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`);
         const meshRefs = readSkinMeshRefs(pyPath);
-        const assets = await extractMeshAssets(fullWadPath, meshRefs);
+        const assets = await extractWadAssets(fullWadPath, meshRefs, currentExtraPath, '网格');
+
+        // 音效别名：把皮肤 bank 里的事件补上 base 名字的别名，保住皮肤自己的音效。
+        // 拿不到 bank / 没有可合并的 tag 时，退回「整段换成 base 皮肤语音」。
+        let audioBlocks = baseSkin.audio ?? undefined;
+        if (baseSkin.audio) {
+          const pyText = fs.readFileSync(pyPath, 'utf-8');
+          const bankRefs = collectBankPaths(pyText, baseSkin.audio);
+          const bankBytes = await extractWadAssets(fullWadPath, bankRefs, currentExtraPath, 'bank');
+          const plan = await planBankAliases({
+            pyText,
+            character: heroNameInLine,
+            baseAudio: baseSkin.audio,
+            readBank: async (bankPath) =>
+              bankBytes.get(bankPath.replace(/\\/g, '/').toLowerCase()) ?? null,
+            log: logData,
+          });
+          if (plan) {
+            audioBlocks = plan.blocks;
+            for (const file of plan.files) {
+              const target = path.join(packDir, file.path);
+              fs.mkdirSync(path.dirname(target), { recursive: true });
+              fs.writeFileSync(target, file.data);
+            }
+            logData(
+              ` [base-skin] ${heroNameInLine}: 音效别名 ${plan.aliasedEvents} 个` +
+                `${plan.missingEvents > 0 ? `（${plan.missingEvents} 个事件在 bank 里找不到）` : ''}` +
+                `，单位 ${plan.renamedUnits.map((unit) => `${unit.from}->${unit.to}`).join(', ') || '不改名'}` +
+                `，随包 bank ${plan.files.length} 个` +
+                `${plan.voiceUnits.length > 0 ? `，语音走 base（${plan.voiceUnits.join(', ')}）` : ''}`
+            );
+            for (const note of plan.notes.slice(0, 5)) {
+              logData(` [base-skin] ${heroNameInLine}: ${note}`);
+            }
+          } else {
+            logData(` [base-skin] ${heroNameInLine}: 补不了音效别名，音频整段换成 base 皮肤的`);
+          }
+        }
+
         const rebase = rebaseSkinPy({
           pyPath,
           character: heroNameInLine,
           baseChampionSkinName: baseSkin.name,
-          baseAudio: baseSkin.audio ?? undefined,
+          baseAudio: audioBlocks,
           extractRoot: currentExtraPath,
           assets,
-          outputRoot: path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`),
+          outputRoot: packDir,
           log: logData,
         });
         if (rebase) {
