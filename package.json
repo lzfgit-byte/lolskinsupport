@@ -34,6 +34,7 @@
     "ltf:live:test": "node test/ltf-live.test.mjs",
     "zip:test": "node node_modules/esbuild/bin/esbuild electron/utils/zip-archive.ts --bundle --platform=node --format=esm --outfile=test/.tmp/zipArchive.mjs && node test/zip-archive.test.mjs",
     "config:test": "node node_modules/esbuild/bin/esbuild electron/utils/json-config.ts --bundle --platform=node --format=esm --outfile=test/.tmp/jsonConfig.mjs && node test/json-config.test.mjs",
+    "skin:test": "node node_modules/esbuild/bin/esbuild electron/export/skin-sync.ts --bundle --platform=node --format=esm --packages=external --outfile=test/.tmp/skinSync.mjs && node test/skin-sync.test.mjs",
     "import:test": "node node_modules/esbuild/bin/esbuild electron/export/league-skins-import.ts --bundle --platform=node --format=esm --outfile=test/.tmp/leagueSkinsImport.mjs && node test/league-skins-import.test.mjs"
   },
   "dependencies": {

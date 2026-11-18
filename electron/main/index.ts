@@ -13,6 +13,7 @@ import { gameflowMonitor } from '../http/gameflowMonitor';
 import { initLocaleWatcher, stopLocaleWatcher } from '../export/locale-watcher';
 import { killLeftoverManagerSync } from '../export/ltfSession';
 import { isShutdownFinished, shutdown } from '../export/shutdown';
+import { startSkinSyncMonitor } from '../export/skin-sync';
 // 启动服务
 let win: BrowserWindow | null = null;
 const url = process.env.VITE_DEV_SERVER_URL;
@@ -91,7 +92,11 @@ async function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  await createWindow();
+  // 皮肤自动同步：按设置定时检查 LeagueSkins 清单，有变化就下载
+  startSkinSyncMonitor();
+});
 /**
  *窗口跟app是不一样的，这说明可以在无窗口时，可以再次创建窗口
  */

@@ -46,6 +46,57 @@
             >
           </a-space>
         </a-tab-pane>
+        <a-tab-pane key="sync" tab="皮肤同步">
+          <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px">
+            <h3 style="margin: 0 0 8px">皮肤自动同步</h3>
+            <div style="font-size: 12px; color: #999; margin-bottom: 8px">
+              定时检查 GitHub 上 {{ skinSyncState?.repo || 'Alban1911/LeagueSkins' }} 的皮肤清单，
+              有新增或变化的皮肤就下载到「皮肤目录 / 目录名称 / 英雄 / 英雄_序号.zip」。
+              下载走下面的代理。
+            </div>
+            启用自动同步：
+            <a-switch v-model:checked="skinSyncEnabled"></a-switch>
+            <span style="font-size: 12px; color: #999; margin-left: 8px">
+              启动后约 20 秒做第一次检查，之后按间隔检查
+            </span>
+            <br /><br />
+            代理地址：
+            <a-input
+              v-model:value="skinSyncProxy"
+              style="width: 260px"
+              placeholder="http://127.0.0.1:10808"
+            />
+            <span style="font-size: 12px; color: #999; margin-left: 8px">留空 = 直连</span>
+            <br /><br />
+            检查间隔（分钟）：
+            <a-input-number v-model:value="skinSyncInterval" :min="1" :max="1440" />
+            <br /><br />
+            首次只补齐缺失：
+            <a-switch v-model:checked="skinSyncMissingOnly"></a-switch>
+            <div style="font-size: 12px; color: #999; margin-top: 4px">
+              开：本地已有、但同步记录里没有的皮肤不重新下载（第一次不会白下 4
+              GB），之后仓库有变化仍会下载； 关：以仓库为准，清单里能识别的皮肤全部重新校验下载。
+            </div>
+            <br />
+            <a-space>
+              <a-button size="small" type="primary" @click="saveSkinSyncSettings"
+                >保存设置</a-button
+              >
+              <a-button size="small" @click="handleTestSkinSyncProxy">测试代理</a-button>
+              <a-button size="small" :loading="skinSyncRunning" @click="handleSyncSkinsNow">
+                立即同步
+              </a-button>
+              <a-button size="small" @click="refreshSkinSync">刷新状态</a-button>
+            </a-space>
+            <div style="margin-top: 10px; font-size: 12px; color: #666; line-height: 1.8">
+              <div>状态：{{ skinSyncStatusText }}</div>
+              <div v-if="skinSyncState?.state?.recorded">
+                已记录 {{ skinSyncState.state.recorded }} 个皮肤，清单 commit
+                {{ (skinSyncState.state.commit || '').slice(0, 8) || '—' }}
+              </div>
+            </div>
+          </div>
+        </a-tab-pane>
         <a-tab-pane key="screenshot" tab="截图设置">
           <div style="font-size: 12px; color: #999; margin-bottom: 8px">
             多杀（双杀~五杀）时会自动截图。等待时间越长越容易截到游戏内横幅，
@@ -215,7 +266,7 @@
 <script setup lang="ts">
   import { useRoute } from 'vue-router';
   import { message } from 'ant-design-vue';
-  import { onMounted, ref } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import {
     GAME_PATH,
     HERO_SKIN,
@@ -236,6 +287,7 @@
     f_getGamePath,
     f_getLocaleCodes,
     f_getLocaleWatcherState,
+    f_getSkinSyncState,
     f_importLeagueSkinsPackage,
     f_loadSkinDataByFilePath,
     f_loadSkinDataIdName,
@@ -251,9 +303,12 @@
     f_setMultiKillCaptureDelay,
     f_setMultiKillCaptureEnabled,
     f_setMultiKillCaptureWindow,
+    f_setSkinSyncSettings,
     f_shoutDownModTools,
     f_startLocaleWatcher,
     f_stopLocaleWatcher,
+    f_syncSkinsNow,
+    f_testSkinSyncProxy,
     f_winGetData,
   } from '@/utils/business';
   import { showFrontendConfirm } from '@/utils/kit-utils';
@@ -346,6 +401,84 @@
       importLeagueSkinsLoading.value = false;
     }
   };
+  // ===================== 皮肤自动同步 =====================
+  const skinSyncState = ref<any>(null);
+  const skinSyncEnabled = ref(true);
+  const skinSyncProxy = ref('http://127.0.0.1:10808');
+  const skinSyncInterval = ref(30);
+  const skinSyncMissingOnly = ref(true);
+  const skinSyncRunning = ref(false);
+  const skinSyncStatusText = computed(() => {
+    const state = skinSyncState.value;
+    if (!state) {
+      return '未加载';
+    }
+    if (state.running || skinSyncRunning.value) {
+      return '正在同步…';
+    }
+    const last = state.lastRun;
+    if (!last) {
+      if (!state.settings?.enabled) {
+        return '自动同步已关闭';
+      }
+      return `等待检查（${
+        state.nextCheckAt ? new Date(state.nextCheckAt).toLocaleTimeString() : '未排期'
+      }）`;
+    }
+    const time = last.finishedAt ? new Date(last.finishedAt).toLocaleString() : '';
+    if (!last.ok) {
+      return `上次失败（${time}）：${last.error || '未知错误'}`;
+    }
+    return `上次检查（${time}）：下载 ${last.downloaded}，认领 ${last.adopted}，失败 ${last.failed}`;
+  });
+  const refreshSkinSync = async () => {
+    skinSyncState.value = await f_getSkinSyncState();
+    const settings = skinSyncState.value?.settings;
+    if (settings) {
+      skinSyncEnabled.value = !!settings.enabled;
+      skinSyncProxy.value = settings.proxy ?? '';
+      skinSyncInterval.value = Number(settings.intervalMin) || 30;
+      skinSyncMissingOnly.value = settings.missingOnly !== false;
+    }
+    skinSyncRunning.value = !!skinSyncState.value?.running;
+  };
+  const saveSkinSyncSettings = async () => {
+    skinSyncState.value = await f_setSkinSyncSettings({
+      enabled: skinSyncEnabled.value,
+      proxy: skinSyncProxy.value,
+      intervalMin: skinSyncInterval.value,
+      missingOnly: skinSyncMissingOnly.value,
+    });
+    message.success('皮肤同步设置已保存');
+  };
+  const handleTestSkinSyncProxy = async () => {
+    const result = await f_testSkinSyncProxy();
+    if (result?.ok) {
+      message.success(`代理正常：清单 ${result.entries} 条，${result.ms} ms`);
+    } else {
+      message.error(`代理/清单测试失败：${result?.error || '未知错误'}`);
+    }
+  };
+  const handleSyncSkinsNow = async () => {
+    if (skinSyncRunning.value) {
+      return;
+    }
+    skinSyncRunning.value = true;
+    logDrawOpen.value = true;
+    try {
+      const result = await f_syncSkinsNow(false);
+      if (result?.ok) {
+        message.success(
+          `同步完成：下载 ${result.downloaded}，认领 ${result.adopted}，失败 ${result.failed}`
+        );
+      } else {
+        message.error(`同步失败：${result?.error || '未知错误'}`);
+      }
+    } finally {
+      skinSyncRunning.value = false;
+      await refreshSkinSync();
+    }
+  };
   const chuckValue = ref(20);
   const handleLoadAllSkinData = async () => {
     showFrontendConfirm('生成全部皮肤数据?').then(() => {
@@ -422,6 +555,7 @@
   watchEffect(() => {
     if (drawerOpen.value) {
       refreshLocaleWatcher();
+      refreshSkinSync();
     }
   });
   onMounted(async () => {
@@ -430,6 +564,7 @@
       value,
     }));
     await refreshLocaleWatcher();
+    await refreshSkinSync();
     document.addEventListener('keydown', function (event) {
       if (event.ctrlKey && event.key === 'w') {
         drawerOpen.value = !drawerOpen.value;

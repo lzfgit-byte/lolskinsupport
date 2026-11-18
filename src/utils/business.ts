@@ -328,3 +328,23 @@ export const f_launchLeagueOfLegendsAt = async (clientPath: string) => {
 export const f_isGameRunning = async (): Promise<boolean> => {
   return executeFunction('isGameRunning');
 };
+/**
+ * 皮肤自动同步（定时检查 LeagueSkins 清单，通过代理下载新增/变化的皮肤）
+ */
+export const f_getSkinSyncState = async (): Promise<any> => {
+  return executeFunction('getSkinSyncState');
+};
+export const f_syncSkinsNow = async (force = false): Promise<any> => {
+  return executeFunction('syncSkinsNow', force);
+};
+export const f_setSkinSyncSettings = async (settings: {
+  enabled?: boolean;
+  proxy?: string;
+  intervalMin?: number;
+  missingOnly?: boolean;
+}): Promise<any> => {
+  return executeFunction('setSkinSyncSettings', settings);
+};
+export const f_testSkinSyncProxy = async (): Promise<any> => {
+  return executeFunction('testSkinSyncProxy');
+};

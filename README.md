@@ -20,8 +20,13 @@
 | 2 | **LTK Manager** | 注入器。下载：<https://github.com/LeagueToolkit/ltk-manager/releases/latest>，默认装到 `C:\Program Files\LTK Manager` |
 | 3 | **lolskinsupport 程序** | 安装包或解压后的程序目录（内含 `resources\ltf\ltk_launcher.exe` 与 `resources\ltf\LeagueToolFlop.dll`）|
 
-### 还需要：皮肤文件（二选一）
+### 还需要：皮肤文件（三选一）
 
+- **自动同步**：在「设置 → 皮肤同步」里保持自动同步开启（默认开），程序会定时检查 GitHub 上
+  `Alban1911/LeagueSkins` 的清单，有新增或变化的皮肤就通过代理下载到皮肤目录。
+  默认代理 `http://127.0.0.1:10808`，可在同一页面改或留空直连，旁边的「测试代理」只拉清单、不下载文件。
+  第一次默认「只补齐缺失」，不会把已经导入过的皮肤重下一遍（之后仓库有变化仍会下载）；
+  如果本地一个皮肤都没有，第一次同步等于下载整库（约 4.5 GB），建议先用整包导入落一批。
 - **整包导入**：拿一份 LeagueSkins 整包（结构为 `skins/<英雄ID>/<皮肤ID>/<皮肤ID>.fantome`），
   在「设置 → 导入 LeagueSkins 整包」里选这个 zip。整包通常 **4~5 GB**，导入后占 **约 4 GB** 磁盘，
   耗时几十秒。重复导入时按内容比对：**大小或 CRC32 不一致的会覆盖**，只有完全相同的才跳过。
@@ -57,6 +62,10 @@ mod-tools\
 | 皮肤目录 `SKIN_PATH` | `%LOCALAPPDATA%\lol-skin-ll\skins` | 皮肤文件放这里 |
 | 工具目录 `MOD_TOOLS_PATH` | `%LOCALAPPDATA%\lol-skin-ll\mod-tools\mod-tools.exe` | 仅生成皮肤时用到 |
 | Riot 客户端 `RIOT_CLIENT_PATH` | 自动推断 | 一键启动游戏（可选） |
+| 同步代理 `SKIN_SYNC_PROXY` | `http://127.0.0.1:10808` | 自动同步皮肤走的 HTTP 代理；留空直连 |
+| 同步间隔 `SKIN_SYNC_INTERVAL_MIN` | `30` | 每隔多少分钟检查一次清单 |
+| 自动同步开关 `SKIN_SYNC_ENABLED` | `true` | 启动后约 20 秒做第一次检查 |
+| 首次只补缺失 `SKIN_SYNC_MISSING_ONLY` | `true` | 本地已有、没同步记录的皮肤不重下 |
 
 **LTK Manager 路径不用配**：程序按 `C:\Program Files\LTK Manager`、`%LOCALAPPDATA%\LTK Manager`、
 `%LOCALAPPDATA%\Programs\LTK Manager` 自动查找；装在别处时在 `config.json` 里加一项
@@ -93,6 +102,7 @@ mod-tools\
 | `logs\ltk\ltk_launcher.log` | LTK Manager 启动日志（排查注入问题看这里） | 程序自动 |
 | `ltf_staging\` | 导入 LTK Manager 前的暂存包（会自动清） | 程序自动 |
 | `ltf_session.json` | 注入会话记录；正常退出会删掉，崩溃残留的下次启动补清 | 程序自动 |
+| `skin_sync_state.json` | 皮肤自动同步的记录（每个文件已下载的 SHA） | 程序自动 |
 
 程序安装目录下的 `resources\ltf\` 必须有 `ltk_launcher.exe` 和 `LeagueToolFlop.dll`——这两个
 文件把桥注入 LTK Manager，是整个注入链路的入口。

@@ -45,6 +45,7 @@ Electron 主进程 ──(TCP JSON, 127.0.0.1:46321-46340)──> LeagueToolFlop
 | `electron/export/shutdown.ts` | 退出清理：关窗口 / 退出时收尾，硬超时后强制关掉 LTK Manager |
 | `electron/export/ltfBridge.ts` | 桥客户端：端口/令牌发现、逐行 JSON 协议 |
 | `electron/export/league-skins-import.ts` | LeagueSkins 整包导入（流式、去重、预检） |
+| `electron/export/skin-sync.ts` | 皮肤自动同步：拉清单、按 SHA 判变化、走代理下载 |
 | `electron/utils/zip-archive.ts` | 流式 ZIP 读取器（ZIP64，>2 GiB 可用） |
 
 ---
@@ -253,6 +254,37 @@ DLL 在 LTK Manager 进程内起一个 TCP 服务，用 CDP 驱动它自己的�
 > 用 CRC 比对后，内容没变就只读不写（3.9 GB 校验约 4 秒），内容有变化仍然会覆盖。
 
 `classic/`（经典模式）条目不在 `skins/` 结构里，会被跳过并计入「未识别」。
+
+### 5.4 皮肤自动同步
+
+`electron/export/skin-sync.ts`，数据源与 Rose 相同：GitHub 仓库 `Alban1911/LeagueSkins`。
+
+```
+manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/manifest.json
+文件:      https://raw.githubusercontent.com/Alban1911/LeagueSkins/<commit 或 main>/<路径>
+兜底清单:  https://api.github.com/repos/Alban1911/LeagueSkins/git/trees/main?recursive=1
+```
+
+1. 清单是 `[路径, git blob SHA, 大小]` 数组（约 1.1 万条，其中 `skins/` 约 9 千条）。
+   `classic/`、`resources/` 会被忽略（本程序只认 `skins/<英雄>/<皮肤>/`）。
+2. 目标路径与整包导入完全一致：`<SKIN_PATH>/<后缀>/<英雄>/<英雄>_<序号>.zip`。
+   状态记在 `<数据目录>/skin_sync_state.json`（`路径 -> {sha, size}`）。
+3. 判定：清单 SHA 与记录一致且文件在 → 跳过；文件不在 → 下载；SHA 变了 → 下载；
+   文件在但没记录（用户手工放的/整包导入的）→ 由 `SKIN_SYNC_MISSING_ONLY` 决定
+   「认领」（只记 SHA、不下载）还是「以仓库为准重新下载」。
+4. 下载：并发 3，写 `<目标>.part`，边下边算 `sha1("blob <长度>\0" + 内容)`，
+   与清单 SHA 一致才 `rename` 落盘；失败只记失败并继续。
+5. 代理：`SKIN_SYNC_PROXY`（默认 `http://127.0.0.1:10808`）交给 axios 的 `proxy`；
+   https 目标由 axios 用 CONNECT 隧道（`HttpsProxyAgent`）。留空才是直连，
+   代理连不上会明确报错，不会偷偷绕过。
+6. 定时：`startSkinSyncMonitor()` 在窗口建好后启动，启动 20 秒后第一次检查，
+   之后按 `SKIN_SYNC_INTERVAL_MIN`（默认 30 分钟）循环；程序退出时 `shutdown()` 里停掉。
+
+界面上「设置 → 皮肤同步」可以改开关 / 代理 / 间隔 / 首次只补缺失，并手动「立即同步」；
+「测试代理」只拉一次清单（约 1 MB，超时 120 秒），用来确认代理通不通。
+
+> 首次同步如果没有本地皮肤，等于下载整库（约 4.5 GB）；经本机代理实测速度有限，
+> 建议先用「导入 LeagueSkins 整包」落一批，之后只下增量。
 
 ---
 

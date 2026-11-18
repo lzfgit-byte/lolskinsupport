@@ -36,6 +36,12 @@ import { patchJsonConfig, readJsonConfig } from '../utils/json-config';
 import { loadSkinData, loadSkinDataByFile, setConfigData, unpackWadFile } from './load-skin-data';
 import { ltfInjector } from './ltfSession';
 import { importLeagueSkinsFromZip } from './league-skins-import';
+import {
+  getSkinSyncState,
+  setSkinSyncSettings,
+  syncSkinsNow,
+  testSkinSyncProxy,
+} from './skin-sync';
 
 export * from '../http';
 export * from './locale-watcher';
@@ -44,6 +50,9 @@ export * from './lol-data';
 export * from './match-history';
 export * from './remote-cache';
 export * from '../utils/screenshot-config';
+
+// 皮肤自动同步（IPC 名称要和这里导出的函数名一致）
+export { getSkinSyncState, setSkinSyncSettings, syncSkinsNow, testSkinSyncProxy };
 const idName = {};
 const SKIN_DEFAULT_SUFFIX_CONFIG_KEY = 'SKIN_DEFAULT_SUFFIX';
 const defaultSkinSuffix = 'leagueSkins';

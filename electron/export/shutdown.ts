@@ -15,6 +15,7 @@ import { lcuConnector } from '../http/lcuConnector';
 import { gameflowMonitor } from '../http/gameflowMonitor';
 import { killLeftoverManagerSync, ltfInjector } from './ltfSession';
 import { stopLocaleWatcher } from './locale-watcher';
+import { stopSkinSyncMonitor } from './skin-sync';
 
 /** 退出清理最多等这么久；超时说明桥出了问题，直接强杀 */
 const SHUTDOWN_TIMEOUT_MS = 15000;
@@ -46,6 +47,11 @@ const runShutdown = async (): Promise<void> => {
     killLeftoverManagerSync();
   } finally {
     finished = true;
+    try {
+      stopSkinSyncMonitor();
+    } catch (error) {
+      console.warn('[EXIT] 停止皮肤同步失败:', error);
+    }
     try {
       lcuConnector?.disconnect();
     } catch (error) {
