@@ -1,12 +1,18 @@
 /**
- * LeagueSkins 整包导入 —— 把 `skins/<英雄>/<皮肤>/<皮肤>.fantome` 摊平成
+ * LeagueSkins 导入 —— 把 `skins/<英雄>/<皮肤>/<皮肤>.fantome` 摊平成
  * `<皮肤目录>/<英雄>/<英雄>_<序号>.zip`。
  *
- * 整包通常 4~5 GB、上万条目，所以只做流式处理：ZipArchive 只读中央目录，条目
- * 逐条流式解压落盘（先写 .part 再改名），内存占用与压缩包大小无关。
+ * 两种来源，落盘结果完全一致：
+ *   1. 整包 zip（`importLeagueSkinsFromZip`）：ZipArchive 只读中央目录，条目逐条
+ *      流式解压落盘（先写 .part 再改名），4~5 GB 也不会读进内存；
+ *   2. 本地文件夹（`importLeagueSkinsFromFolder`）：用户在「设置」里选
+ *      `...\LeagueSkins\skins`（或它上一级），逐个文件复制。
+ *
+ * 两种来源都按「大小 + CRC32」判断目标文件是否已经一致，一致就只读不写。
  */
 
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { ZipArchive, type ZipEntry } from '../utils/zip-archive';
@@ -33,6 +39,8 @@ export interface ImportLeagueSkinsResult {
   failed: number;
   unrecognized: number;
   outDir: string;
+  /** 整体失败原因（例如选的文件夹不是 LeagueSkins 结构、磁盘空间不足） */
+  error?: string;
 }
 
 /** 目标目录所在盘的剩余空间，读不到就返回 null */
@@ -120,6 +128,106 @@ export const parseLeagueSkinsEntry = (entryName: string) => {
 
 const GB = 1024 * 1024 * 1024;
 
+/** 文件夹导入同时复制的文件数；小文件很多，串行会被建文件/改名开销拖住 */
+const FOLDER_COPY_CONCURRENCY = 4;
+
+const isDirectory = async (target: string): Promise<boolean> => {
+  try {
+    return (await fsp.stat(target)).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * 找到真正的 `skins` 目录。
+ *
+ * 用户可能选的是 `D:\projects\LeagueSkins\skins`（目录名就是 skins），也可能选仓库
+ * 根目录 `D:\projects\LeagueSkins`（下面有 skins）。其余目录一律不算，避免把英雄
+ * 目录、皮肤目录误当成根目录，导出一堆对不上号的皮肤。
+ */
+export const resolveLeagueSkinsFolder = async (folderPath: string): Promise<string | null> => {
+  if (!folderPath) {
+    return null;
+  }
+  const absolute = path.resolve(folderPath);
+  if (!(await isDirectory(absolute))) {
+    return null;
+  }
+  if (path.basename(absolute).toLowerCase() === 'skins') {
+    return absolute;
+  }
+  const nested = path.join(absolute, 'skins');
+  return (await isDirectory(nested)) ? nested : null;
+};
+
+interface FolderFantomeFile {
+  /** 源文件完整路径 */
+  file: string;
+  /** 相对 skins 目录的路径（用 / 分隔） */
+  relative: string;
+}
+
+/**
+ * 递归收集 `skins` 目录下的 .fantome 文件。
+ *
+ * 不跟随符号链接/目录联接（避免循环）；读不了的目录只记日志并跳过。
+ */
+const collectFantomeFiles = async (
+  skinsDir: string,
+  log: (message: string) => void
+): Promise<{ files: FolderFantomeFile[]; unreadable: number }> => {
+  const files: FolderFantomeFile[] = [];
+  const stack: string[] = [''];
+  let unreadable = 0;
+  while (stack.length > 0) {
+    const relativeDir = stack.pop();
+    const dir = path.join(skinsDir, relativeDir);
+    let entries: fs.Dirent[];
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true });
+    } catch (error) {
+      unreadable++;
+      log(
+        `[LeagueSkins文件夹导入] 读取目录失败 ${dir}: ${
+          (error as NodeJS.ErrnoException)?.message ?? error
+        }`
+      );
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+      const relative = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        stack.push(relative);
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.fantome')) {
+        files.push({
+          file: path.join(skinsDir, relative),
+          relative: relative.replace(/\\/g, '/'),
+        });
+      }
+    }
+  }
+  // 按路径排序，保证重复目标时和 zip 导入（中央目录顺序）选中同一份
+  files.sort((left, right) => left.relative.localeCompare(right.relative));
+  return { files, unreadable };
+};
+
+/** 复制到 `.part` 再改名，失败不会留下半个文件，也不会破坏已有目标 */
+const copyFileAtomic = async (source: string, target: string): Promise<void> => {
+  await fsp.mkdir(path.dirname(target), { recursive: true });
+  const temp = `${target}.part`;
+  try {
+    await fsp.copyFile(source, temp);
+    await fsp.rename(temp, target);
+  } catch (error) {
+    await fsp.rm(temp, { force: true }).catch(() => {});
+    throw error;
+  }
+};
+
 export const importLeagueSkinsFromZip = async (
   options: ImportLeagueSkinsOptions
 ): Promise<ImportLeagueSkinsResult> => {
@@ -134,7 +242,8 @@ export const importLeagueSkinsFromZip = async (
   try {
     archive = await ZipArchive.open(zipPath);
   } catch (error) {
-    log(`[LeagueSkins导入] 读取压缩包失败: ${error?.message ?? error}`);
+    const message = `读取压缩包失败: ${error?.message ?? error}`;
+    log(`[LeagueSkins导入] ${message}`);
     return {
       canceled: false,
       count: 0,
@@ -143,6 +252,7 @@ export const importLeagueSkinsFromZip = async (
       failed: 0,
       unrecognized: 0,
       outDir,
+      error: message,
     };
   }
 
@@ -210,7 +320,16 @@ export const importLeagueSkinsFromZip = async (
       `空间不足：需要约 ${(bytesNeeded / GB).toFixed(1)} GB，` +
       `只剩 ${(free / GB).toFixed(1)} GB`;
     log(`[LeagueSkins导入] ${message}`);
-    return { canceled: false, count: 0, skipped, replaced, failed: 0, unrecognized, outDir };
+    return {
+      canceled: false,
+      count: 0,
+      skipped,
+      replaced,
+      failed: 0,
+      unrecognized,
+      outDir,
+      error: message,
+    };
   }
 
   let count = 0;
@@ -233,6 +352,209 @@ export const importLeagueSkinsFromZip = async (
   log(
     `[LeagueSkins导入] 完成: 写入 ${count}（覆盖 ${replaced}），内容一致跳过 ${skipped}，` +
       `失败 ${failed}，未识别 ${unrecognized}/${fantomeCount}`
+  );
+
+  return { canceled: false, count, skipped, replaced, failed, unrecognized, outDir };
+};
+
+export interface ImportLeagueSkinsFolderOptions {
+  /** 用户选的文件夹：`...\LeagueSkins\skins` 或包含它的上一级目录 */
+  folderPath: string;
+  /** 皮肤库根目录（其下按皮肤目录后缀分目录） */
+  skinRoot: string;
+  /** 皮肤目录后缀，例如 wad_skins */
+  suffix: string;
+  /** 日志回调（接到界面的日志面板） */
+  log?: (message: string) => void;
+}
+
+/**
+ * 从本地文件夹导入 —— 不需要先把 4~5 GB 的 skins 目录压成 zip。
+ *
+ * 目录结构：
+ *   <folderPath>/skins/<英雄>/<皮肤>/<皮肤>.fantome
+ * 也支持直接选到 `skins` 目录本身；落盘目标和整包导入完全一致：
+ *   <skinRoot>/<suffix>/<英雄>/<英雄>_<序号>.zip
+ */
+export const importLeagueSkinsFromFolder = async (
+  options: ImportLeagueSkinsFolderOptions
+): Promise<ImportLeagueSkinsResult> => {
+  const { folderPath, skinRoot, suffix } = options;
+  const log = options.log ?? (() => {});
+  const outDir = path.join(skinRoot, suffix);
+
+  log(`[LeagueSkins文件夹导入] 选择的文件夹: ${folderPath}`);
+  log(`[LeagueSkins文件夹导入] 目标目录: ${outDir}`);
+
+  const skinsDir = await resolveLeagueSkinsFolder(folderPath);
+  if (!skinsDir) {
+    const message =
+      '选择的文件夹不是 LeagueSkins 结构：请选 skins 文件夹（skin 文件在里层），或它上一级的仓库目录';
+    log(`[LeagueSkins文件夹导入] ${message}`);
+    return {
+      canceled: false,
+      count: 0,
+      skipped: 0,
+      replaced: 0,
+      failed: 0,
+      unrecognized: 0,
+      outDir,
+      error: message,
+    };
+  }
+  log(`[LeagueSkins文件夹导入] 皮肤目录: ${skinsDir}`);
+
+  const { files, unreadable } = await collectFantomeFiles(skinsDir, log);
+  if (files.length === 0) {
+    const message = `skins 目录下没有找到 .fantome 皮肤文件: ${skinsDir}`;
+    log(`[LeagueSkins文件夹导入] ${message}`);
+    return {
+      canceled: false,
+      count: 0,
+      skipped: 0,
+      replaced: 0,
+      failed: 0,
+      unrecognized: 0,
+      outDir,
+      error: message,
+    };
+  }
+
+  // 目标文件 -> 源文件；同一个英雄皮肤只留一份
+  const plan = new Map<string, { source: string; size: number }>();
+  let unrecognized = 0;
+  let duplicates = 0;
+  let failed = 0;
+  for (const item of files) {
+    const parsed = parseLeagueSkinsEntry(`skins/${item.relative}`);
+    if (!parsed) {
+      unrecognized++;
+      continue;
+    }
+    const target = path.join(outDir, parsed.heroId, `${parsed.heroId}_${parsed.skinIndex}.zip`);
+    try {
+      const stat = await fsp.stat(item.file);
+      if (plan.has(target)) {
+        duplicates++;
+      }
+      plan.set(target, { source: item.file, size: stat.size });
+    } catch (error) {
+      failed++;
+      log(
+        `[LeagueSkins文件夹导入] 读取失败 ${item.file}: ${
+          (error as NodeJS.ErrnoException)?.message ?? error
+        }`
+      );
+    }
+  }
+
+  // 已存在的按内容比对：大小 + CRC32 都一致才算「已经有了」，否则覆盖
+  const todo: { target: string; source: string; size: number }[] = [];
+  let skipped = 0;
+  let replaced = 0;
+  for (const [target, item] of plan) {
+    let existingSize = -1;
+    try {
+      existingSize = (await fsp.stat(target)).size;
+    } catch {
+      // 还没有导入过
+    }
+    if (existingSize >= 0) {
+      if (existingSize === item.size && item.size > 0) {
+        const [localCrc, sourceCrc] = await Promise.all([
+          fileCrc32(target),
+          fileCrc32(item.source),
+        ]);
+        if (localCrc !== null && sourceCrc !== null && localCrc === sourceCrc) {
+          skipped++;
+          continue;
+        }
+      }
+      replaced++;
+    }
+    todo.push({ target, ...item });
+  }
+
+  const bytesNeeded = todo.reduce((sum, item) => sum + item.size, 0);
+  const free = diskFreeBytes(fs.existsSync(outDir) ? outDir : skinRoot);
+  log(
+    `[LeagueSkins文件夹导入] fantome ${files.length} 个，可导入 ${plan.size} 个，` +
+      `内容一致跳过 ${skipped} 个，待覆盖 ${replaced} 个，` +
+      `待写入 ${(bytesNeeded / GB).toFixed(2)} GB${
+        free === null ? '' : `，磁盘剩余 ${(free / GB).toFixed(1)} GB`
+      }`
+  );
+  if (unrecognized > 0) {
+    log(`[LeagueSkins文件夹导入] 跳过 ${unrecognized} 个不在 skins/<英雄>/<皮肤>/ 结构里的文件`);
+  }
+  if (duplicates > 0) {
+    log(
+      `[LeagueSkins文件夹导入] ${duplicates} 个文件映射到同一个皮肤（如重复的炫彩），` +
+        '只保留扫描到的最后一份'
+    );
+  }
+  if (unreadable > 0) {
+    log(`[LeagueSkins文件夹导入] ${unreadable} 个目录读取失败，已跳过`);
+  }
+
+  // 留 2 GB 余量，避免写到一半把盘塞满
+  if (free !== null && bytesNeeded > free - 2 * GB) {
+    const message =
+      `空间不足：需要约 ${(bytesNeeded / GB).toFixed(1)} GB，` +
+      `只剩 ${(free / GB).toFixed(1)} GB`;
+    log(`[LeagueSkins文件夹导入] ${message}`);
+    return {
+      canceled: false,
+      count: 0,
+      skipped,
+      replaced,
+      failed,
+      unrecognized,
+      outDir,
+      error: message,
+    };
+  }
+
+  let count = 0;
+  let bytesCopied = 0;
+  let completed = 0;
+  const total = todo.length;
+  let cursor = 0;
+  const copyWorker = async () => {
+    while (true) {
+      const index = cursor++;
+      if (index >= total) {
+        return;
+      }
+      const item = todo[index];
+      try {
+        await copyFileAtomic(item.source, item.target);
+        count++;
+        bytesCopied += item.size;
+      } catch (error) {
+        failed++;
+        log(
+          `[LeagueSkins文件夹导入] 失败 ${item.source}: ${
+            (error as NodeJS.ErrnoException)?.message ?? error
+          }`
+        );
+      }
+      completed++;
+      if (completed % 50 === 0 || completed === total) {
+        log(
+          `[LeagueSkins文件夹导入] 进度 ${completed}/${total}，成功 ${count}，失败 ${failed}，` +
+            `已写入 ${(bytesCopied / GB).toFixed(2)} GB`
+        );
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(FOLDER_COPY_CONCURRENCY, total) }, () => copyWorker())
+  );
+
+  log(
+    `[LeagueSkins文件夹导入] 完成: 写入 ${count}（覆盖 ${replaced}），` +
+      `内容一致跳过 ${skipped}，失败 ${failed}，未识别 ${unrecognized}/${files.length}`
   );
 
   return { canceled: false, count, skipped, replaced, failed, unrecognized, outDir };

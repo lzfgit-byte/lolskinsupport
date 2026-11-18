@@ -30,7 +30,19 @@
             >
               上传皮肤压缩包
             </a-button>
+            <a-button
+              size="small"
+              title="选择已解压的 LeagueSkins 目录（skins/<英雄>/<皮肤>/<皮肤>.fantome），不用先压成 zip"
+              :loading="importLeagueSkinsFolderLoading"
+              @click="handleImportLeagueSkinsFolder"
+            >
+              从文件夹导入
+            </a-button>
           </a-space>
+          <div style="font-size: 12px; color: #999; margin-top: 6px">
+            「从文件夹导入」直接选 ...\LeagueSkins\skins（或它的上一级仓库目录），结构与整包 zip
+            里的一样。
+          </div>
           <br /><br />
           皮肤目录名称：
           <a-space>
@@ -288,6 +300,7 @@
     f_getLocaleCodes,
     f_getLocaleWatcherState,
     f_getSkinSyncState,
+    f_importLeagueSkinsFolder,
     f_importLeagueSkinsPackage,
     f_loadSkinDataByFilePath,
     f_loadSkinDataIdName,
@@ -336,6 +349,7 @@
   } = useGlobalState();
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const importLeagueSkinsLoading = ref(false);
+  const importLeagueSkinsFolderLoading = ref(false);
   const activeTab = ref('skin');
   const testSlideWin = () => {
     f_checkCanAutoConfirm({
@@ -399,6 +413,15 @@
       await f_importLeagueSkinsPackage();
     } finally {
       importLeagueSkinsLoading.value = false;
+    }
+  };
+  const handleImportLeagueSkinsFolder = async () => {
+    logDrawOpen.value = true;
+    importLeagueSkinsFolderLoading.value = true;
+    try {
+      await f_importLeagueSkinsFolder();
+    } finally {
+      importLeagueSkinsFolderLoading.value = false;
     }
   };
   // ===================== 皮肤自动同步 =====================

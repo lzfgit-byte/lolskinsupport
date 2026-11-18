@@ -44,7 +44,7 @@ Electron 主进程 ──(TCP JSON, 127.0.0.1:46321-46340)──> LeagueToolFlop
 | `electron/export/ltfSession.ts` | 注入会话：启动 LTK Manager、导入、开关、启停 patcher、收尾 |
 | `electron/export/shutdown.ts` | 退出清理：关窗口 / 退出时收尾，硬超时后强制关掉 LTK Manager |
 | `electron/export/ltfBridge.ts` | 桥客户端：端口/令牌发现、逐行 JSON 协议 |
-| `electron/export/league-skins-import.ts` | LeagueSkins 整包导入（流式、去重、预检） |
+| `electron/export/league-skins-import.ts` | LeagueSkins 导入：整包 zip / 本地文件夹（流式、去重、预检） |
 | `electron/export/skin-sync.ts` | 皮肤自动同步：拉清单、按 SHA 判变化、走代理下载 |
 | `electron/utils/zip-archive.ts` | 流式 ZIP 读取器（ZIP64，>2 GiB 可用） |
 
@@ -239,9 +239,12 @@ DLL 在 LTK Manager 进程内起一个 TCP 服务，用 CDP 驱动它自己的�
 `skins\<皮肤目录后缀>\<heroId>\<heroId>_<n>.zip`
 （后缀默认 `leagueSkins`，可配置为 `wad_skins` 等。）
 
-### 5.3 LeagueSkins 整包导入
+### 5.3 LeagueSkins 导入（整包 zip / 本地文件夹）
 
-整包约 4~5 GB / 2 万条目，**不能整包读进内存**（Node Buffer 上限 2 GiB）：
+两种来源最终都落成同样的 `<heroId>/<heroId>_<n>.zip`，规则完全一致：
+
+**整包 zip**（`importLeagueSkinsFromZip`）约 4~5 GB / 2 万条目，**不能整包读进内存**
+（Node Buffer 上限 2 GiB）：
 
 1. `ZipArchive.open()`：只读 EOCD/ZIP64 + 中央目录（本机实测 22244 条目解析 13ms）；
 2. 筛 `.fantome`，按 `skins/<英雄>/<皮肤>/...` 解析出目标 `<heroId>/<heroId>_<n>.zip`；
@@ -250,10 +253,19 @@ DLL 在 LTK Manager 进程内起一个 TCP 服务，用 CDP 驱动它自己的�
 4. 预检磁盘空间（留 2 GB 余量）；
 5. 逐条流式解压：写 `.part` → 改名，单条失败只记失败。
 
-> 为什么不是无条件覆盖：整包 9000+ 皮肤，无条件重写每次要写 3~4 GB；
+**本地文件夹**（`importLeagueSkinsFromFolder`）用于已经解压好的仓库，省掉再压 4~5 GB zip：
+
+1. `resolveLeagueSkinsFolder()` 只认两种选择：目录名是 `skins`，或所选目录下面有 `skins\`；
+   选到英雄/皮肤子目录会直接报错，不会导出对不上号的条目；
+2. 递归扫 `.fantome`（不跟符号链接），相对路径套用与 zip 相同的解析规则；
+3. 目标比对、磁盘预检同上；复制走 `copyFile → .part → rename`，失败不会留下半个文件或破坏旧目标；
+4. `skins\` 之外的东西（`classic\`、`README.md`、`.git\` 等）根本不会被扫描。
+
+> 为什么不是无条件覆盖：整库 9000+ 皮肤，无条件重写每次要写 3~4 GB；
 > 用 CRC 比对后，内容没变就只读不写（3.9 GB 校验约 4 秒），内容有变化仍然会覆盖。
 
-`classic/`（经典模式）条目不在 `skins/` 结构里，会被跳过并计入「未识别」。
+`classic/`（经典模式）条目不在 `skins/` 结构里，会被跳过并计入「未识别」（文件夹导入只扫 `skins\`，
+不会看到它们）。
 
 ### 5.4 皮肤自动同步
 
@@ -286,7 +298,7 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
 「测试代理」只拉一次清单（约 1 MB，超时 120 秒），用来确认代理通不通。
 
 > 首次同步如果没有本地皮肤，等于下载整库（约 4.5 GB）；经本机代理实测速度有限，
-> 建议先用「导入 LeagueSkins 整包」落一批，之后只下增量。
+> 建议先用「整包导入」或「从文件夹导入」落一批，之后只下增量。
 
 ---
 
@@ -408,7 +420,7 @@ VO 单位，语音走 base 的（同一个人配音，差别很小）。
 
 | | Rose | 本项目 |
 |---|---|---|
-| 皮肤来源 | 自己的皮肤库 + 保存的模组 | LeagueSkins 整包 / 手工 zip |
+| 皮肤来源 | 自己的皮肤库 + 保存的模组 | LeagueSkins 整包 / 文件夹导入 / 手工 zip |
 | 会话模型 | 复杂 journal（saved mods、park、迁移） | 单会话 + `ltf_session.json` 最小恢复 |
 | 触发时机 | 选人倒计时内自动注入 | 手动点「使用皮肤」 |
 | 客户端集成 | Pengu Loader 插件（UI 内嵌） | 独立 Electron 界面 |

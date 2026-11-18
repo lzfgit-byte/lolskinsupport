@@ -219,6 +219,12 @@ export const f_importLeagueSkinsPackage = async () => {
   return executeFunction('importLeagueSkinsPackage');
 };
 /**
+ * export const importLeagueSkinsFolder = async () => {
+ */
+export const f_importLeagueSkinsFolder = async () => {
+  return executeFunction('importLeagueSkinsFolder');
+};
+/**
  * export const getSkinImage = (skinId: string) => {
  */
 export const f_getSkinImage = async (skinId: string) => {

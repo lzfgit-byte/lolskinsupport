@@ -35,7 +35,7 @@ import { lcuConnector } from '../http/lcuConnector';
 import { patchJsonConfig, readJsonConfig } from '../utils/json-config';
 import { loadSkinData, loadSkinDataByFile, setConfigData, unpackWadFile } from './load-skin-data';
 import { ltfInjector } from './ltfSession';
-import { importLeagueSkinsFromZip } from './league-skins-import';
+import { importLeagueSkinsFromFolder, importLeagueSkinsFromZip } from './league-skins-import';
 import {
   getSkinSyncState,
   setSkinSyncSettings,
@@ -458,6 +458,8 @@ export const importLeagueSkinsPackage = async () => {
 
   if (imported.failed > 0 && imported.count === 0) {
     MessageUtil.error(`导入失败：${imported.failed} 个皮肤都没能写入，详见日志`);
+  } else if (imported.error && imported.count === 0) {
+    MessageUtil.error(imported.error);
   } else if (imported.count === 0) {
     MessageUtil.error(
       imported.skipped > 0
@@ -467,6 +469,58 @@ export const importLeagueSkinsPackage = async () => {
   } else {
     MessageUtil.success(
       `导入 LeagueSkins 皮肤成功：写入 ${imported.count} 个${
+        imported.replaced ? `（其中覆盖 ${imported.replaced} 个）` : ''
+      }${imported.skipped ? `，内容一致跳过 ${imported.skipped} 个` : ''}${
+        imported.failed ? `，失败 ${imported.failed} 个` : ''
+      }`
+    );
+  }
+
+  return imported;
+};
+
+/** 记住本次进程内上次选的 LeagueSkins 文件夹，下次打开对话框直接定位过去 */
+let lastLeagueSkinsFolder = '';
+
+/**
+ * 从本地文件夹导入（不需要先压成 zip）。
+ *
+ * 选择 `...\LeagueSkins\skins` 或它上一级的仓库目录，目录结构为
+ * `skins/<英雄>/<皮肤>/<皮肤>.fantome`；落盘结果与整包导入一致。
+ */
+export const importLeagueSkinsFolder = async () => {
+  LogMsgUtil.sendLogMsg('[LeagueSkins导入] 开始选择文件夹');
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    defaultPath: lastLeagueSkinsFolder || getSkinPath(),
+  });
+
+  if (result.canceled || !result.filePaths[0]) {
+    LogMsgUtil.sendLogMsg('[LeagueSkins导入] 已取消');
+    return { canceled: true, count: 0, outDir: '' };
+  }
+
+  lastLeagueSkinsFolder = result.filePaths[0];
+  const imported = await importLeagueSkinsFromFolder({
+    folderPath: lastLeagueSkinsFolder,
+    skinRoot: getSkinPath(),
+    suffix: getSkinDefaultSuffix(),
+    log: (message) => LogMsgUtil.sendLogMsg(message),
+  });
+
+  if (imported.error && imported.count === 0) {
+    MessageUtil.error(imported.error);
+  } else if (imported.failed > 0 && imported.count === 0) {
+    MessageUtil.error(`导入失败：${imported.failed} 个皮肤都没能写入，详见日志`);
+  } else if (imported.count === 0) {
+    MessageUtil.error(
+      imported.skipped > 0
+        ? `无需导入：${imported.skipped} 个皮肤的内容已经和源文件夹里一致`
+        : '未找到可导入的 LeagueSkins 皮肤文件'
+    );
+  } else {
+    MessageUtil.success(
+      `从文件夹导入皮肤成功：写入 ${imported.count} 个${
         imported.replaced ? `（其中覆盖 ${imported.replaced} 个）` : ''
       }${imported.skipped ? `，内容一致跳过 ${imported.skipped} 个` : ''}${
         imported.failed ? `，失败 ${imported.failed} 个` : ''

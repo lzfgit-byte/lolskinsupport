@@ -20,7 +20,7 @@
 | 2 | **LTK Manager** | 注入器。下载：<https://github.com/LeagueToolkit/ltk-manager/releases/latest>，默认装到 `C:\Program Files\LTK Manager` |
 | 3 | **lolskinsupport 程序** | 安装包或解压后的程序目录（内含 `resources\ltf\ltk_launcher.exe` 与 `resources\ltf\LeagueToolFlop.dll`）|
 
-### 还需要：皮肤文件（三选一）
+### 还需要：皮肤文件（任选一种）
 
 - **自动同步**：在「设置 → 皮肤同步」里保持自动同步开启（默认开），程序会定时检查 GitHub 上
   `Alban1911/LeagueSkins` 的清单，有新增或变化的皮肤就通过代理下载到皮肤目录。
@@ -29,8 +29,11 @@
   如果本地一个皮肤都没有，第一次同步等于下载整库（约 4.5 GB），建议先用整包导入落一批。
   **手动改过的本地皮肤也会被发现**（记录里有大小/mtime），下次同步会用仓库版本还原。
 - **整包导入**：拿一份 LeagueSkins 整包（结构为 `skins/<英雄ID>/<皮肤ID>/<皮肤ID>.fantome`），
-  在「设置 → 导入 LeagueSkins 整包」里选这个 zip。整包通常 **4~5 GB**，导入后占 **约 4 GB** 磁盘，
+  在「设置 → 皮肤设置 → 上传皮肤压缩包」里选这个 zip。整包通常 **4~5 GB**，导入后占 **约 4 GB** 磁盘，
   耗时几十秒。重复导入时按内容比对：**大小或 CRC32 不一致的会覆盖**，只有完全相同的才跳过。
+- **文件夹导入**：已经有解压好的 LeagueSkins 目录时，在「设置 → 皮肤设置 → 从文件夹导入」里
+  直接选 `...\LeagueSkins\skins`（也可以选它上一级的仓库目录），**不用先压成 4~5 GB 的 zip**。
+  落盘路径、跳过/覆盖规则和整包导入完全一样。
 - **手工放置**：把皮肤按 `<皮肤目录>\<英雄ID>\<英雄ID>_<序号>.zip` 放好
   （例如 `...\skins\wad_skins\1\1_1.zip` 是安妮的 1 号皮肤）。
 
@@ -160,7 +163,7 @@ D:\Program Files\Rose\_internal\injection\tools\LeagueToolFlop.dll
 npm run ltf:test          # 桥协议（假桥服务器，不依赖本机环境）
 npm run ltf:session:test  # 真机：驱动 ltfInjector 完成一次注入并清理
 npm run zip:test          # 流式 ZIP 读取（含 >2 GiB 与真实整包）
-npm run import:test       # LeagueSkins 整包导入（落盘/去重/覆盖）
+npm run import:test       # LeagueSkins 导入（zip / 文件夹，落盘/去重/覆盖）
 ```
 
 ---
