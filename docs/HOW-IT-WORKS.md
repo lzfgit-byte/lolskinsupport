@@ -271,7 +271,9 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
    状态记在 `<数据目录>/skin_sync_state.json`（`路径 -> {sha, size}`）。
 3. 判定：清单 SHA 与记录一致且文件在 → 跳过；文件不在 → 下载；SHA 变了 → 下载；
    文件在但没记录（用户手工放的/整包导入的）→ 由 `SKIN_SYNC_MISSING_ONLY` 决定
-   「认领」（只记 SHA、不下载）还是「以仓库为准重新下载」。
+   「认领」（只记 SHA、不下载）还是「以仓库为准重新下载」；
+   **本地文件被改过**（大小和记录不一致，或 mtime 晚于记录时间）→ 也算变化，下载仓库版本还原
+   （老状态文件没存 localSize 时只靠 mtime 判断）。
 4. 下载：并发 3，写 `<目标>.part`，边下边算 `sha1("blob <长度>\0" + 内容)`，
    与清单 SHA 一致才 `rename` 落盘；失败只记失败并继续。
 5. 代理：`SKIN_SYNC_PROXY`（默认 `http://127.0.0.1:10808`）交给 axios 的 `proxy`；

@@ -45,7 +45,16 @@ const fileServer = http.createServer((req, res) => {
     res.end(JSON.stringify(manifestBody()));
     return;
   }
-  const key = decodeURIComponent(req.url.replace(/^\//, ''));
+  // raw.githubusercontent.com/<repo>/<ref>/<path>：少了 ref 这一段 GitHub 会回 404，
+  // 假服务器也照着来，避免「URL 拼错但测试照过」。
+  const parts = decodeURIComponent(req.url.replace(/^\//, '')).split('/');
+  const ref = parts.shift();
+  if (ref !== commit) {
+    res.writeHead(404);
+    res.end('not found: missing or wrong ref');
+    return;
+  }
+  const key = parts.join('/');
   const body = files[key];
   if (!body) {
     res.writeHead(404);
@@ -254,6 +263,39 @@ try {
     assert.equal(plan.items.length, 2);
     assert.equal(plan.ignored, 1);
     return '2 个待下载 / 1 个忽略';
+  });
+
+  await step('本地文件被改过：下次同步能发现并还原', async () => {
+    const target = targetOf('skins/8/8003/8003.fantome');
+    fs.writeFileSync(target, 'user-edited-locally', 'utf-8');
+    const result = await syncSkinsNow();
+    assert.equal(result.ok, true, result.error);
+    assert.equal(result.localChanged, 1, `localChanged=${result.localChanged}`);
+    assert.equal(result.downloaded, 1, `downloaded=${result.downloaded}`);
+    assert.equal(fs.readFileSync(target, 'utf-8'), 'vladimir-skin-v2', '应该还原成仓库版本');
+    return '检测到 1 个本地改动';
+  });
+
+  await step('老状态文件（没有 localSize）：靠 mtime 也能发现改动', async () => {
+    const stateFile = path.join(dataDir, 'skin_sync_state.json');
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+    const key = 'skins/8/8003/8003.fantome';
+    const target = targetOf(key);
+    // 模拟旧版本记录：只有 sha/size/at，at 是 1 分钟前
+    state.files[key] = {
+      sha: state.files[key].sha,
+      size: state.files[key].size,
+      at: new Date(Date.now() - 60_000).toISOString(),
+    };
+    fs.writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf-8');
+    fs.writeFileSync(target, 'vladimir-skin-v2', 'utf-8');
+    const future = new Date(Date.now() + 5_000);
+    fs.utimesSync(target, future, future);
+    const result = await syncSkinsNow();
+    assert.equal(result.ok, true, result.error);
+    assert.equal(result.localChanged, 1, `localChanged=${result.localChanged}`);
+    assert.equal(result.downloaded, 1, `downloaded=${result.downloaded}`);
+    return 'mtime 判定生效';
   });
 
   await step('测试代理：只拉清单，不下载文件', async () => {

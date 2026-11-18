@@ -80,8 +80,12 @@ export interface SkinSyncManifest {
 interface SkinSyncRecord {
   sha: string;
   size: number;
-  /** 本地文件写入/认领时间 */
+  /** 记下这条记录的时间（下载/认领完成时） */
   at: string;
+  /** 写入/认领时本地文件的大小（用来发现用户手改了文件） */
+  localSize?: number;
+  /** 写入/认领时本地文件的 mtime（毫秒） */
+  localMtimeMs?: number;
 }
 
 export interface SkinSyncStateFile {
@@ -112,7 +116,8 @@ export interface SkinSyncSettings {
 export interface SkinSyncPlanItem {
   entry: SkinSyncEntry;
   target: string;
-  reason: 'missing' | 'changed' | 'unknown';
+  /** missing: 本地没有；changed: 仓库变了；local-changed: 本地文件被改过；unknown: 没记录 */
+  reason: 'missing' | 'changed' | 'local-changed' | 'unknown';
 }
 
 export interface SkinSyncPlan {
@@ -128,7 +133,10 @@ export interface SkinSyncRunResult {
   /** 清单里可用的皮肤条目数 */
   total: number;
   missing: number;
+  /** 仓库里有变化（SHA 变了） */
   changed: number;
+  /** 本地文件被改过、需要用仓库版本还原的 */
+  localChanged: number;
   downloaded: number;
   adopted: number;
   failed: number;
@@ -188,6 +196,10 @@ const readState = (): SkinSyncStateFile => {
           sha: value.sha,
           size: Number(value.size) || 0,
           at: `${value.at || ''}`,
+          localSize: Number.isFinite(Number(value.localSize)) ? Number(value.localSize) : undefined,
+          localMtimeMs: Number.isFinite(Number(value.localMtimeMs))
+            ? Number(value.localMtimeMs)
+            : undefined,
         };
       }
     }
@@ -304,6 +316,47 @@ export const syncTargetPath = (
  * 认领（adopted）只发生在「本地文件存在、但状态里没有记录」且开关要求先补齐缺失时：
  * 否则第一次同步就得把整库 4 GB 重下一遍。
  */
+const statOrNull = (file: string): fs.Stats | null => {
+  try {
+    return fs.statSync(file);
+  } catch {
+    return null;
+  }
+};
+
+/** 给本地文件打上「写入时的样子」，之后文件被动过就能看出来 */
+const localSnapshot = (target: string): { localSize?: number; localMtimeMs?: number } => {
+  const stat = statOrNull(target);
+  return stat ? { localSize: stat.size, localMtimeMs: stat.mtimeMs } : {};
+};
+
+/** 记录时间之后、文件又被改过的宽限（文件系统时间精度 + 写入顺序） */
+const LOCAL_EDIT_GRACE_MS = 2000;
+
+/**
+ * 本地文件是不是在记录之后被人动过。
+ *
+ * 两种判据：大小和记录里写下的不一致；或者 mtime 晚于记录时间（老版本状态文件没存
+ * localSize，也能靠这条发现改动）。内容改了但大小和 mtime 都被刻意保留的情况查不出来，
+ * 那种要用「强制全量」。
+ */
+const locallyChanged = (record: SkinSyncRecord, stat: fs.Stats): boolean => {
+  if (record.localSize !== undefined && stat.size !== record.localSize) {
+    return true;
+  }
+  const recordedAt = Date.parse(record.at);
+  if (Number.isFinite(recordedAt) && stat.mtimeMs > recordedAt + LOCAL_EDIT_GRACE_MS) {
+    return true;
+  }
+  if (
+    record.localMtimeMs !== undefined &&
+    Math.abs(stat.mtimeMs - record.localMtimeMs) > LOCAL_EDIT_GRACE_MS
+  ) {
+    return true;
+  }
+  return false;
+};
+
 export const planSync = (
   manifest: SkinSyncManifest,
   state: SkinSyncStateFile,
@@ -325,16 +378,21 @@ export const planSync = (
       plan.items.push({ entry, target: mapped.target, reason: exists ? 'changed' : 'missing' });
       continue;
     }
-    if (record && record.sha === entry.sha && exists) {
+    if (record && exists) {
+      const stat = statOrNull(mapped.target);
+      if (record.sha !== entry.sha) {
+        plan.items.push({ entry, target: mapped.target, reason: 'changed' });
+        continue;
+      }
+      if (stat && locallyChanged(record, stat)) {
+        plan.items.push({ entry, target: mapped.target, reason: 'local-changed' });
+        continue;
+      }
       plan.unchanged++;
       continue;
     }
     if (!exists) {
       plan.items.push({ entry, target: mapped.target, reason: 'missing' });
-      continue;
-    }
-    if (record) {
-      plan.items.push({ entry, target: mapped.target, reason: 'changed' });
       continue;
     }
     if (options.missingOnly) {
@@ -348,16 +406,24 @@ export const planSync = (
 
 // ==================== 下载 ====================
 
-const entryUrl = (entry: SkinSyncEntry): string =>
-  `${rawBase()}/${entry.path
+/**
+ * raw.githubusercontent.com 的地址必须带 ref（清单里的 commit，缺省回退 main），
+ * 少了这一段就是 404 —— 之前漏了，下载全部失败。
+ */
+const entryUrl = (entry: SkinSyncEntry, commit: string): string => {
+  const ref = commit || 'main';
+  const relative = entry.path
     .split('/')
     .map((part) => encodeURIComponent(part))
-    .join('/')}`;
+    .join('/');
+  return `${rawBase()}/${encodeURIComponent(ref)}/${relative}`;
+};
 
 const downloadEntry = async (
   client: AxiosInstance,
   entry: SkinSyncEntry,
-  target: string
+  target: string,
+  commit: string
 ): Promise<number> => {
   await fsp.mkdir(path.dirname(target), { recursive: true });
   const temp = `${target}.part`;
@@ -366,7 +432,7 @@ const downloadEntry = async (
   hash.update(`blob ${entry.size}\0`);
   let bytes = 0;
   try {
-    const response = await client.get(entryUrl(entry), { responseType: 'stream' });
+    const response = await client.get(entryUrl(entry, commit), { responseType: 'stream' });
     const counter = new Transform({
       transform(chunk: Buffer, _encoding, callback) {
         bytes += chunk.length;
@@ -428,6 +494,7 @@ const emptyResult = (startedAt: string): SkinSyncRunResult => ({
   total: 0,
   missing: 0,
   changed: 0,
+  localChanged: 0,
   downloaded: 0,
   adopted: 0,
   failed: 0,
@@ -443,7 +510,10 @@ const emptyResult = (startedAt: string): SkinSyncRunResult => ({
  *
  * @param force 为 true 时不看本地记录，清单里能识别的皮肤全部重新下载并校验
  */
-export const syncSkinsNow = async (force = false): Promise<SkinSyncRunResult> => {
+export const syncSkinsNow = async (
+  force = false,
+  source: 'manual' | 'scheduled' = 'manual'
+): Promise<SkinSyncRunResult> => {
   const startedAt = new Date().toISOString();
   const result = emptyResult(startedAt);
   if (running) {
@@ -462,10 +532,18 @@ export const syncSkinsNow = async (force = false): Promise<SkinSyncRunResult> =>
       LogMsgUtil.sendLogMsg(`[皮肤同步] 代理地址无法解析（${settings.proxy}），本次直连`);
     }
 
+    const mode = force ? '强制全量' : settings.missingOnly ? '只补缺失' : '以仓库为准';
     LogMsgUtil.sendLogMsg(
-      `[皮肤同步] 检查清单 ${manifestUrl()}${proxy ? `（代理 ${settings.proxy}）` : ''}`
+      `[皮肤同步] 开始${source === 'scheduled' ? '定时' : ''}检查（${mode}${
+        proxy ? `，代理 ${settings.proxy}` : '，直连'
+      }）`
     );
+    const fetchStarted = Date.now();
     const manifest = await fetchManifest(client);
+    LogMsgUtil.sendLogMsg(
+      `[皮肤同步] 清单 ${manifest.files.length} 条，commit ${manifest.commit.slice(0, 8)}，` +
+        `读取耗时 ${Date.now() - fetchStarted} ms`
+    );
     result.commit = manifest.commit;
 
     const plan = planSync(manifest, state, settings.skinRoot, settings.suffix, {
@@ -474,20 +552,37 @@ export const syncSkinsNow = async (force = false): Promise<SkinSyncRunResult> =>
     });
     result.total = manifest.files.length;
     result.missing = plan.items.filter((item) => item.reason === 'missing').length;
-    result.changed = plan.items.filter((item) => item.reason !== 'missing').length;
+    result.localChanged = plan.items.filter((item) => item.reason === 'local-changed').length;
+    result.changed = plan.items.filter(
+      (item) => item.reason !== 'missing' && item.reason !== 'local-changed'
+    ).length;
     result.adopted = plan.adopted.length;
+    for (const item of plan.items) {
+      if (item.reason === 'local-changed') {
+        LogMsgUtil.sendLogMsg(
+          `[皮肤同步] 本地文件被改过：${path.basename(item.target)}，用仓库版本还原`
+        );
+      }
+    }
 
     const bytesNeeded = plan.items.reduce((sum, item) => sum + item.entry.size, 0);
     LogMsgUtil.sendLogMsg(
       `[皮肤同步] 可识别 ${plan.items.length + plan.unchanged + plan.adopted.length} 个皮肤，` +
-        `新增 ${result.missing}，变化 ${result.changed}，无需改动 ${plan.unchanged}，` +
-        `认领本地已有 ${result.adopted}，待下载 ${(bytesNeeded / 1024 / 1024 / 1024).toFixed(2)} GB`
+        `新增 ${result.missing}，仓库变化 ${result.changed}，本地改动 ${result.localChanged}，` +
+        `无需改动 ${plan.unchanged}，认领本地已有 ${result.adopted}，` +
+        `待下载 ${(bytesNeeded / 1024 / 1024 / 1024).toFixed(2)} GB`
     );
 
     if (plan.adopted.length > 0) {
       const at = new Date().toISOString();
       for (const entry of plan.adopted) {
-        state.files[entry.path] = { sha: entry.sha, size: entry.size, at };
+        const mapped = syncTargetPath(settings.skinRoot, settings.suffix, entry.path);
+        state.files[entry.path] = {
+          sha: entry.sha,
+          size: entry.size,
+          at,
+          ...(mapped ? localSnapshot(mapped.target) : {}),
+        };
       }
     }
 
@@ -502,16 +597,22 @@ export const syncSkinsNow = async (force = false): Promise<SkinSyncRunResult> =>
     }
 
     const total = plan.items.length;
+    if (total > 0) {
+      LogMsgUtil.sendLogMsg(
+        `[皮肤同步] 开始下载 ${total} 个文件，共 ${(bytesNeeded / 1024 / 1024).toFixed(1)} MB`
+      );
+    }
     let done = 0;
     const errors: string[] = [];
     const startedMs = Date.now();
     await runPool(plan.items, DOWNLOAD_CONCURRENCY, async (item) => {
       try {
-        result.bytes += await downloadEntry(client, item.entry, item.target);
+        result.bytes += await downloadEntry(client, item.entry, item.target, manifest.commit);
         state.files[item.entry.path] = {
           sha: item.entry.sha,
           size: item.entry.size,
           at: new Date().toISOString(),
+          ...localSnapshot(item.target),
         };
         result.downloaded++;
       } catch (error) {
@@ -523,21 +624,14 @@ export const syncSkinsNow = async (force = false): Promise<SkinSyncRunResult> =>
       done++;
       if (done % 20 === 0 || done === total) {
         const percent = total === 0 ? 100 : Math.round((done / total) * 100);
-        const speed =
-          result.bytes > 0
-            ? `，${((result.bytes / 1024 / 1024 / (Date.now() - startedMs)) * 1000).toFixed(
-                1
-              )} MB/s`
-            : '';
-        ProgressMsgUtil.sendProgress(
-          percent,
-          PROGRESS_KEY,
-          '皮肤同步',
-          `${done}/${total}，已下载 ${(result.bytes / 1024 / 1024).toFixed(1)} MB${speed}`
-        );
-        if (done % 100 === 0) {
-          LogMsgUtil.sendLogMsg(`[皮肤同步] 进度 ${done}/${total}`);
-        }
+        const elapsedMs = Math.max(Date.now() - startedMs, 1);
+        const mbps = result.bytes / 1024 / 1024 / (elapsedMs / 1000);
+        const speed = mbps >= 0.1 ? `${mbps.toFixed(1)} MB/s` : `${(mbps * 1024).toFixed(0)} KB/s`;
+        const detail =
+          `${done}/${total}（${percent}%），${(result.bytes / 1024 / 1024).toFixed(1)} MB，` +
+          `${speed}，成功 ${result.downloaded}，失败 ${result.failed}`;
+        ProgressMsgUtil.sendProgress(percent, PROGRESS_KEY, '皮肤同步', detail);
+        LogMsgUtil.sendLogMsg(`[皮肤同步] 进度 ${detail}`);
       }
       if (done % 20 === 0) {
         // 中途也保存，程序被关掉的话下次不用重下已经完成的
@@ -561,13 +655,26 @@ export const syncSkinsNow = async (force = false): Promise<SkinSyncRunResult> =>
     if (!result.ok) {
       result.error = `${result.failed} 个文件下载失败：${errors[0] ?? ''}`;
     }
-    LogMsgUtil.sendLogMsg(
-      `[皮肤同步] 完成：下载 ${result.downloaded}，认领 ${result.adopted}，失败 ${result.failed}，` +
-        `共 ${(result.bytes / 1024 / 1024).toFixed(1)} MB（commit ${manifest.commit.slice(0, 8)}）`
-    );
-    if (result.downloaded === 0 && result.adopted === 0) {
-      LogMsgUtil.sendLogMsg('[皮肤同步] 皮肤已是最新');
+    if (!result.ok && errors.length > 0) {
+      LogMsgUtil.sendLogMsg(`[皮肤同步] 首个失败原因：${errors[0]}`);
     }
+    const elapsed = ((Date.now() - Date.parse(result.startedAt)) / 1000).toFixed(1);
+    let verdict: string;
+    if (!result.ok && result.downloaded === 0 && result.adopted === 0) {
+      verdict = `结论：失败（${result.failed} 个文件下载失败）`;
+    } else if (!result.ok) {
+      verdict = `结论：部分成功（成功 ${result.downloaded}，失败 ${result.failed}）`;
+    } else if (result.downloaded === 0 && result.adopted === 0) {
+      verdict = '结论：已是最新，无需下载';
+    } else {
+      verdict = `结论：成功（下载 ${result.downloaded}，认领 ${result.adopted}）`;
+    }
+    LogMsgUtil.sendLogMsg(
+      `[皮肤同步] ${verdict}；检查 ${result.total} 个，新增 ${result.missing}，仓库变化 ` +
+        `${result.changed}，本地改动还原 ${result.localChanged}，失败 ${result.failed}；` +
+        `共 ${(result.bytes / 1024 / 1024).toFixed(1)} MB；耗时 ${elapsed}s；` +
+        `commit ${manifest.commit.slice(0, 8)}`
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     result.ok = false;
@@ -607,11 +714,19 @@ const scheduleNext = (delayMs: number): void => {
   timer = setTimeout(async () => {
     timer = null;
     try {
-      await syncSkinsNow();
+      await syncSkinsNow(false, 'scheduled');
     } catch (error) {
       console.warn('[皮肤同步] 定时同步失败:', error);
     }
-    scheduleNext(Math.max(1, readSkinSyncSettings().intervalMin) * 60_000);
+    const interval = Math.max(1, readSkinSyncSettings().intervalMin);
+    scheduleNext(interval * 60_000);
+    if (nextCheckAt > 0) {
+      LogMsgUtil.sendLogMsg(
+        `[皮肤同步] 下次自动检查：${new Date(
+          nextCheckAt
+        ).toLocaleTimeString()}（每 ${interval} 分钟）`
+      );
+    }
   }, delayMs);
   timer.unref?.();
 };
@@ -627,7 +742,11 @@ export const startSkinSyncMonitor = (): void => {
   scheduleNext(FIRST_CHECK_DELAY_MS);
   LogMsgUtil.sendLogMsg(
     `[皮肤同步] 已启用：每 ${settings.intervalMin} 分钟检查一次` +
-      `（代理 ${settings.proxy || '直连'}，目标 ${path.join(settings.skinRoot, settings.suffix)}）`
+      `（代理 ${settings.proxy || '直连'}，目标 ${path.join(
+        settings.skinRoot,
+        settings.suffix
+      )}，` +
+      `首次检查约 ${new Date(nextCheckAt).toLocaleTimeString()}）`
   );
 };
 
@@ -684,20 +803,24 @@ export const testSkinSyncProxy = async (): Promise<SkinSyncProbeResult> => {
   const started = Date.now();
   try {
     const manifest = await fetchManifest(createClient(proxy));
-    return {
+    const result: SkinSyncProbeResult = {
       ok: true,
       ms: Date.now() - started,
       entries: manifest.files.length,
       commit: manifest.commit,
       viaProxy: !!proxy,
     };
+    LogMsgUtil.sendLogMsg(
+      `[皮肤同步] 测试代理成功：清单 ${result.entries} 条，commit ${manifest.commit.slice(
+        0,
+        8
+      )}，` + `${result.ms} ms${result.viaProxy ? '（走代理）' : '（直连）'}`
+    );
+    return result;
   } catch (error) {
-    return {
-      ok: false,
-      ms: Date.now() - started,
-      viaProxy: !!proxy,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    const message = error instanceof Error ? error.message : String(error);
+    LogMsgUtil.sendLogMsg(`[皮肤同步] 测试代理失败（${settings.proxy || '直连'}）：${message}`);
+    return { ok: false, ms: Date.now() - started, viaProxy: !!proxy, error: message };
   }
 };
 

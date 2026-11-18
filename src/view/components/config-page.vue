@@ -429,7 +429,8 @@
     if (!last.ok) {
       return `上次失败（${time}）：${last.error || '未知错误'}`;
     }
-    return `上次检查（${time}）：下载 ${last.downloaded}，认领 ${last.adopted}，失败 ${last.failed}`;
+    const localChanged = last.localChanged ? `，其中本地改动还原 ${last.localChanged}` : '';
+    return `上次检查（${time}）：下载 ${last.downloaded}${localChanged}，认领 ${last.adopted}，失败 ${last.failed}`;
   });
   const refreshSkinSync = async () => {
     skinSyncState.value = await f_getSkinSyncState();
