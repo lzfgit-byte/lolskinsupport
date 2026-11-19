@@ -67,10 +67,15 @@
   （`createSidecarRegistry` 由调用方持有）。
 - 改源文件**不要**用 PowerShell 的 `Get-Content`/`Set-Content` 改写（会把 UTF-8 读成 ANSI，
   整篇变乱码、中文串破坏语法）；用编辑工具或 `write`。
+- 生成完会跑一次 **LTK 名字检查**（`electron/export/skin-check.ts`，规则同
+  `bin_skinhack/mod.rs`，5 MB 文本约 0.2 ms）：结果写到 `<zip>.check.json`，
+  `injectSkin` 注入前读它，`ok=false` 就不加载并提示换皮肤；`autoBuildSkin` 发现上次
+  没通过会自动重生成。**别把这个检查去掉** —— 名字没换干净时包照样能生成，但一进游戏
+  patcher 就会把整个 overlay 关掉，用户只看到「没挂载成功」（Akali skin102 就是）。
 - 改完重建包后，可以先用 `%TEMP%\harness\check-ltk.mjs`（离线复刻检查规则）验证，再去游戏里试；
   音效再用 `check-audio.mjs`（事件都有 bank 提供）、`check-alias-actions.mjs`（别名 Action 一致）。
 - 测试：`npm run mesh:test`、`npm run audio:test`、`npm run bnk:test`、`npm run banks:test`、
-  `npm run rebase:test`。
+  `npm run rebase:test`、`npm run skincheck:test`。
 
 ## 四、生成皮肤的性能坑（2026-11-19）
 

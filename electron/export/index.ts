@@ -41,6 +41,7 @@ import {
   unpackWadFile,
 } from './load-skin-data';
 import { getToolsEnvStatus } from './tools-env';
+import { blockedSkinCheck, describeSkinCheck, readSkinCheck } from './skin-check';
 import { isManagedToolsPath, resolveToolsDir } from '../utils/tools-path';
 import { toSkinIndex as resolveSkinIndex } from './skin-id';
 import { ltfInjector } from './ltfSession';
@@ -101,7 +102,12 @@ export const autoBuildSkin = async (wadPath: string, heroId: string, skinId: str
   setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   const skinPath = buildSkinPath(`${heroId}`, `${skinId}`);
   if (existsSync(skinPath)) {
-    return { ok: true, existed: true, path: skinPath };
+    // 上次生成没通过 LTK 检查（可能是旧版本留下的包）：重新生成一次
+    const check = readSkinCheck(skinPath);
+    if (!check || check.ok) {
+      return { ok: true, existed: true, path: skinPath };
+    }
+    LogMsgUtil.sendLogMsg(`[检查] ${skinPath} 上次没过 LTK 检查，重新生成`);
   }
   if (!wadPath || !existsSync(wadPath)) {
     const error = `找不到英雄 WAD：${wadPath}`;
@@ -341,6 +347,19 @@ const injectSkin = async (
     showToast(`${skinPath} not exists`);
     return false;
   }
+  // 生成时做过一次 LTK 名字检查：不通过就别注入 —— patcher 一进游戏就会把整个
+  // overlay 关掉（`Integrity scan rejected ... c0000229`），用户只看到「没挂载成功」
+  const blocked = blockedSkinCheck(skinPath);
+  if (blocked) {
+    const detail = describeSkinCheck(blocked);
+    LogMsgUtil.sendLogMsg(`[检查] ${skinPath} 没过 LTK 名字检查：${detail}`);
+    MessageUtil.error(
+      `皮肤 ${heroId}_${skinId} 会被 LTK 判 skinhack（${detail}），已停止加载。` +
+        `请换一个皮肤，或重新生成这个皮肤`
+    );
+    showToast(`该皮肤会被判 skinhack，已停止加载`);
+    return false;
+  }
   setHeroChoseSkin(heroId, skinId);
   setSkinImage(skinId, skinImage);
   const applied = await ltfInjector.applySkins([{ archive: skinPath, heroId, skinId }]);
@@ -376,16 +395,25 @@ export const loadSkins = async () => {
 
   const skins = [];
   let missing = 0;
+  let blocked = 0;
   for (const { heroId, skinId } of applied) {
     const archive = buildSkinPath(heroId, skinId);
     if (!existsSync(archive)) {
       missing++;
       continue;
     }
+    const check = blockedSkinCheck(archive);
+    if (check) {
+      blocked++;
+      continue;
+    }
     skins.push({ archive, heroId, skinId });
   }
   if (missing > 0) {
     MessageUtil.warning(`有 ${missing} 个皮肤文件不存在，已跳过`);
+  }
+  if (blocked > 0) {
+    MessageUtil.warning(`有 ${blocked} 个皮肤没过 LTK 检查（会被判 skinhack），已跳过`);
   }
   if (skins.length === 0) {
     MessageUtil.error('没有可注入的皮肤文件');

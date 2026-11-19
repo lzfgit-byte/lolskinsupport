@@ -492,6 +492,21 @@ sidecar 路径。同一份皮肤的几个角色（Vayne / jade_vayne）共用一
 还没做的另一步：把 48 个内嵌 VFX 条目精简掉（Rose 输出只留 `Skin0` + `Resources` 两个条目），
 不影响 LTK 的检查。
 
+#### 生成后的名字检查（不合格就不注入）
+
+每生成一个皮肤，打包前会用 `electron/export/skin-check.ts` 跑一遍 **LTK 的 skinhack 名字检查**
+（规则同 `bin_skinhack/mod.rs`：`ChampionSkinName` / `TagEventList` / `BankUnits[].Name` /
+非 voiceOver 单位的事件名里出现 `<英雄>skin<n>`，n≠0；base 皮肤自己也列的事件不算）。
+只是字符串扫描，5 MB 的 bin 文本约 **0.2 ms**，所以放在生成流程里没有成本。
+
+- 结果写到 zip 旁边：`<hero>_<n>.zip.check.json`（`{ ok, champion, checkedAt, problems }`）；
+- 生成的包不合格：日志里会有一行 `[检查] 84_102 会被 LTK 判 skinhack（N 处）：…`；
+- **注入前**（`electron/export/index.ts` 的 `injectSkin`）会读这个文件，`ok=false` 就直接
+  不加载，提示「会被 LTK 判 skinhack，请换一个皮肤或重新生成」；「加载全部皮肤」也会跳过它；
+- 没有 `.check.json` 的老包（旧版本生成的）不拦，照旧尝试；`autoBuildSkin` 发现上次的包
+  没通过检查会自动重新生成。
+
+
 ---
 
 ## 7. 数据目录一览
@@ -531,7 +546,7 @@ sidecar 路径。同一份皮肤的几个角色（Vayne / jade_vayne）共用一
 | 导入中途崩溃 | 残留 `.part` / 未登记文件 | 下次导入按大小判断覆盖；`.part` 不会被当成皮肤 |
 | 退出清理超时（桥不应答） | 最多等 15 秒后强制结束 LTK Manager | 看日志 `[EXIT]`；未删掉的条目留在 `ltf_session.json`，下次启动补清 |
 | 关程序后仍有 `ltk-manager.exe` | 见第 3.5 节 | 那是你手动开的实例，本程序不关；确认是残留就结束它，下次启动补清 |
-| 进游戏没换肤、overlay 被关 | LTK 日志 `overlay verification failed, disabling overlay: base-skin check: skin0 is another skin: SkinAudioProperties.BankUnits.Events names <英雄>Skin<n>`，同目录 `incidents\*.json` 里 `verdict.kind = skinhack-detected` | 包里还留着别的皮肤的事件名（Akali skin102 就是 `Play_AkaliSkin102_Attack1_To_Idle` 这类**状态类**事件漏改）。用当前版本重新生成这个皮肤；仍报就把日志里的事件名发出来 |
+| 进游戏没换肤、overlay 被关 | LTK 日志 `overlay verification failed, disabling overlay: base-skin check: skin0 is another skin: SkinAudioProperties.BankUnits.Events names <英雄>Skin<n>`，同目录 `incidents\*.json` 里 `verdict.kind = skinhack-detected` | 包里还留着别的皮肤的事件名（Akali skin102 就是 `Play_AkaliSkin102_Attack1_To_Idle` 这类**状态类**事件漏改）。现在生成时会跑 §6.1 的名字检查、不合格直接不注入；按提示重新生成，仍报就把日志里的事件名发出来 |
 
 ---
 

@@ -21,6 +21,7 @@ import {
   planBankAliases,
 } from './skin-banks';
 import { findCaseInsensitive, readSkinMeshRefs, rebaseSkinPy } from './skin-rebase';
+import { checkSkinNames, describeSkinCheck, writeSkinCheck } from './skin-check';
 
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -532,8 +533,13 @@ export const loadSkinDataByFile = async (
   });
   // 获取该 WAD 里的英雄名（如 annie）
   let skinId = Math.max(currentSkinId, 0);
+  // 每个皮肤生成后做一次 LTK 名字检查（只查 WAD 同名角色，和 patcher 的检查范围一致）
+  let checkChampion = '';
+  let checkProblems: ReturnType<typeof checkSkinNames> = [];
   while (true) {
     let flag = false;
+    checkChampion = '';
+    checkProblems = [];
     const trueHeros = heroes.filter((item) => {
       return item.toUpperCase() === heroName.toUpperCase();
     })[0];
@@ -718,19 +724,28 @@ export const loadSkinDataByFile = async (
               .map((item) => `${item.path}(${item.added})`)
               .join(', ')}`
           );
-          // 名字没换干净 = 这个包进游戏一定会被 LTK 判 skinhack（整包注入被关掉），
-          // 光写日志没人看得到，这里直接弹错误提示
-          if (rebase.audioLeftover.length > 0) {
-            MessageUtil.error(
-              `皮肤 ${heroName}_${skinId}：bin 里还留着别的皮肤的名字` +
-                `（${rebase.audioLeftover.slice(0, 3).join('、')}` +
-                `${rebase.audioLeftover.length > 3 ? ' 等' : ''}），` +
-                `LTK 会判 skinhack、注入会被关掉。把这条日志发给开发者`
-            );
-          }
         }
       } else {
         logData(` [base-skin] 跳过 ${heroNameInLine}：没有读到 base 皮肤名`);
+      }
+      // LTK 的 patcher 只查与 WAD 同名的角色目录里的 skin0.bin，这里跟着查一遍：
+      // 名字没换干净（比如状态类事件）包能生成，但一进游戏 overlay 就被关掉。
+      // 纯字符串扫描，几毫秒；结果写到 zip 旁边，注入前读它。
+      if (heroNameInLine.toLowerCase() === heroName.toLowerCase() && fs.existsSync(pyPath)) {
+        checkChampion = heroName;
+        checkProblems = checkSkinNames({
+          text: fs.readFileSync(pyPath, 'utf-8'),
+          champion: heroName,
+          base: baseSkin.name
+            ? { championSkinName: baseSkin.name, audio: baseSkin.audio }
+            : undefined,
+        });
+        logData(
+          checkProblems.length === 0
+            ? ` [检查] ${heroId}_${skinId} 通过 LTK 名字检查`
+            : ` [检查] ${heroId}_${skinId} 会被 LTK 判 skinhack（${checkProblems.length} 处）：` +
+                describeSkinCheck({ problems: checkProblems })
+        );
       }
       const packCall = pyToBinsCall(pyPath);
       await runCommand(packCall.command, true, ...packCall.args);
@@ -767,7 +782,20 @@ export const loadSkinDataByFile = async (
       skinId,
       heroId
     );
-    onProgress?.(100, '构建完成');
+    // 检查结果写在 zip 旁边：注入前 `injectSkin` 读它，不通过就不加载
+    const zipPath = path.join(OUTPUT_WAD_BASE_DIR, heroId, `${heroId}_${skinId}.zip`);
+    if (fs.existsSync(zipPath)) {
+      writeSkinCheck(zipPath, {
+        ok: checkProblems.length === 0,
+        champion: checkChampion || heroName,
+        checkedAt: new Date().toISOString(),
+        problems: checkProblems,
+      });
+    }
+    onProgress?.(
+      100,
+      checkProblems.length === 0 ? '构建完成' : '构建完成（未通过 LTK 检查，注入会被拦住）'
+    );
     if (currentSkinId > -1) {
       break;
     }
