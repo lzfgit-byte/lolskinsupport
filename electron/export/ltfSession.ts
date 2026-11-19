@@ -24,6 +24,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFile, spawnSync } from 'node:child_process';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
+import { resolveToolsDir } from '../utils/tools-path';
 import {
   BridgeCommandError,
   BridgeUnavailable,
@@ -70,7 +71,7 @@ const ALREADY_OPEN_REASON =
 
 // ==================== 路径 ====================
 
-/** LTF 桥所在的目录：打包后在 resources/ltf，开发时在 native/ltf/build */
+/** LTF 桥所在的目录：打包后在 resources/ltf，开发时在 native/ltf/build，最后看随包工具目录 */
 export const resolveLtfDir = (): string => {
   const packaged = process.resourcesPath ? path.join(process.resourcesPath, 'ltf') : '';
   // 打包后 process.defaultApp 不存在；vite dev 里 electron 以 . 启动，它是 true
@@ -80,6 +81,14 @@ export const resolveLtfDir = (): string => {
   const dev = path.join(process.cwd(), 'native', 'ltf', 'build');
   if (fs.existsSync(path.join(dev, LTF_LAUNCHER))) {
     return dev;
+  }
+  // 随包工具目录里也带着这两个文件（resources\tools），安装包缺 ltf 时兜底
+  const tools = resolveToolsDir();
+  if (
+    fs.existsSync(path.join(tools, LTF_LAUNCHER)) &&
+    fs.existsSync(path.join(tools, LTF_BRIDGE_DLL))
+  ) {
+    return tools;
   }
   return packaged || dev;
 };
@@ -125,7 +134,7 @@ const ltkManagerInstallDirs = (): string[] => {
   return dirs;
 };
 
-/** ltk-manager.exe：配置 > 已知安装位置 */
+/** ltk-manager.exe：配置 > 已知安装位置 > 随包工具目录里那份 */
 const resolveLtkManager = (): string | null => {
   const configured = configuredLtkManager();
   if (configured) {
@@ -138,6 +147,10 @@ const resolveLtkManager = (): string | null => {
         return candidate;
       }
     }
+  }
+  const bundled = path.join(resolveToolsDir(), LTK_MANAGER_EXECUTABLES[0]);
+  if (fs.existsSync(bundled)) {
+    return bundled;
   }
   return null;
 };

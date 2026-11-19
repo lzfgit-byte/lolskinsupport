@@ -313,7 +313,8 @@ interface ExtractByHashResult {
 
 interface ExtractSkinBinsOptions {
   wadPath: string;
-  hashesPath: string;
+  /** 随包的 `skinbins-index.txt`（皮肤 bin 路径 + WAD 路径哈希，每行一条） */
+  skinBinIndexPath: string;
   outputDir: string;
   logFlag?: boolean;
 }
@@ -546,11 +547,11 @@ async function extractWadByHash(options: ExtractByHashOptions): Promise<ExtractB
  * Extract all skin<number>.bin files under data/characters/<character>/skins from WAD.client.
  * Files are written to outputDir with their original relative paths preserved.
  *
- * @param options - WAD path, hashes.game.txt path and output directory
+ * @param options - WAD path, skin-bin index path (`skinbins-index.txt`) and output directory
  * @returns Result object with status for each matched skin<number>.bin file
  */
 async function extractWadSkinBins(options: ExtractSkinBinsOptions): Promise<ExtractSkinBinsResult> {
-  const { wadPath, hashesPath, outputDir, logFlag = false } = options;
+  const { wadPath, skinBinIndexPath, outputDir, logFlag = false } = options;
   const results: ExtractSkinBinsResult = {
     success: true,
     matched: 0,
@@ -567,7 +568,7 @@ async function extractWadSkinBins(options: ExtractSkinBinsOptions): Promise<Extr
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    const hashMap = parseHashesFile(hashesPath);
+    const hashMap = parseHashesFile(skinBinIndexPath);
     const skinBinFiles: FileHashPair[] = [];
 
     hashMap.forEach((filePath, hash) => {
@@ -643,6 +644,122 @@ async function extractWadSkinBins(options: ExtractSkinBinsOptions): Promise<Extr
 }
 
 const extractWadSkin0Bins = extractWadSkinBins;
+
+/**
+ * 只读 WAD 的目录（头部 + chunk 表），不读数据区。
+ *
+ * 144 MB 的英雄 WAD 只需要读前 100 多 KB，几十毫秒就能知道里面有哪些哈希，
+ * 用来判断「某个路径在不在这个 WAD 里」，不必像 wad-extract 那样全解开。
+ */
+export const readWadChunkHashes = async (wadPath: string): Promise<Set<string>> => {
+  const fd = fs.openSync(wadPath, 'r');
+  try {
+    // signature(2) + 版本(2) + 填充(83 或 256) + 校验和(8, v2+) + chunkCount(4)
+    const header = Buffer.alloc(4 + 256 + 8 + 4);
+    fs.readSync(fd, header, 0, header.length, 0);
+    if (header.toString('ascii', 0, 2) !== 'RW') {
+      throw new Error('Invalid WAD signature');
+    }
+    const versionMajor = header.readUInt8(2);
+    const paddingSize = versionMajor >= 3 ? 256 : 83;
+    let cursor = 4 + paddingSize;
+    if (versionMajor >= 2) {
+      cursor += 8;
+    }
+    const chunkCount = header.readUInt32LE(cursor);
+    const recordSize = 24 + (versionMajor >= 2 ? 8 : 0);
+    const table = Buffer.alloc(chunkCount * recordSize);
+    fs.readSync(fd, table, 0, table.length, cursor + 4);
+
+    const hashes = new Set<string>();
+    for (let index = 0; index < chunkCount; index++) {
+      hashes.add(
+        table
+          .readBigUInt64LE(index * recordSize)
+          .toString(16)
+          .padStart(16, '0')
+      );
+    }
+    return hashes;
+  } finally {
+    fs.closeSync(fd);
+  }
+};
+
+interface ExtractFilesOptions {
+  wadPath: string;
+  /** 要取的文件（路径 + 已算好的 xxHash64） */
+  files: FileHashPair[];
+  outputDir: string;
+  logFlag?: boolean;
+}
+
+interface ExtractFilesResult {
+  success: boolean;
+  files: {
+    filePath: string;
+    hash: string;
+    outputPath?: string;
+    error?: string;
+    size?: number;
+  }[];
+}
+
+/**
+ * 按路径哈希取一批文件，输出保持原来的相对路径。
+ *
+ * 和 `extractWadByHash` 的区别：那个把文件名平铺到输出目录（不同角色的
+ * `skin11.bin` 会互相覆盖），这个保留 `data/characters/<角色>/skins/...` 结构。
+ */
+export const extractWadFiles = async (options: ExtractFilesOptions): Promise<ExtractFilesResult> => {
+  const { wadPath, files, outputDir, logFlag = false } = options;
+  const results: ExtractFilesResult = { success: true, files: [] };
+  const logData = (message: string) => {
+    if (logFlag) {
+      LogMsgUtil.sendLogMsg(message);
+    }
+  };
+
+  try {
+    fs.mkdirSync(outputDir, { recursive: true });
+    const wadBuffer = fs.readFileSync(wadPath);
+    const parser = new WADParser(wadBuffer);
+    const header = parser.parseHeader();
+    const chunks = parser.parseChunks(header);
+    const chunksByHash = new Map<string, WADChunk>();
+    for (const chunk of chunks) {
+      chunksByHash.set(chunk.hash, chunk);
+    }
+
+    for (const fileInfo of files) {
+      const chunk = chunksByHash.get(fileInfo.hash);
+      if (!chunk) {
+        results.files.push({ ...fileInfo, error: `Chunk not found with hash: ${fileInfo.hash}` });
+        continue;
+      }
+      try {
+        const data = parser.extractChunk(chunk);
+        const outputPath = path.join(outputDir, ...fileInfo.filePath.split('/'));
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        fs.writeFileSync(outputPath, data);
+        results.files.push({ ...fileInfo, outputPath, size: data.length });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        results.files.push({ ...fileInfo, error: message });
+      }
+    }
+
+    const failed = results.files.filter((file) => file.error).length;
+    results.success = failed === 0;
+    logData(` 定向解包: ${results.files.length - failed}/${files.length} 个文件`);
+    return results;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logData(`定向解包失败: ${message}`);
+    results.success = false;
+    return results;
+  }
+};
 
 // ============================================================================
 // Utilities

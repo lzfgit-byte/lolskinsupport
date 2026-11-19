@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain, screen } from 'electron';
 import { executeFunc } from '@ilzf/utils';
 import type { ShowSliderConfirmType } from '@ghs/constant';
 import { confirmHtml } from './export-confirm-html';
+import { progressHtml } from './export-progress-html';
 
 let htmlContent = confirmHtml;
 
@@ -178,4 +179,144 @@ export const showSliderConfirm = (opt: ShowSliderConfirmType, okFunc?: any, cFun
     }
     item.win = null;
   });
+};
+
+// ==================== 进度通知（构建皮肤用） ====================
+
+export interface ProgressNoticePayload {
+  title?: string;
+  /** 当前阶段 */
+  message?: string;
+  /** 最近一条日志 */
+  detail?: string;
+  percent?: number;
+  state?: 'running' | 'success' | 'error';
+}
+
+export interface ProgressNoticeHandle {
+  update: (payload: ProgressNoticePayload) => void;
+  /** delayMs > 0 时延迟关闭（成功后留一点时间给用户看结果） */
+  close: (delayMs?: number) => void;
+  isVisible: () => boolean;
+}
+
+const escapeHtml = (text: string): string =>
+  text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+/**
+ * 侧边进度通知：和 `showSliderConfirm` 同一套卡片样式与滑入/滑出动画
+ * （同一列通知队列，会叠在其它通知下面），区别是没有按钮、底部是进度条，
+ * 由调用方持续 `update()`，结束后 `close()`。
+ */
+export const showProgressNotice = (
+  options: { title?: string; width?: number; height?: number } = {}
+): ProgressNoticeHandle => {
+  const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
+  const hashId = `build-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // width/height 是卡片尺寸；窗口要留 10px 内边距给阴影
+  const cardWidth = options.width || 340;
+  const cardHeight = options.height || 128;
+  const targetWidth = cardWidth + 20;
+  const targetHeight = cardHeight + 20;
+  const targetX = screenWidth - targetWidth - 20;
+
+  const item: NoticeItem = { win: null, height: targetHeight, closing: false };
+  const targetY = calcY(notices.length);
+  notices.push(item);
+
+  const win = new BrowserWindow({
+    width: targetWidth,
+    height: targetHeight,
+    x: screenWidth, // 从屏幕最右边开始
+    y: targetY,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  item.win = win;
+
+  const html = progressHtml
+    .split('$hashId')
+    .join(hashId)
+    .replace('$title', escapeHtml(options.title || '构建皮肤'))
+    .replace('$width', `${cardWidth}`)
+    .replace('$height', `${cardHeight}`);
+  win.loadURL(`data:text/html;base64,${Buffer.from(html).toString('base64')}`);
+
+  let dismissed = false;
+  const dismiss = () => {
+    if (dismissed) {
+      return;
+    }
+    dismissed = true;
+    ipcMain.off(`${hashId}-dismiss`, dismiss);
+    if (item.closing) {
+      return;
+    }
+    item.closing = true;
+    const index = notices.indexOf(item);
+    if (index > -1) {
+      notices.splice(index, 1);
+    }
+    relayout();
+    const [curX] = win.getPosition();
+    slideX(win, curX, screenWidth + 20, () => {
+      if (!win.isDestroyed()) {
+        win.close();
+      }
+      item.win = null;
+    });
+  };
+
+  ipcMain.on(`${hashId}-dismiss`, dismiss);
+
+  win.once('ready-to-show', () => {
+    win.show();
+    slideX(win, screenWidth, targetX);
+  });
+
+  win.on('closed', () => {
+    if (!item.closing) {
+      item.closing = true;
+      const index = notices.indexOf(item);
+      if (index > -1) {
+        notices.splice(index, 1);
+      }
+      relayout();
+    }
+    item.win = null;
+  });
+
+  return {
+    update: (payload) => {
+      if (win.isDestroyed() || win.webContents.isDestroyed()) {
+        return;
+      }
+      try {
+        win.webContents.send(`${hashId}-update`, payload);
+      } catch {
+        // 窗口正在销毁，忽略
+      }
+    },
+    close: (delayMs = 0) => {
+      if (delayMs > 0) {
+        setTimeout(dismiss, delayMs);
+        return;
+      }
+      dismiss();
+    },
+    isVisible: () => !win.isDestroyed() && win.isVisible(),
+  };
 };

@@ -14,49 +14,57 @@
 
       <a-tabs v-model:active-key="activeTab">
         <a-tab-pane key="skin" tab="皮肤设置">
-          皮肤存储路径：
-          {{ skinPath }}
-          <a-space>
-            <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
-            <!--          <a-button size="small" @click="f_removePath(skinPath)">删除文件路径</a-button> -->
-            <a-button size="small" @click="setConfigPath(SKIN_PATH, skinPath)"
-              >设置文件地址</a-button
-            >
-            <a-button
-              size="small"
-              type="primary"
-              :loading="importLeagueSkinsLoading"
-              @click="handleImportLeagueSkinsPackage"
-            >
-              上传皮肤压缩包
-            </a-button>
-            <a-button
-              size="small"
-              title="选择已解压的 LeagueSkins 目录（skins/<英雄>/<皮肤>/<皮肤>.fantome），不用先压成 zip"
-              :loading="importLeagueSkinsFolderLoading"
-              @click="handleImportLeagueSkinsFolder"
-            >
-              从文件夹导入
-            </a-button>
-          </a-space>
-          <div style="font-size: 12px; color: #999; margin-top: 6px">
-            「从文件夹导入」直接选 ...\LeagueSkins\skins（或它的上一级仓库目录），结构与整包 zip
-            里的一样。
+          <div class="config-rows">
+            <div class="config-row">
+              <span class="config-label">皮肤存储路径：</span>
+              <span class="config-value">{{ skinPath }}</span>
+              <div class="config-actions">
+                <a-button size="small" @click="f_openPath(skinPath)">打开文件路径</a-button>
+                <a-button size="small" @click="setConfigPath(SKIN_PATH, skinPath)"
+                  >设置文件地址</a-button
+                >
+                <a-button
+                  size="small"
+                  type="primary"
+                  :loading="importLeagueSkinsLoading"
+                  @click="handleImportLeagueSkinsPackage"
+                >
+                  上传皮肤压缩包
+                </a-button>
+                <!-- 目录结构的说明放进 tooltip，不再单独占一行（行距太松） -->
+                <a-tooltip
+                  placement="bottom"
+                  title="直接选 ...\LeagueSkins\skins（或它的上一级仓库目录），结构与整包 zip 里的一样"
+                >
+                  <a-button
+                    size="small"
+                    :loading="importLeagueSkinsFolderLoading"
+                    @click="handleImportLeagueSkinsFolder"
+                  >
+                    从文件夹导入
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </div>
+            <div class="config-row">
+              <span class="config-label">皮肤目录名称：</span>
+              <a-input v-model:value="skinDefaultSuffix" size="small" style="width: 180px" />
+              <a-button size="small" @click="setSkinDefaultSuffix">设置目录名称</a-button>
+            </div>
+            <div class="config-row">
+              <span class="config-label">线程数：</span>
+              <a-input-number v-model:value="chuckValue" size="small" :min="1" :max="100" />
+              <a-button size="small" danger @click="handleLoadAllSkinData()"
+                >创建所有皮肤数据</a-button
+              >
+              <a-tooltip
+                placement="bottom"
+                title="为每个英雄生成全部皮肤；线程数越大越快，但别超过机器能扛的并发"
+              >
+                <span class="config-hint">?</span>
+              </a-tooltip>
+            </div>
           </div>
-          <br /><br />
-          皮肤目录名称：
-          <a-space>
-            <a-input v-model:value="skinDefaultSuffix" size="small" style="width: 180px" />
-            <a-button size="small" @click="setSkinDefaultSuffix">设置目录名称</a-button>
-          </a-space>
-          <br /><br />
-          线程数：
-          <a-space>
-            <a-input-number v-model:value="chuckValue" size="small" :min="1" :max="100" />
-            <a-button size="small" danger @click="handleLoadAllSkinData()"
-              >创建所有皮肤数据</a-button
-            >
-          </a-space>
         </a-tab-pane>
         <a-tab-pane key="sync" tab="皮肤同步">
           <div style="border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px">
@@ -160,57 +168,87 @@
           </a-space>
         </a-tab-pane>
         <a-tab-pane key="path" tab="路径设置">
-          游戏路径：{{ gamePath }}
-          <a-space>
-            <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
-            <a-button size="small" @click="setConfigPath(GAME_PATH, gamePath)"
-              >设置文件地址</a-button
-            >
-          </a-space>
-          <br /><br />
-          installedPath路径：{{ installedPath }}
-          <a-space>
-            <a-button size="small" @click="f_openPath(installedPath)">打开文件路径</a-button>
-            <a-button size="small" danger @click="f_removePath(installedPath)"
-              >删除文件路径</a-button
-            >
-            <a-button size="small" @click="setConfigPath(INSTALLED_PATH, installedPath)">
-              设置文件地址
-            </a-button>
-          </a-space>
-          <br /><br />
-          overlay路径：{{ overlayPath }}
-          <a-space>
-            <a-button size="small" @click="f_openPath(overlayPath)">打开文件路径</a-button>
-            <a-button size="small" danger @click="f_removePath(overlayPath)">删除文件路径</a-button>
-            <a-button size="small" @click="setConfigPath(OVERLAY_PATH, overlayPath)">
-              设置文件地址
-            </a-button>
-          </a-space>
-          <br /><br />
-          overlayConfig路径：{{ overlayConfigPath }}
-          <a-space>
-            <a-button size="small" @click="f_openPath(overlayConfigPath)">打开文件路径</a-button>
-            <!--          <a-button size="small" @click="f_removePath(overlayConfigPath)">删除文件路径</a-button> -->
-            <a-button size="small" @click="setConfigPath(OVERLAY_CONFIG_PATH, overlayConfigPath)">
-              设置文件地址
-            </a-button>
-          </a-space>
-          <br /><br />
-          toolsPath路径：{{ toolsPath }}
-          <a-space>
-            <a-button size="small" @click="f_openPath(toolsPath)">打开文进路径</a-button>
-            <!--          <a-button size="small" @click="f_removePath(toolsPath)">删除文件路径</a-button> -->
-            <a-button size="small" @click="setConfigFilePath(MOD_TOOLS_PATH, toolsPath)">
-              设置文件地址
-            </a-button>
-            <a-button
-              size="small"
-              @click="f_openUrl('https://github.com/LeagueToolkit/cslol-manager')"
-            >
-              打开url地址
-            </a-button>
-          </a-space>
+          <div class="config-rows">
+            <div class="config-row">
+              <span class="config-label">游戏路径：</span>
+              <span class="config-value">{{ gamePath }}</span>
+              <div class="config-actions">
+                <a-button size="small" @click="f_openPath(gamePath)">打开文件路径</a-button>
+                <a-button size="small" @click="setConfigPath(GAME_PATH, gamePath)"
+                  >设置文件地址</a-button
+                >
+              </div>
+            </div>
+            <div class="config-row">
+              <span class="config-label">installedPath路径：</span>
+              <span class="config-value">{{ installedPath }}</span>
+              <div class="config-actions">
+                <a-button size="small" @click="f_openPath(installedPath)">打开文件路径</a-button>
+                <a-button size="small" danger @click="f_removePath(installedPath)"
+                  >删除文件路径</a-button
+                >
+                <a-button size="small" @click="setConfigPath(INSTALLED_PATH, installedPath)">
+                  设置文件地址
+                </a-button>
+              </div>
+            </div>
+            <div class="config-row">
+              <span class="config-label">overlay路径：</span>
+              <span class="config-value">{{ overlayPath }}</span>
+              <div class="config-actions">
+                <a-button size="small" @click="f_openPath(overlayPath)">打开文件路径</a-button>
+                <a-button size="small" danger @click="f_removePath(overlayPath)"
+                  >删除文件路径</a-button
+                >
+                <a-button size="small" @click="setConfigPath(OVERLAY_PATH, overlayPath)">
+                  设置文件地址
+                </a-button>
+              </div>
+            </div>
+            <div class="config-row">
+              <span class="config-label">overlayConfig路径：</span>
+              <span class="config-value">{{ overlayConfigPath }}</span>
+              <div class="config-actions">
+                <a-button size="small" @click="f_openPath(overlayConfigPath)"
+                  >打开文件路径</a-button
+                >
+                <a-button
+                  size="small"
+                  @click="setConfigPath(OVERLAY_CONFIG_PATH, overlayConfigPath)"
+                >
+                  设置文件地址
+                </a-button>
+              </div>
+            </div>
+            <div class="config-row">
+              <span class="config-label">toolsPath路径：</span>
+              <span class="config-value">{{ toolsPath }}</span>
+              <div class="config-actions">
+                <a-button size="small" @click="f_openPath(toolsPath)">打开文件路径</a-button>
+                <a-button size="small" @click="setConfigFilePath(MOD_TOOLS_PATH, toolsPath)">
+                  设置文件地址
+                </a-button>
+                <a-button
+                  size="small"
+                  @click="f_openUrl('https://github.com/LeagueToolkit/cslol-manager')"
+                >
+                  打开url地址
+                </a-button>
+              </div>
+            </div>
+            <div class="config-row">
+              <span class="config-label">工具环境：</span>
+              <span v-if="toolsEnvState?.ready" style="color: #52c41a">已就绪</span>
+              <span v-else style="color: #fa8c16">
+                缺少 {{ toolsEnvState?.missing?.length ?? 0 }} 个文件
+              </span>
+              <a-tooltip placement="bottom" :title="toolsIndexHint">
+                <span class="config-hint">?</span>
+              </a-tooltip>
+              <a-button size="small" @click="refreshToolsEnvState">刷新状态</a-button>
+              <span class="config-hint">{{ toolsEnvState?.toolsDir || '' }}</span>
+            </div>
+          </div>
         </a-tab-pane>
         <a-tab-pane key="debug" tab="其他">
           lcuState：{{ lcuState }}<span m-l-4 m-r-4>isUseCommand:</span>
@@ -300,6 +338,7 @@
     f_getLocaleCodes,
     f_getLocaleWatcherState,
     f_getSkinSyncState,
+    f_getToolsEnvState,
     f_importLeagueSkinsFolder,
     f_importLeagueSkinsPackage,
     f_loadSkinDataByFilePath,
@@ -351,6 +390,33 @@
   const importLeagueSkinsLoading = ref(false);
   const importLeagueSkinsFolderLoading = ref(false);
   const activeTab = ref('skin');
+
+  // ===== 工具环境（随安装包放在 resources\tools，不再需要手动初始化） =====
+  const toolsEnvState = ref<{
+    ready: boolean;
+    toolsDir: string;
+    missing: string[];
+    indexEntries?: number;
+    indexGeneratedAt?: string;
+    indexSourceDate?: string;
+  } | null>(null);
+  const toolsIndexHint = computed(() => {
+    const state = toolsEnvState.value;
+    const sourceDate = state?.indexSourceDate?.slice(0, 10);
+    const generated = state?.indexGeneratedAt?.slice(0, 10);
+    const index = state?.indexEntries
+      ? `皮肤索引：${state.indexEntries} 条` +
+        `${sourceDate ? `（游戏路径表 ${sourceDate}` : ''}` +
+        `${sourceDate && generated ? `，索引 ${generated} 生成）` : sourceDate ? '）' : ''}；`
+      : '';
+    return (
+      `${index}工具随安装包放在 resources\\tools，启动时自动生效，不需要手动初始化；` +
+      '游戏更新出了新皮肤后，需要用 npm run index:gen 重新生成索引'
+    );
+  });
+  const refreshToolsEnvState = async () => {
+    toolsEnvState.value = await f_getToolsEnvState();
+  };
   const testSlideWin = () => {
     f_checkCanAutoConfirm({
       title: '提示',
@@ -589,6 +655,7 @@
     }));
     await refreshLocaleWatcher();
     await refreshSkinSync();
+    await refreshToolsEnvState();
     document.addEventListener('keydown', function (event) {
       if (event.ctrlKey && event.key === 'w') {
         drawerOpen.value = !drawerOpen.value;
@@ -600,4 +667,49 @@
   });
 </script>
 
-<style scoped lang="less"></style>
+<style scoped lang="less">
+  // 设置项统一成「标签 + 值 + 按钮」一行，行距用 gap 控制（以前是 <br/><br/>，太散）
+  .config-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 1000px;
+    padding-top: 4px;
+  }
+
+  .config-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    line-height: 24px;
+  }
+
+  .config-label {
+    color: rgba(0, 0, 0, 0.65);
+    white-space: nowrap;
+  }
+
+  .config-value {
+    color: rgba(0, 0, 0, 0.88);
+    word-break: break-all;
+    // 不抢剩余宽度：按钮紧跟路径，避免被右上角悬浮按钮压住
+    flex: 0 1 auto;
+    min-width: 120px;
+  }
+
+  .config-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    max-width: 100%;
+  }
+
+  .config-hint {
+    color: #999;
+    font-size: 12px;
+    cursor: default;
+  }
+</style>

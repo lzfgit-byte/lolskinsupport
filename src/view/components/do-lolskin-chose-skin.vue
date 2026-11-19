@@ -124,6 +124,7 @@
   import useGlobalState, { LogUtil } from '@/hooks/use-global-state';
   import { fetchJsonWithCache, heroSkinsCacheKey, LOL_DATA } from '@/utils/remote-cache';
   import {
+    f_autoBuildSkin,
     f_checkHasSkins,
     f_clearSkinImage,
     f_confirmChoseSkin,
@@ -293,15 +294,39 @@
     choseDrawerOpen.value = false;
   };
 
+  /**
+   * 没有皮肤包就直接后台构建（进度显示在独立的构建小窗，页面不弹日志抽屉）。
+   * 构建失败才提示一次。
+   */
+  const ensureSkinBuilt = async (skinId: string) => {
+    if (!skinId) {
+      message.warn('请先选择皮肤');
+      return false;
+    }
+    if (await f_checkHasSkins(heroId.value, skinId)) {
+      return true;
+    }
+    if (!heroAlias.value) {
+      message.warn('请先选择英雄');
+      return false;
+    }
+    const wadPath = `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`;
+    const result = await f_autoBuildSkin(wadPath, heroId.value, skinId);
+    if (!result?.ok) {
+      message.warn(`皮肤构建失败：${result?.error ?? '详见构建窗口'}`);
+      return false;
+    }
+    return true;
+  };
+
   const handleChoseSkin = async (item: skinInfo) => {
     LogUtil.log(`${item.skinId}`);
     choseSkinId.value = item.skinId;
     if (item.chromasBelongId === '0') {
       showChromas.value = false;
     }
-    const res = await f_checkHasSkins(heroId.value, item.skinId);
-    if (!res) {
-      message.warn('请先下载英雄皮肤');
+    if (!(await ensureSkinBuilt(item.skinId))) {
+      return;
     }
     await preChose();
   };
@@ -326,9 +351,7 @@
   };
 
   const applySelectedSkin = async () => {
-    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
-    if (!res) {
-      message.warn('请先下载英雄皮肤');
+    if (!(await ensureSkinBuilt(choseSkinId.value))) {
       return;
     }
     await ensureBuildSkinZipBeforeApply();
@@ -336,9 +359,7 @@
   };
 
   const doMkOverlay = async () => {
-    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
-    if (!res) {
-      message.warn('请先下载英雄皮肤');
+    if (!(await ensureSkinBuilt(choseSkinId.value))) {
       return;
     }
     await f_mkOverlay(heroId.value, choseSkin.value.skinId, getSkinImage());
@@ -349,9 +370,7 @@
   };
 
   const preChose = async () => {
-    const res = await f_checkHasSkins(heroId.value, choseSkinId.value);
-    if (!res) {
-      message.warn('请先下载英雄皮肤');
+    if (!(await ensureSkinBuilt(choseSkinId.value))) {
       return;
     }
     await f_setHeroChoseSkin(heroId.value, choseSkinId.value);

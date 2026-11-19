@@ -12,8 +12,16 @@
     "dist-electron",
     "dist"
   ],
+  // 随包工具（wad-make / wad-extract / ritobin + 精简名字表 / skinbins-index.txt /
+  // ltk_launcher …）。用 extraResources 而不是打进 asar：这些是外部 exe，要按普通文件
+  // 路径执行，而且 ritobin 要读同目录下的名字表。
+  // 源就是仓库里的 native/tools（15 个文件 / 8.1 MB）。
   // LTF 桥（ltk_launcher.exe + LeagueToolFlop.dll），先 npm run ltf:build 生成
   "extraResources": [
+    {
+      "from": "native/tools",
+      "to": "tools"
+    },
     {
       "from": "native/ltf/build",
       "to": "ltf",

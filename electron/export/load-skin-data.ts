@@ -8,8 +8,11 @@ import AdmZip from 'adm-zip';
 import { IS_USE_COMMAND, modToolsWrapper } from '../const';
 import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
 import { wadPathHash } from '../utils/wad-hash';
-import { extractWadByHash, extractWadSkinBins } from './extract-wad-chunks';
+import { extractWadByHash, extractWadFiles, extractWadSkinBins } from './extract-wad-chunks';
 import { readAudioBlocks, type AudioBlocks } from './skin-audio';
+import { convertBinsToPy } from './ritobin';
+import { resolveSkinBinIndexPath } from '../utils/tools-path';
+import { discoverWadSkinBins } from './wad-index';
 import {
   collectBankPaths,
   collectVoiceBankPaths,
@@ -43,8 +46,26 @@ export const setConfigData = (
   MOD_TOOLS_PATH = Path.join(modToolsPath, '..');
 };
 
+/**
+ * 自动构建时的日志改道：默认发到页面日志抽屉，设置 sink 后只发给构建窗口。
+ * 这样「没皮肤就自动构建」不会把页面日志刷满。
+ */
+let buildLogSink: ((message: string) => void) | null = null;
+
+export const setBuildLogSink = (sink: ((message: string) => void) | null) => {
+  buildLogSink = sink;
+};
+
 const logData = (msg: string, ...data: any[]) => {
   console.log(msg, ...data);
+  if (buildLogSink) {
+    const extra = data
+      .filter((item) => item !== undefined && item !== null && `${item}`.length > 0)
+      .map((item) => `${item}`)
+      .join(' ');
+    buildLogSink(extra ? `${msg} ${extra}` : msg);
+    return;
+  }
   LogMsgUtil.sendLogMsg(msg + data?.toString());
 };
 const deleteFile = (filePath: string) => {
@@ -142,29 +163,36 @@ const baseSkinCache = new Map<string, { name: string; audio: AudioBlocks | null 
  *
  * 不能靠拼字符串猜：不同英雄叫法不一样（VayneBase / Jade_VayneBase / AnnieBase…），
  * Rose 的 baseskin 也是从游戏数据里取的。
+ *
+ * `prefetchedPy` 是批量解包时已经转好的 py（省掉一次 3 秒的 ritobin 启动）。
  */
 const readBaseSkinData = async (
-  characterDir: string,
-  character: string
+  baseBinPath: string,
+  character: string,
+  prefetchedPy?: string
 ): Promise<{ name: string; audio: AudioBlocks | null }> => {
   const cached = baseSkinCache.get(character);
   if (cached !== undefined) {
     return cached;
   }
-  const baseBin = path.join(characterDir, 'skins', 'skin0.bin');
-  if (!fs.existsSync(baseBin)) {
-    baseSkinCache.set(character, { name: '', audio: null });
-    return { name: '', audio: null };
-  }
+  let basePy: string | null = null;
   try {
-    await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), false, baseBin);
-    const basePy = baseBin.replace(/\.bin$/, '.py');
-    const text = fs.existsSync(basePy) ? fs.readFileSync(basePy, 'utf-8') : '';
+    if (prefetchedPy && fs.existsSync(prefetchedPy)) {
+      basePy = prefetchedPy;
+    } else if (fs.existsSync(baseBinPath)) {
+      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), false, baseBinPath);
+      basePy = baseBinPath.replace(/\.bin$/, '.py');
+    }
+    if (!basePy || !fs.existsSync(basePy)) {
+      baseSkinCache.set(character, { name: '', audio: null });
+      return { name: '', audio: null };
+    }
+    const text = fs.readFileSync(basePy, 'utf-8');
     const matched = /championSkinName:\s*string\s*=\s*"([^"]*)"/.exec(text);
     const name = matched ? matched[1] : '';
     const audio = readAudioBlocks(text);
-    if (fs.existsSync(basePy)) {
-      fs.unlinkSync(basePy);
+    if (!prefetchedPy) {
+      fs.rmSync(basePy, { force: true });
     }
     logData(
       ` [base-skin] ${character} 的 base 皮肤: ${name || '(没找到)'}` +
@@ -370,11 +398,63 @@ export const createZipFile = async (wadName, outWadFilePath, heroName, heroId) =
 const getHeroName = (fullWadPath: string) => {
   return path.basename(fullWadPath, path.extname(fullWadPath)).split('.')[0];
 };
+/**
+ * 准备好这个 WAD 里要用的 bin。
+ *
+ * `targeted` 为真时先试「定向解包」：只按路径哈希取 `data/characters/<角色>/skins/skin<n>.bin`
+ * （几十 KB，实测 50 ms），失败再退回全量解包（wad-extract.exe 要解 144 MB）。
+ * 生成皮肤走定向解包；「把 WAD 拆开看一眼」那种工具函数仍然全量解包。
+ */
 const doUnpackWadFile = async (
   fullWadPath: string,
   currentExtraPath: string,
-  sendPregress = false
+  sendPregress = false,
+  wantedSkinIds?: number[],
+  targeted = false
 ) => {
+  if (targeted) {
+    const startedAt = Date.now();
+    try {
+      const entries = await discoverWadSkinBins({
+        wadPath: fullWadPath,
+        skinBinIndexPath: resolveSkinBinIndexPath(MOD_TOOLS_PATH),
+        log: sendPregress ? logData : undefined,
+      });
+      if (entries.length > 0) {
+        // base 皮肤（skin0）要留着读身份/音频，其余只取这次要生成的皮肤
+        const wanted =
+          wantedSkinIds && wantedSkinIds.length > 0
+            ? entries.filter(
+                (entry) =>
+                  /\/skin0\.bin$/.test(entry.filePath) ||
+                  wantedSkinIds.some((id) => entry.filePath.endsWith(`/skin${id}.bin`))
+              )
+            : entries;
+        const result = await extractWadFiles({
+          wadPath: fullWadPath,
+          files: wanted,
+          outputDir: currentExtraPath,
+        });
+        if (result.success) {
+          logData(
+            ` [定向解包] ${wanted.length}/${entries.length} 个皮肤 bin，` +
+              `用时 ${Date.now() - startedAt} ms`
+          );
+          return;
+        }
+        logData(' [定向解包] 有文件没取到，退回全量解包');
+      } else {
+        // 索引是随包带的静态文件，游戏更新出了新英雄/新皮肤后要重新生成
+        logData(
+          ` [定向解包] ${Path.basename(fullWadPath)} 不在皮肤索引里` +
+            '（索引可能过期：npm run index:gen）'
+        );
+      }
+    } catch (error) {
+      logData(` [定向解包] 失败，退回全量解包: ${error?.message ?? error}`);
+    }
+  }
+
   if (IS_USE_COMMAND) {
     await runCommand(
       Path.join(MOD_TOOLS_PATH, 'wad-extract.exe'),
@@ -386,7 +466,7 @@ const doUnpackWadFile = async (
   }
   await extractWadSkinBins({
     wadPath: fullWadPath,
-    hashesPath: Path.join(MOD_TOOLS_PATH, 'hashes.game.txt'),
+    skinBinIndexPath: resolveSkinBinIndexPath(MOD_TOOLS_PATH),
     outputDir: currentExtraPath,
     logFlag: sendPregress,
   });
@@ -404,7 +484,9 @@ export const loadSkinDataByFile = async (
   fullWadPath: string,
   nameIdMap_?: Record<string, any>,
   currentSkinId = -1,
-  cb?: Function
+  cb?: Function,
+  /** 构建进度回调（0~100 + 当前阶段说明），给构建窗口用 */
+  onProgress?: (percent: number, message: string) => void
 ) => {
   if (!fs.existsSync(fullWadPath)) {
     MessageUtil.error(`文件不存在: ${fullWadPath}`);
@@ -429,12 +511,19 @@ export const loadSkinDataByFile = async (
     return;
   }
   logData(` [正在解压] ${fullWadPath}`);
-  await doUnpackWadFile(fullWadPath, currentExtraPath, false);
+  await doUnpackWadFile(
+    fullWadPath,
+    currentExtraPath,
+    false,
+    currentSkinId > -1 ? [currentSkinId] : undefined,
+    true
+  );
   logData(` [解压完成] ${fullWadPath}`);
+  onProgress?.(15, '解包完成');
   // 4. 定位英雄目录 (data/characters/XXXX)
   const charactersDir = path.join(currentExtraPath, 'data', 'characters');
   if (!fs.existsSync(charactersDir)) {
-    logData(`跳过: 内部不含 characters 目录`);
+    logData(` [错误] 没有解出任何皮肤 bin：皮肤索引可能过期，先运行 npm run index:gen`);
     return;
   }
   const heroes = fs.readdirSync(charactersDir).filter((f) => {
@@ -448,30 +537,77 @@ export const loadSkinDataByFile = async (
       return item.toUpperCase() === heroName.toUpperCase();
     })[0];
     const notifyKey = new Date().getTime();
-    const findNextSkinId = (skinsDir: string, skinId: number, offset = 50) => {
+    const findNextSkinId = (skinsDir: string, startId: number, offset = 50) => {
+      let current = startId;
       while (offset > 0) {
-        let binFileName = `skin${skinId}.bin`;
-        let sourceBinPath = path.join(skinsDir, binFileName);
+        const binFileName = `skin${current}.bin`;
+        const sourceBinPath = path.join(skinsDir, binFileName);
         if (fs.existsSync(sourceBinPath)) {
-          return { binFileName, sourceBinPath, skinId_: skinId };
+          return { binFileName, sourceBinPath, skinId_: current };
         }
-        NotifyMsgUtil.sendNotifyMsg('[发现跨id皮肤]', sourceBinPath, `${notifyKey}`);
         offset--;
-        skinId++;
+        current++;
       }
-      let binFileName = `skin${skinId}.bin`;
-      let sourceBinPath = path.join(skinsDir, binFileName);
-      return { binFileName, sourceBinPath, skinId_: skinId };
+      const binFileName = `skin${current}.bin`;
+      const sourceBinPath = path.join(skinsDir, binFileName);
+      // 跨 id 时只提示一次，不要每跳一个 id 弹一张通知
+      if (current !== startId) {
+        NotifyMsgUtil.sendNotifyMsg('[发现跨id皮肤]', sourceBinPath, `${notifyKey}`);
+      }
+      return { binFileName, sourceBinPath, skinId_: current };
     };
     const trueHerosDir = path.join(charactersDir, trueHeros, 'skins');
     const allFilesLength = fs.readdirSync(trueHerosDir).length;
     const { sourceBinPath, skinId_ } = findNextSkinId(trueHerosDir, skinId, 50);
     skinId = skinId_;
     if (!fs.existsSync(sourceBinPath)) {
+      // 批量模式（currentSkinId = -1）走到这里就是正常结束；单个皮肤找不到才是异常
+      if (currentSkinId > 0) {
+        logData(` [未找到] ${heroName} 的 skin${currentSkinId}（往上找了 50 个 id 都没有 bin）`);
+        logData(' [提示] 新皮肤可能还没进随包索引：npm run index:gen 重新生成后重试');
+      }
       break;
     }
+
+    // 一次批量把「本皮肤 + base 皮肤」的 bin 转成 py：
+    // ritobin 每次启动都要读 219 MB 名字表，逐次转 4 次要 12 s，批量一次只要几十毫秒
+    const ritobinWork = path.join(OUTPUT_BASE_DIR, heroName, '_ritobin', `skin${skinId}`);
+    fs.rmSync(ritobinWork, { recursive: true, force: true });
+    const skinPyOf = new Map<string, string>();
+    const basePyOf = new Map<string, string>();
+    for (const heroNameInLine of heroes) {
+      const characterSkinsDir = path.join(charactersDir, heroNameInLine, 'skins');
+      const skinBin = path.join(characterSkinsDir, `skin${skinId}.bin`);
+      if (!fs.existsSync(skinBin)) {
+        continue;
+      }
+      const skinWork = path.join(ritobinWork, 'skin', heroNameInLine);
+      fs.mkdirSync(skinWork, { recursive: true });
+      fs.copyFileSync(skinBin, path.join(skinWork, `skin${skinId}.bin`));
+      skinPyOf.set(heroNameInLine, path.join(skinWork, `skin${skinId}.py`));
+
+      const baseBin = path.join(characterSkinsDir, 'skin0.bin');
+      if (fs.existsSync(baseBin)) {
+        const baseWork = path.join(ritobinWork, 'base', heroNameInLine);
+        fs.mkdirSync(baseWork, { recursive: true });
+        fs.copyFileSync(baseBin, path.join(baseWork, 'skin0.bin'));
+        basePyOf.set(heroNameInLine, path.join(baseWork, 'skin0.py'));
+      }
+    }
+    const ritobinRunner = (args: string[]) =>
+      runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), false, ...args);
+    if (skinPyOf.size > 0) {
+      const converted = await convertBinsToPy(ritobinRunner, ritobinWork, logData);
+      logData(
+        ` [ritobin] 批量解包 ${converted.count} 个 bin，用时 ${converted.elapsedMs} ms` +
+          `${converted.slimHashes ? '（精简名字表）' : '（默认名字表）'}`
+      );
+    }
+    onProgress?.(35, 'bin 转换完成');
+
     // 一份皮肤里几个角色（vayne / jade_vayne）共用语音 bank，sidecar 要累计它们
     const sidecarRegistry = createSidecarRegistry();
+    const inLineNames = Array.from(skinPyOf.keys());
     for (const heroNameInLine of heroes) {
       const skinsDir = path.join(charactersDir, heroNameInLine, 'skins');
       let binFileName = `skin${skinId}.bin`;
@@ -485,6 +621,9 @@ export const loadSkinDataByFile = async (
         continue;
       }
       logData(` [正在处理] 英雄名字 ${heroName} ${heroNameInLine} 皮肤id ${skinId}`);
+      const lineIndex = Math.max(0, inLineNames.indexOf(heroNameInLine));
+      const lineCount = Math.max(1, inLineNames.length);
+      onProgress?.(45 + Math.round((lineIndex / lineCount) * 40), `改写 ${heroNameInLine}`);
       // 6. 创建两级目录结构: 英雄名 -> 皮肤ID
       // 路径示例: C:\Users\18074\Downloads\annie\skin1\data\characters\annie\skins
       const targetSkinDir = path.join(
@@ -496,26 +635,23 @@ export const loadSkinDataByFile = async (
         fs.mkdirSync(targetSkinDir, { recursive: true });
       }
 
-      // 7. 复制并解包
-      const destBinPath = path.join(targetSkinDir, `skin0.bin`);
-      fs.copyFileSync(sourceBinPath, destBinPath);
-      logData(` [复制完成] ${sourceBinPath} -> ${destBinPath}`);
-
-      // 调用全局 ritobin_cli 自动解出 .py`E:\\lolsupport\\ritobin\\bin\\ritobin_cli`
-      await runCommand(
-        Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'),
-        true,
-        destBinPath
-      );
-      logData(` [解包完成 ritobin]  ${destBinPath}`);
-      const pyPath = destBinPath.replace('.bin', '.py');
+      // 7. 直接用批量转换好的 py（bin 不再复制，也不再单独起 ritobin）
+      const pyPath = path.join(targetSkinDir, 'skin0.py');
+      const preparedPy = skinPyOf.get(heroNameInLine);
+      if (!preparedPy || !fs.existsSync(preparedPy)) {
+        logData(` [跳过] ${heroNameInLine} skin${skinId} 没有预转换的 py`);
+        continue;
+      }
+      fs.copyFileSync(preparedPy, pyPath);
+      logData(` [复制完成] ${preparedPy} -> ${pyPath}`);
       patchPyFile(heroNameInLine, pyPath, skinId);
       logData(` [处理完成 py文件修改] ${pyPath}`);
       // 按 Rose 的方式补 base skin 身份：复制 SKN/SKL 到 base 路径 + 改 championSkinName/骨架引用，
       // 否则 LTK 的 patcher 会把这个皮肤当成 skinhack，整局 overlay 被关掉。
       const baseSkin = await readBaseSkinData(
-        path.join(charactersDir, heroNameInLine),
-        heroNameInLine
+        path.join(charactersDir, heroNameInLine, 'skins', 'skin0.bin'),
+        heroNameInLine,
+        basePyOf.get(heroNameInLine)
       );
       if (baseSkin.name) {
         const packDir = path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`);
@@ -585,11 +721,16 @@ export const loadSkinDataByFile = async (
       } else {
         logData(` [base-skin] 跳过 ${heroNameInLine}：没有读到 base 皮肤名`);
       }
-      deleteFile(destBinPath);
       await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), true, pyPath);
       logData(` [封包完成 ritobin] ${pyPath}`);
       deleteFile(pyPath);
+      onProgress?.(
+        45 + Math.round(((lineIndex + 1) / lineCount) * 40),
+        `${heroNameInLine} 改写完成`
+      );
     }
+    // 批量解包用的工作目录用完就删（里面是 bin/py 副本）
+    fs.rmSync(ritobinWork, { recursive: true, force: true });
     // 所有角色的语音别名攒在 registry 里，最后统一写成 sidecar bank
     const sidecarFiles = flushSidecars(sidecarRegistry);
     if (sidecarFiles.length > 0) {
@@ -607,12 +748,14 @@ export const loadSkinDataByFile = async (
     if (flag) {
       break;
     }
+    onProgress?.(90, '打包中');
     await packToWad(
       path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`),
       heroName,
       skinId,
       heroId
     );
+    onProgress?.(100, '构建完成');
     if (currentSkinId > -1) {
       break;
     }

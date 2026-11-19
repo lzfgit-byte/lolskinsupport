@@ -1,0 +1,6 @@
+# 随包工具（native/tools）：exe/dll 按二进制处理，别做换行转换
+native/tools/**/*.exe binary
+native/tools/**/*.dll binary
+native/tools/**/*.stub binary
+# 皮肤 bin 索引是文本，但必须保持 LF（Windows 上也不要 CRLF，省得每次 checkout 都脏）
+native/tools/skinbins-index.txt text eol=lf

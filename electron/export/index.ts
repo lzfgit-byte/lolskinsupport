@@ -20,7 +20,6 @@ import {
   configPath,
   defaultGamePath,
   defaultInstalledPath,
-  defaultModToolsPath,
   defaultOverlayConfigPath,
   defaultOverlayPath,
   defaultScreenshotPath,
@@ -31,9 +30,19 @@ import {
 } from '../const';
 import { LogMsgUtil, MessageUtil } from '../utils/message';
 import { showSliderConfirm } from '../hooks/use-confirm-window';
+import { closeBuildWindow, showBuildWindow, updateBuildWindow } from '../hooks/build-window';
 import { lcuConnector } from '../http/lcuConnector';
 import { patchJsonConfig, readJsonConfig } from '../utils/json-config';
-import { loadSkinData, loadSkinDataByFile, setConfigData, unpackWadFile } from './load-skin-data';
+import {
+  loadSkinData,
+  loadSkinDataByFile,
+  setBuildLogSink,
+  setConfigData,
+  unpackWadFile,
+} from './load-skin-data';
+import { getToolsEnvStatus } from './tools-env';
+import { isManagedToolsPath, resolveToolsDir } from '../utils/tools-path';
+import { toSkinIndex as resolveSkinIndex } from './skin-id';
 import { ltfInjector } from './ltfSession';
 import { importLeagueSkinsFromFolder, importLeagueSkinsFromZip } from './league-skins-import';
 import {
@@ -70,6 +79,80 @@ export const loadSkinDataIdName = async (chuckSize = 20) => {
 export const loadSkinDataByFilePath = async (fullWadPath: string, current = -1) => {
   setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   await loadSkinDataByFile(idName, fullWadPath, null, current);
+};
+
+/** 工具环境状态：关键工具齐不齐、工具目录在哪（工具随安装包走，不需要手动初始化） */
+export const getToolsEnvState = () => getToolsEnvStatus();
+
+/**
+ * 皮肤列表里的 id 是「英雄 id + 序号」（`59` + `59005`），生成皮肤要的是序号（`5`，
+ * 对应游戏里的 `skin5.bin`）。换算在 `skin-id.ts`，这里和 `buildSkinPath()` 共用。
+ */
+const toSkinIndex = (heroId: string, skinId: string): number =>
+  resolveSkinIndex(`${heroId}`, `${skinId}`);
+
+/**
+ * 「没有皮肤就直接构建」用：后台静默构建一个皮肤包。
+ *
+ * 页面日志抽屉不动（`setBuildLogSink` 把日志改道到构建窗口），进度和结果都发到
+ * 侧边通知；已经有包时直接返回。
+ */
+export const autoBuildSkin = async (wadPath: string, heroId: string, skinId: string) => {
+  setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
+  const skinPath = buildSkinPath(`${heroId}`, `${skinId}`);
+  if (existsSync(skinPath)) {
+    return { ok: true, existed: true, path: skinPath };
+  }
+  if (!wadPath || !existsSync(wadPath)) {
+    const error = `找不到英雄 WAD：${wadPath}`;
+    showBuildWindow('构建皮肤');
+    updateBuildWindow({ state: 'error', percent: 100, message: '找不到英雄 WAD', detail: error });
+    return { ok: false, existed: false, path: skinPath, error };
+  }
+  const skinIndex = toSkinIndex(`${heroId}`, `${skinId}`);
+  if (!Number.isFinite(skinIndex) || skinIndex < 0) {
+    const error = `皮肤 id 解析失败：heroId=${heroId} skinId=${skinId}`;
+    showBuildWindow('构建皮肤');
+    updateBuildWindow({ state: 'error', percent: 100, message: '皮肤 id 解析失败', detail: error });
+    return { ok: false, existed: false, path: skinPath, error };
+  }
+  const toolsState = getToolsEnvStatus();
+  if (!toolsState.ready) {
+    const error = `工具环境不完整（缺 ${toolsState.missing.join(', ')}），请重新安装本程序`;
+    showBuildWindow('构建皮肤');
+    updateBuildWindow({ state: 'error', percent: 100, message: '工具环境未初始化', detail: error });
+    return { ok: false, existed: false, path: skinPath, error };
+  }
+
+  showBuildWindow(`构建皮肤 ${heroId}_${skinId}`);
+  let lastError = '';
+  setBuildLogSink((line) => updateBuildWindow({ detail: line }));
+  try {
+    await loadSkinDataByFile(
+      idName,
+      wadPath,
+      null,
+      skinIndex,
+      undefined,
+      (percent, message) => updateBuildWindow({ percent, message, state: 'running' })
+    );
+  } catch (error) {
+    lastError = (error as Error)?.message ?? `${error}`;
+  } finally {
+    setBuildLogSink(null);
+  }
+
+  const ok = existsSync(skinPath);
+  updateBuildWindow({
+    percent: 100,
+    state: ok ? 'success' : 'error',
+    message: ok ? '构建成功' : '构建失败',
+    detail: ok ? skinPath : lastError || '没有生成皮肤文件',
+  });
+  if (ok) {
+    closeBuildWindow(2500);
+  }
+  return { ok, existed: false, path: skinPath, error: ok ? undefined : lastError || '没有生成皮肤文件' };
 };
 export const readConfig = () => readJsonConfig(configPath);
 export const setConfig = (key: string, value: string) => {
@@ -148,8 +231,20 @@ export const getSkinImage = (skinId: string) => {
   const d = JSON.parse(data);
   return d[skinId] || '';
 };
+/**
+ * 实际生效的工具路径。
+ *
+ * 工具现在放在 `resources\tools`（安装包自带），所以配置里那串旧的
+ * `%LOCALAPPDATA%\lol-skin-ll\tools\mod-tools.exe` 不再权威：
+ * 只有「用户自己指定、文件还在」的路径才照用，其它情况都走随包那份。
+ */
 export const getModToolsPath = () => {
-  return readConfigOrDefault(MOD_TOOLS_PATH, defaultModToolsPath);
+  const raw = readConfigValue(MOD_TOOLS_PATH);
+  const configured = `${raw ?? ''}`.trim().replace(/^"|"$/g, '');
+  if (configured && existsSync(configured) && !isManagedToolsPath(configured)) {
+    return configured;
+  }
+  return Path.join(resolveToolsDir(), 'mod-tools.exe');
 };
 export const getInstalledPath = () => {
   return readConfigOrDefault(INSTALLED_PATH, defaultInstalledPath);
@@ -177,13 +272,13 @@ export const findFile = (dir, targetFile) => {
   return null;
 };
 const buildSkinPath = (heroId: string, skinId: string) => {
-  const curSkinId = skinId.replace(heroId, '');
+  const curSkinId = resolveSkinIndex(heroId, skinId);
   const skinBasePath = getSkinDefaultSuffix();
   const skinPath = Path.join(
     getSkinPath(),
     skinBasePath,
     `${heroId}`,
-    `${heroId}_${+curSkinId}.zip`
+    `${heroId}_${curSkinId}.zip`
   );
   if (fs.existsSync(skinPath)) {
     return skinPath;
@@ -191,7 +286,7 @@ const buildSkinPath = (heroId: string, skinId: string) => {
 
   const foundPath = findFile(
     Path.join(getSkinPath(), skinBasePath, heroId),
-    `${heroId}_${+curSkinId}.zip`
+    `${heroId}_${curSkinId}.zip`
   );
   if (foundPath) {
     return foundPath;
@@ -201,7 +296,7 @@ const buildSkinPath = (heroId: string, skinId: string) => {
     getSkinPath(),
     getSkinDefaultSuffix(),
     `${heroId}`,
-    `${heroId}_${+curSkinId}.zip`
+    `${heroId}_${curSkinId}.zip`
   );
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {

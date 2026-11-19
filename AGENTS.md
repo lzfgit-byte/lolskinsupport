@@ -67,3 +67,61 @@
   音效再用 `check-audio.mjs`（事件都有 bank 提供）、`check-alias-actions.mjs`（别名 Action 一致）。
 - 测试：`npm run mesh:test`、`npm run audio:test`、`npm run bnk:test`、`npm run banks:test`、
   `npm run rebase:test`。
+
+## 四、生成皮肤的性能坑（2026-11-19）
+
+单个皮肤从 19 s 压到 0.5 s 的关键，别改回去：
+
+- **`ritobin_cli` 每次启动读 219 MB 名字表**（`ritobin\bin\hashes\hashes.game.txt`）：
+  5 KB 的 bin 也要 3.3 s，1 字节的只要 10 ms。所以 bin→py 必须**批量**
+  （`-r -i bin <目录>`，`electron/export/ritobin.ts`），再配 `-d` 精简名字表。
+- `-d` **只认 `hashes.binfields.txt` / `hashes.bintypes.txt` / `hashes.binentries.txt`
+  这几个固定文件名**（`hashes.other.txt`、`hashes.txt` 会被忽略，实测），所以同一份内容写三份。
+- 精简表 = 「我们改写会用到的名字」（`RITOBIIN_NAMES`）。少写一个就会出现「字段没被改名」
+  这类静默错误（踩过：漏了 `championSkinId`，生成的 bin 与旧流程差 9 字节，LTK 可能判 skinhack）。
+  改完一定要和旧流程比 **WAD 条目内容**（不是 zip 字节：zip 带时间戳会变）。
+- **不要按英雄名猜角色目录**：安妮 WAD 里有 `annietibbers`、`jade_annie_tibbers`，猜会漏条目。
+  `wad-index.ts` 的做法是拿 `hashes.game.txt` 里的皮肤 bin 索引 × WAD chunk 表求交集。
+- 英雄 WAD 不用 `wad-extract.exe` 全解开（144 MB → 503 MB 落盘）。定向解包只要几十 KB，
+  查不到就回退全量解包。
+- 缓存都在 `%TEMP%\lol-skin-cache\`（纯派生物，别挪到用户数据目录）。
+- 测试：`npm run ritobin:test`、`npm run wadindex:test`。
+
+## 五、工具环境与自动构建（2026-11-19）
+
+- 工具跟着安装包走：`native/tools` **直接进 git**（15 个文件 / 8.1 MB），
+  `electron-builder.json5` 的 `extraResources` 把它拷到 `<安装目录>\resources\tools`。
+  运行时用 `electron/utils/tools-path.ts` 的 `resolveToolsDir()` 找它（开发时是 `native/tools`）。
+  **不需要用户点「初始化配置环境」了**：启动时 `ensureToolsConfigured()`
+  （`electron/export/tools-env.ts`）把 `MOD_TOOLS_PATH` 指到随包那份，只迁旧的
+  `%LOCALAPPDATA%\lol-skin-ll\tools\...`；用户数据位置（config.json / skins / overlays）没变。
+- 工具里**不带**两个大文件（历史原因见下）：
+  - `hashes.game.txt`（219 MB）：只用它筛「皮肤 bin 路径 + WAD 路径哈希」，结果就是随包的
+    `skinbins-index.txt`（21446 条 / 1.25 MB）。读索引统一用 `resolveSkinBinIndexPath()`；
+    游戏更新新增皮肤后，用 `npm run index:gen` 从新的 `hashes.game.txt` 重新生成。
+  - `ltk-manager.exe`（95 MB）：注入用系统安装的 LTK Manager（`%ProgramFiles%\LTK Manager`），
+    找不到才提示安装，不再随包带。
+- `ritobin\bin\hashes\` 只留 `binfields` + `bintypes` 两张表：15 个改写锚点全在里面；
+  没解出来的名字在 py 里保持 `0x...` 哈希形式，转回 bin 还是同一个哈希（输出不变）。
+- `skinbins-index.txt` 文件头是 `# skinbins-index / # source / # generated` 三行注释，
+  解析时跳过（`buildSkinBinIndex`、`parseHashesFile` 都跳过 `#`）。游戏更新出新英雄/新皮肤后：
+  `npm run index:gen -- <新的 hashes.game.txt 或目录>` → 看「新增 / 删除」条数 →
+  `npm run wadindex:test` → 构建一个皮肤验证 → 重新打包。`hashes.lcu.txt` 是 LCU 路径的
+  名字表，皮肤 bin 用不到，不用管。日志里出现「索引可能过期」就是该重跑了。
+- `extraResources` 而不是 `asarUnpack`：这些是外部 exe，要按普通文件路径执行，不能塞进 asar。
+  别再把工具放进 `public/`（会被 vite 复制进 `dist` 再打进 asar，白白多一份）。
+- **皮肤 id 有两种写法**：列表里是 `<heroId><序号>`（JarvanIV 的 `59005`），生成时要的是序号
+  `5`（游戏里是 `skin5.bin`）。换算统一用 `electron/export/skin-id.ts` 的 `toSkinIndex()`；
+  以前「没皮肤直接构建」把 59005 直接当序号传下去，扫了 50 个 id 都没找到、最后什么都没生成
+  （手动「当前皮肤文件」走的是正确换算，所以能成功）。
+- 打 zip 别用 `Compress-Archive`（慢、压不干净）；用 .NET
+  `ZipFile.CreateFromDirectory(..., CompressionLevel.Optimal, ...)`，先把文件用硬链接放进暂存目录。
+- 「没皮肤就直接构建」：渲染进程 `ensureSkinBuilt()` → 主进程 `autoBuildSkin()`。
+  构建日志用 `setBuildLogSink()` 改道到构建窗口，**不要**再往页面日志抽屉灌（后台静默）。
+- 构建进度提示：`electron/hooks/build-window.ts` → `showProgressNotice()`
+  （`use-confirm-window.ts` 里，和 `showSliderConfirm` 共用右上角通知队列、卡片样式和滑入动画，
+  只是把按钮换成进度条）；页面 HTML 在 `export-progress-html.ts`，通过 `require('electron')`
+  收 `build-progress` 更新。进程内只保留一个通知。
+- 自测：`native/tools` 应有 15 个文件；打包验证用
+  `npx electron-builder --dir`，看 `release\<版本>\win-unpacked\resources\tools\mod-tools.exe`
+  在不在（旧的 `public/tools` + `tools.zip` 方案已经废弃）。

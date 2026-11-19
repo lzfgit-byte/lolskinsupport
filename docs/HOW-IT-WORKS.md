@@ -77,9 +77,16 @@ Electron 主进程 ──(TCP JSON, 127.0.0.1:46321-46340)──> LeagueToolFlop
 
 渲染进程 `applySelectedSkin()`：
 
-1. `checkHasSkins(heroId, skinId)`：确认 `skins\<suffix>\<heroId>\<heroId>_<n>.zip` 存在；
-2. 必要时先由 WAD 生成皮肤 zip（用到 cslol-tools，见第 6 节）；
-3. `f_loadSkin()` → 主进程 `loadSkin()`：
+1. `ensureSkinBuilt()`：确认 `skins\<suffix>\<heroId>\<heroId>_<n>.zip` 存在；
+   **不存在就直接后台构建**（不再提示「请先下载英雄皮肤」）：
+   - 主进程 `autoBuildSkin()` 调 `loadSkinDataByFile()`，日志不走页面日志抽屉
+     （`setBuildLogSink` 把 `logData` 改到构建窗口），页面保持干净；
+   - 进度和结果发到**侧边通知卡片**（`electron/hooks/build-window.ts` → `showProgressNotice`，
+     和 `showSliderConfirm` 同一套卡片样式、同一个右上角通知队列和滑入/滑出动画，只是把按钮
+     换成进度条）：标题、进度条、当前阶段、最近一条日志；成功显示「构建成功」2.5 秒后自动滑走，
+     失败保留卡片并显示原因（右上角 × 可关）；
+   - 工具环境没铺好、找不到英雄 WAD、构建报错都会在窗口里说清楚；
+2. `f_loadSkin()` → 主进程 `loadSkin()`：
    - 记录「皮肤使用中」的记录目录 `overlays\<heroId>_<skinId>\`；
    - 写 `overlay_config`（当前皮肤 id）与 `SKIN_IMAGE`；
    - 调 `ltfInjector.applySkins([...])` —— 注入会话开始（下一节）。
@@ -320,11 +327,101 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
 
 ```
 游戏 wad (DATA/FINAL/Champions/<alias>.wad.client)
-  └─ wad-extract.exe → ritobin_cli（.bin ↔ .py）→ 改皮肤 → wad-make.exe → <hero>_<n>.zip
+  └─ 定向解包（只取 skin<n>.bin）→ ritobin 批量转 py → 改皮肤 → ritobin 批量转 bin
+     → wad-make.exe → <hero>_<n>.zip
 ```
 
 工具目录（`MOD_TOOLS_PATH` 的父目录）需要 `wad-make.exe`、`wad-extract.exe`、
-`ritobin\bin\ritobin_cli.exe`、`hashes.game.txt`。**注入本身完全不需要它。**
+`ritobin\bin\ritobin_cli.exe`、`skinbins-index.txt`（皮肤 bin 索引）。
+**注入本身完全不需要它。**
+
+### 6.0 工具环境：工具随安装包走（`resources\tools`）
+
+工具就是仓库里的 `native/tools`（15 个文件 / 8.1 MB），打包时由 electron-builder 的
+`extraResources` 原样拷到 `<安装目录>\resources\tools`：
+
+```
+native/tools/                ← 直接进 git，不是构建产物
+  ├─ wad-make.exe / wad-extract.exe / mod-tools.exe / cslol-* / ltk_patcher_*
+  ├─ ritobin\bin\ritobin_cli.exe + hashes\{binfields,bintypes}.txt
+  └─ skinbins-index.txt      ← 21446 条「皮肤 bin 路径 + WAD 路径哈希」，1.25 MB
+```
+
+两个大文件**故意不带**：
+
+| 文件 | 大小 | 为什么不要 |
+| --- | --- | --- |
+| `hashes.game.txt` | 219 MB | 只用来筛「皮肤 bin 的路径 + 哈希」，结果就是随包的 `skinbins-index.txt`；游戏更新时用 `npm run index:gen` 重新生成 |
+| `ltk-manager.exe` | 95 MB | 注入用系统安装的 LTK Manager（`%ProgramFiles%\LTK Manager`），找不到才提示安装 |
+
+开发时 `resolveToolsDir()`（`electron/utils/tools-path.ts`）用 `native/tools`，打包后用
+`resources\tools`。所以「设置 → 工具环境」只看状态，**不需要点任何「初始化」**：程序启动时
+`ensureToolsConfigured()`（`electron/export/tools-env.ts`）会把 `MOD_TOOLS_PATH` 指到随包那份。
+
+- 只会改「空的 / 旧的 `%LOCALAPPDATA%\lol-skin-ll\tools\mod-tools.exe`」这类我们自己的路径；
+  用户自己填的、文件还在的 cslol-tools 目录不动。
+- **用户数据位置没变**：`config.json`、`skins\`、`overlays\` 仍然在 `%LOCALAPPDATA%\lol-skin-ll`。
+- `getToolsEnvStatus()` 用 mod-tools / wad-make / wad-extract / ritobin_cli / skinbins-index.txt
+  这 5 个文件判断工具目录是否完整。
+
+> 打包：`electron-builder.json5` 的 `extraResources` 把 `native/tools` 拷到 `resources/tools`
+> （外部 exe 不能塞进 asar）。
+>
+> 注入用的 `ltk_launcher.exe` / `LeagueToolFlop.dll` 由 `extraResources` 放到 `resources/ltf`；
+> 那份缺了的话 `resolveLtfDir()` 退回 `resources\tools`。
+
+#### 6.0.1 游戏更新后：重新生成皮肤索引
+
+`hashes.game.txt` 会随游戏版本更新（新英雄、新皮肤都在里面）。随包的 `skinbins-index.txt`
+是它的「只含皮肤 bin」子集（文件头记着生成时间、来源和条数），所以游戏大版本更新后要重跑：
+
+1. 拿到新的 `hashes.game.txt`：cslol-manager 的 cslol-tools 包，或者旧工具目录里那份被更新后；
+2. `npm run index:gen -- <hashes.game.txt 或它所在目录>`
+   （不给参数时会在 `%LOCALAPPDATA%\lol-skin-ll\tools` 和仓库 `.tmp` 里找）；
+   输出形如 `21446 条 / 1.25 MB`，还会列出「相比上一版：新增 N 条，删除 M 条」；
+3. `npm run wadindex:test`，再随便构建一个皮肤确认；
+4. 重新打包（`npm run app:build`）。
+
+`hashes.lcu.txt` 不用管：那是客户端（LCU）路径的名字表，皮肤 bin 用不到它。
+
+程序日志里出现下面这些，就是索引该更新了：
+
+- `不在皮肤索引里（索引可能过期：npm run index:gen）`
+- `没解出任何皮肤 bin：皮肤索引可能过期`
+- `skin<N>（往上找了 50 个 id 都没有 bin）`
+
+### 6.1 为什么能快（单个皮肤 19 s → 0.5 s）
+
+原来一个皮肤要 10~19 秒，慢在两处，都不是「干活」本身：
+
+| 步骤 | 原来 | 现在 | 原因 |
+| --- | --- | --- | --- |
+| 解包英雄 WAD | 5.6 s | 0.05 s | `wad-extract.exe` 把 144 MB 全解开（503 MB 落盘）再删，其实只要 4 个 bin |
+| ritobin 转 bin→py | 4 × 3.1 s | 0.05 s | 每次启动都读 `ritobin\bin\hashes\hashes.game.txt`（219 MB）建名字表；现在只带 `binfields`/`bintypes` 两张精简表，再加 `-d` 指定字段名 |
+| ritobin 转 py→bin | 2 × 0.02 s | 0.02 s | 反向不需要名字表 |
+| 网格/bank/语音/打包 | ~0.15 s | ~0.15 s | 本来就不慢 |
+
+**定向解包**（`electron/export/wad-index.ts`）：WAD 目录里只有路径哈希，所以
+
+1. 候选路径来自随包的 `skinbins-index.txt`：所有 `data/characters/<角色>/skins/skin<n>.bin`
+   连同 WAD 路径哈希（21446 条 / 1.25 MB，是从 219 MB 的 `hashes.game.txt` 里筛出来的，
+   用 `npm run index:gen` 重生成）—— 读一次几十毫秒，不再每次解析名字表；
+2. 读 WAD 的 chunk 表（只读前 100 KB，`readWadChunkHashes`），命中索引里哪些哈希 =
+   这个 WAD 里有哪些皮肤 bin；
+3. 只把这些 bin 取出来（`extractWadFiles`，保留原相对路径，不同角色的 `skin0.bin` 不打架）。
+
+不做「按英雄名猜角色目录」的过滤：安妮的 WAD 里还有 `annietibbers`、`jade_annie_tibbers`，
+名字里不含完整英雄名，猜会漏条目。查不到任何 bin 时退回全量解包，行为与以前一致。
+
+**ritobin 批量 + 精简名字表**（`electron/export/ritobin.ts`）：`-r` 一次转完目录，
+名字表只加载一次；再让 `-d` 指向只含 15 个「我们改写要用到的字段名」的小表
+（`hashes.binfields/bintypes/binentries.txt` 各写一份，ritobin 只认这几个固定文件名），
+连 219 MB 都不读。没列进小表的名字保持 `0x...` 哈希形式 —— bin 里本来就是哈希，
+转回 bin 后字节完全一致（已用真实 bin 逐字节验证）。哪天游戏改了字段名、锚点解不出来，
+`convertBinsToPy` 会删掉这批 py 并用默认名字表重转，保证正确性优先。
+
+缓存都在系统临时目录 `%TEMP%\lol-skin-cache\`（纯派生物，不碰用户数据）：
+皮肤 bin 索引、每个 WAD 的探测结果。实测 Vayne Skin11：冷启动 1.3 s、之后 0.46 s。
 
 生成时会对皮肤 bin 做一次 **base-skin 改写**（`electron/export/skin-rebase.ts` +
 `skin-mesh.ts` + `skin-audio.ts` + `skin-banks.ts` + `bnk.ts`，对齐 Rose 1.5.9
@@ -392,7 +489,7 @@ sidecar 路径。同一份皮肤的几个角色（Vayne / jade_vayne）共用一
 | `skins\<suffix>\<hero>\*.zip` | 皮肤文件 |
 | `overlays\<hero>_<skin>\` | 「皮肤使用中」的记录目录（不存 wad） |
 | `overlay.json` | 当前应用到「皮肤使用中」的皮肤 id 列表 |
-| `mod-tools\` | cslol-tools（生成皮肤用） |
+| `mod-tools\` | 旧版「初始化配置环境」的解压目录（新版不用了，确认没在用可以直接删，约 560 MB） |
 | `ltf_staging\` | 交给 LTK 前的 `.fantome` 暂存（硬链接，启动新 LTK Manager 后清理） |
 | `ltf_session.json` | 注入会话记录（崩溃恢复用） |
 | `logs\ltk\ltk_launcher.log` | launcher 启动过程、注入失败原因 |
@@ -409,7 +506,8 @@ sidecar 路径。同一份皮肤的几个角色（Vayne / jade_vayne）共用一
 | 情况 | 表现 | 处理 |
 |---|---|---|
 | 缺 `ltk_launcher.exe` / `LeagueToolFlop.dll` | 注入失败并提示 | 重装；或从 Rose 的 `_internal\injection\tools\` 拷到 `resources\ltf\` |
-| 找不到 LTK Manager | 注入失败并提示 | 安装 LTK Manager，或 `config.json` 写 `LTK_MANAGER_PATH` |
+| 找不到 LTK Manager | 注入失败并提示 | 装 LTK Manager（不再随包；装好会自动探测） |
+| 工具环境缺文件 | 构建窗口提示缺哪几个 | 重新安装本程序（工具在 `resources\tools`，不用手动初始化） |
 | 用户已开着 LTK Manager（无桥） | 拒绝注入并提示关掉 | 关闭 LTK Manager（含托盘）后重试 |
 | 桥 30s 没起来 | 提示 `LTF 桥没有起来` | 看 `logs\ltk\ltk_launcher.log`；多为 launcher 被杀软拦 |
 | `MANAGER_ELEVATED` / `LEAGUE_ELEVATED` | 桥报错 | 取消 LTK/LOL 的管理员兼容设置 |

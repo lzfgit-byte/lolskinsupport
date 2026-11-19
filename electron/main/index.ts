@@ -12,6 +12,7 @@ import { lcuConnector } from '../http/lcuConnector';
 import { gameflowMonitor } from '../http/gameflowMonitor';
 import { initLocaleWatcher, stopLocaleWatcher } from '../export/locale-watcher';
 import { killLeftoverManagerSync } from '../export/ltfSession';
+import { ensureToolsConfigured } from '../export/tools-env';
 import { isShutdownFinished, shutdown } from '../export/shutdown';
 import { startSkinSyncMonitor } from '../export/skin-sync';
 // 启动服务
@@ -93,6 +94,15 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // 工具随安装包放在 resources\tools：把配置里的 MOD_TOOLS_PATH 指过去（旧路径自动迁移）
+  try {
+    const tools = ensureToolsConfigured();
+    if (tools.changed) {
+      console.log(`[TOOLS] MOD_TOOLS_PATH -> ${tools.path}`);
+    }
+  } catch (error) {
+    console.warn('[TOOLS] 对齐工具路径失败:', error);
+  }
   await createWindow();
   // 皮肤自动同步：按设置定时检查 LeagueSkins 清单，有变化就下载
   startSkinSyncMonitor();

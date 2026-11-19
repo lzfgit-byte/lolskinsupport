@@ -117,6 +117,20 @@ export const f_checkHasSkins = async (heroId: string, skinId: string) => {
   return executeFunction('checkHasSkins', heroId, skinId);
 };
 /**
+ * 没有皮肤时直接构建（后台静默，进度发到独立的构建窗口）
+ * export const autoBuildSkin = (wadPath, heroId, skinId) => {}
+ */
+export const f_autoBuildSkin = async (wadPath: string, heroId: string, skinId: string) => {
+  return executeFunction('autoBuildSkin', wadPath, heroId, skinId);
+};
+/**
+ * 工具环境状态（关键工具是否齐全、工具目录在哪）
+ * export const getToolsEnvState = () => {}
+ */
+export const f_getToolsEnvState = async () => {
+  return executeFunction('getToolsEnvState');
+};
+/**
  * export const getHeroChoseSkin = (heroId: string) => {
  */
 export const f_getHeroChoseSkin = async (heroId: string) => {
