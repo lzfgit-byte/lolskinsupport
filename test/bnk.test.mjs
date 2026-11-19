@@ -156,5 +156,40 @@ step('不是 bank 的数据要报错', () => {
   return 'BankError';
 });
 
+step('造语音 sidecar：复制 Action，换 bank id / language id', () => {
+  const data = makeBank(
+    145,
+    { 'Play_vo_VayneSkin11_Death3D': [77], 'Play_vo_VayneSkin11_Joke3D': [78] },
+    [77, 78]
+  );
+  const source = Bank.parse(data);
+  const aliasId = wwiseHash('Play_vo_Vayne_Death3D');
+  const { bank, count } = source.extractEvents(0x1234, 0x5678, [
+    [aliasId, wwiseHash('Play_vo_VayneSkin11_Death3D')],
+    // 源事件不存在：跳过
+    [wwiseHash('Play_vo_Vayne_Nope'), wwiseHash('Play_vo_VayneSkin11_Nope')],
+  ]);
+  assert.equal(count, 1);
+  const out = bank.write();
+  const rebuilt = Bank.parse(out);
+  assert.deepEqual(rebuilt.eventActions(aliasId), [77], 'Action id 沿用源 bank');
+  assert.equal(rebuilt.eventIds().length, 1, '只收进来的那个别名');
+  assert.equal(out.readUInt32LE(12), 0x1234, 'bank id');
+  assert.equal(out.readUInt32LE(16), 0x5678, 'language id');
+  return `${out.length} 字节`;
+});
+
+step('sidecar 里的 Action 对象真的被复制了', () => {
+  const data = makeBank(145, { 'Play_vo_VayneSkin11_Death3D': [77] }, [77]);
+  const { bank } = Bank.parse(data).extractEvents(1, 2, [
+    [wwiseHash('Play_vo_Vayne_Death3D'), wwiseHash('Play_vo_VayneSkin11_Death3D')],
+  ]);
+  // HIRC 对象数：1 个 Action + 1 个 Event
+  const written = bank.write();
+  const hircAt = written.indexOf('HIRC', 0, 'latin1');
+  assert.equal(written.readUInt32LE(hircAt + 8), 2);
+  return 'Action + Event';
+});
+
 console.log(failures === 0 ? '\nWwise bank 读写测试通过' : `\n${failures} 个环节失败`);
 process.exit(failures === 0 ? 0 : 1);

@@ -50,11 +50,13 @@ export interface BankAliasPlan {
   files: BankFilePlan[];
   /** 单位改名（`Vayne_Skin11_SFX` -> `Vayne_Base_SFX`） */
   renamedUnits: Array<{ from: string; to: string }>;
-  /** 补进 bank 的别名事件数 */
+  /** 补进 bank 的别名事件数（音效） */
   aliasedEvents: number;
+  /** 补进 sidecar 的语音别名数 */
+  voiceAliases: number;
   /** 列出了但 bank 里找不到的事件数（这些补不了别名，列出来会被删掉） */
   missingEvents: number;
-  /** 被换成 base 皮肤语音的单位 */
+  /** 语音别名进了 sidecar 的单位 */
   voiceUnits: string[];
   /** 打过补丁的 base 皮肤事件 bank */
   patchedBaseBanks: string[];
@@ -69,8 +71,79 @@ export interface BankAliasOptions {
   baseAudio: AudioBlocks;
   /** 按 WAD 路径读一个 bank，读不到返回 null */
   readBank: (bankPath: string) => Promise<Buffer | null>;
+  /**
+   * 同一份皮肤里多个角色（Vayne / jade_vayne 这种）会共用语音 bank，
+   * sidecar 要累计它们的别名，所以注册表由调用方持有、跨角色传递。
+   */
+  sidecars: SidecarRegistry;
   log?: (message: string) => void;
 }
+
+/** 一个语音 sidecar 攒下来的别名 */
+export interface SidecarState {
+  /** sidecar 路径（写进 bin 的那个） */
+  path: string;
+  /** 源语音事件 bank 的路径 */
+  sourcePath: string;
+  /** 源 bank（用来复制 Action） */
+  bank: Bank;
+  pairs: Array<[number, number]>;
+  aliasIds: Set<number>;
+}
+
+export type SidecarRegistry = Map<string, SidecarState>;
+
+export const createSidecarRegistry = (): SidecarRegistry => new Map();
+
+/** 往注册表里加一批 (别名 id, 源事件 id)，返回真正新加的几个 */
+export const addSidecarPairs = (
+  registry: SidecarRegistry,
+  sidecar: string,
+  sourcePath: string,
+  sourceBank: Bank,
+  pairs: Array<[number, number]>
+): number => {
+  const key = sidecar.toLowerCase();
+  let state = registry.get(key);
+  if (!state) {
+    state = { path: sidecar, sourcePath, bank: sourceBank, pairs: [], aliasIds: new Set() };
+    registry.set(key, state);
+  }
+  let added = 0;
+  for (const [aliasId, sourceId] of pairs) {
+    if (state.aliasIds.has(aliasId)) {
+      continue;
+    }
+    state.aliasIds.add(aliasId);
+    state.pairs.push([aliasId, sourceId]);
+    added++;
+  }
+  return added;
+};
+
+/** 把攒好的 sidecar 变成要写进包的文件（所有角色跑完之后调一次） */
+export const flushSidecars = (registry: SidecarRegistry): BankFilePlan[] => {
+  const files: BankFilePlan[] = [];
+  for (const state of registry.values()) {
+    const fileStem = (state.path.split('/').pop() ?? '').replace(/\.bnk$/i, '');
+    let built: { bank: Bank; count: number };
+    try {
+      built = state.bank.extractEvents(wwiseHash(fileStem), wwiseHash('SFX'), state.pairs);
+    } catch {
+      continue;
+    }
+    if (built.count === 0) {
+      continue;
+    }
+    files.push({
+      path: state.path.toLowerCase(),
+      reference: state.path,
+      data: built.bank.write(),
+      aliases: built.count,
+    });
+  }
+  return files;
+};
 
 const lowerName = (value: string): string => value.toLowerCase();
 const sameName = (left: string, right: string): boolean => lowerName(left) === lowerName(right);
@@ -117,6 +190,23 @@ export const tagStart = (name: string): number | null => {
 /** 路径里有没有语言目录（.../VO/en_US/...）：本地化 bank 每个语言一份 */
 export const isLocalizedPath = (path: string): boolean =>
   path.split('/').some((segment) => /^[A-Za-z]{2}_[A-Za-z]{2}$/.test(segment));
+
+/**
+ * 语音别名的 sidecar 路径：去掉语言目录、文件名加 `_basetag_events`
+ * （`.../VO/en_US/.../Aatrox_Skin01_VO_events.bnk` ->
+ * `.../VO/.../Aatrox_Skin01_VO_basetag_events.bnk`）。
+ *
+ * 语言 bank 每个语言一份、mod 装不全，所以别名不能写进它们；sidecar 放在
+ * 没有语言目录的路径上（随英雄 WAD 走），里面的 Action 沿用源 bank 的 id，
+ * 于是不管客户端加载哪个语言的 bank，声音都找得到。对应 Rose 的 `sidecar_path`。
+ */
+export const sidecarPath = (source: string): string => {
+  const segments = source.split('/').filter((segment) => !/^[A-Za-z]{2}_[A-Za-z]{2}$/.test(segment));
+  const name = segments.pop() ?? '';
+  const stem = name.replace(/_events\.bnk$/i, '').replace(/\.bnk$/i, '');
+  segments.push('');
+  return `${segments.join('/')}${stem}_basetag_events.bnk`;
+};
 
 /** 把事件名里的 tag 换成另一个 tag；tag 对不上就是 null */
 export const renameTag = (name: string, from: string, to: string): string | null => {
@@ -186,11 +276,6 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
     return null;
   }
   const baseUnits = parseBankUnits(options.baseAudio.bankUnits);
-  const baseVo = baseUnits.filter((unit) => unit.voiceOver);
-  if (baseVo.length === 0) {
-    log(`[base-skin] ${options.character}: base 皮肤没有 voiceOver 单位，音频退回整段替换`);
-    return null;
-  }
 
   const tags = quoted(blocks.tagEventList);
   const baseTags = quoted(options.baseAudio.tagEventList);
@@ -213,8 +298,9 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
     files: [],
     renamedUnits: [],
     aliasedEvents: 0,
+    voiceAliases: 0,
     missingEvents: 0,
-    voiceUnits: units.filter((unit) => unit.voiceOver).map((unit) => unit.name ?? ''),
+    voiceUnits: [],
     patchedBaseBanks: [],
     notes: [],
   };
@@ -261,12 +347,60 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
   };
 
   const aliasIds = new Map<number, string>();
-  const edits = new Map<number, { name?: string; events?: string[] } | null>();
+  const edits = new Map<number, { name?: string; events?: string[]; paths?: string[] } | null>();
 
   for (let index = 0; index < units.length; index++) {
     const unit = units[index];
     if (unit.voiceOver) {
-      edits.set(index, null);
+      const renamed = unit.name ? baseUnitName(unit.name) : null;
+      const eventsBank =
+        unit.paths.find((path) => isLocalizedPath(path) && /_events\.bnk$/i.test(path)) ?? null;
+      const source = eventsBank ? await load(eventsBank) : null;
+      if (!eventsBank || !source) {
+        // 语音 bank 在语言 WAD 里；读不到就没法补别名，整份退回「换成 base 语音」
+        log(
+          `[base-skin] ${options.character}: ${unit.name ?? '(无名单位)'} 的语音 bank 读不到（需要语言 WAD）`
+        );
+        return null;
+      }
+      const sidecar = sidecarPath(eventsBank);
+      const pairs: Array<[number, number]> = [];
+      const listed: string[] = [];
+      for (const event of unit.events) {
+        const at = tagStart(event);
+        const tag = at === null ? '' : event.slice(at).split('_')[0];
+        if (!droppedTags.some((dropped) => sameName(dropped, tag))) {
+          listed.push(event);
+          continue;
+        }
+        const alias = renameTag(event, tag, baseTag);
+        const sourceId = wwiseHash(event);
+        if (!alias || !source.bank.hasEvent(sourceId) || source.bank.eventActions(sourceId) === null) {
+          plan.missingEvents++;
+          plan.notes.push(`${event} 在语音 bank 里找不到，补不了别名`);
+          continue;
+        }
+        pairs.push([wwiseHash(alias), sourceId]);
+        listed.push(alias);
+      }
+      if (pairs.length > 0) {
+        plan.voiceAliases += addSidecarPairs(
+          options.sidecars,
+          sidecar,
+          eventsBank,
+          source.bank,
+          pairs
+        );
+        plan.voiceUnits.push(unit.name ?? '');
+        if (renamed && renamed !== unit.name && unit.name) {
+          plan.renamedUnits.push({ from: unit.name, to: renamed });
+        }
+      }
+      edits.set(index, {
+        ...(renamed && renamed !== unit.name ? { name: renamed } : {}),
+        events: Array.from(new Set(listed)),
+        paths: pairs.length > 0 ? [...unit.paths, sidecar] : unit.paths,
+      });
       continue;
     }
     const renamed = unit.name ? baseUnitName(unit.name) : null;
@@ -277,8 +411,18 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
     const eventsBank = bankPaths.find((path) => /_events\.bnk$/i.test(path)) ?? null;
     const target = eventsBank ? await load(eventsBank) : null;
     if (!eventsBank || !target) {
-      plan.notes.push(`${unit.name ?? '(无名单位)'} 的事件 bank 读不到，这个单位保持原样`);
-      edits.set(index, renamed && renamed !== unit.name ? { name: renamed } : {});
+      // 读不到事件 bank 就补不了别名：皮肤 tag 的事件只能不再列出来（列出来就是给 patcher 抓）
+      const kept = unit.events.filter((event) => {
+        const at = tagStart(event);
+        const tag = at === null ? '' : event.slice(at).split('_')[0];
+        return !droppedTags.some((dropped) => sameName(dropped, tag));
+      });
+      plan.missingEvents += unit.events.length - kept.length;
+      plan.notes.push(`${unit.name ?? '(无名单位)'} 的事件 bank 读不到，${unit.events.length - kept.length} 个事件只能不列出`);
+      edits.set(index, {
+        ...(renamed && renamed !== unit.name ? { name: renamed } : {}),
+        events: kept,
+      });
       continue;
     }
 
@@ -356,9 +500,9 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
     });
   }
 
-  const extraUnits = baseVo
-    .map((unit) => options.baseAudio.bankUnits.slice(unit.start, unit.end).replace(/\s+$/, ''))
-    .filter(Boolean);
+  // 语音 sidecar 在调用方 flush（同一份皮肤的几个角色共用一个 sidecar）
+
+  const extraUnits: string[] = [];
   plan.blocks = {
     tagEventList: options.baseAudio.tagEventList,
     bankUnits: rewriteBankUnits(
@@ -369,4 +513,27 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
     ),
   };
   return plan;
+};
+
+/**
+ * 语音单位的事件 bank 路径：这些在**语言 WAD** 里（`<英雄>.zh_CN.wad.client`），
+ * 英雄 WAD 里没有，读的时候要另外找。
+ */
+export const collectVoiceBankPaths = (pyText: string): string[] => {
+  const blocks = readAudioBlocks(pyText);
+  if (!blocks) {
+    return [];
+  }
+  const paths = new Set<string>();
+  for (const unit of parseBankUnits(blocks.bankUnits)) {
+    if (!unit.voiceOver) {
+      continue;
+    }
+    for (const path of unit.paths) {
+      if (/_events\.bnk$/i.test(path) && isLocalizedPath(path)) {
+        paths.add(path);
+      }
+    }
+  }
+  return Array.from(paths);
 };

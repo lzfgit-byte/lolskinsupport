@@ -165,6 +165,10 @@ export interface BankUnitBlock {
   /** 名字字符串（引号内）的位置 */
   nameSpan: Span | null;
   paths: string[];
+  /** `bankPath: list[string] = {` 之后到配对的 `}` 之前 */
+  pathsInner: Span | null;
+  /** `bankPath:` 这一行的缩进 */
+  pathsIndent: string;
   events: string[];
   /** `events: list[string] = {` 之后到配对的 `}` 之前 */
   eventsInner: Span | null;
@@ -220,6 +224,8 @@ export const parseBankUnits = (block: string): BankUnitBlock[] => {
       name: nameMatch ? nameMatch[1] : null,
       nameSpan,
       paths: paths ? paths.values : [],
+      pathsInner: paths ? { start: start + paths.inner.start, end: start + paths.inner.end } : null,
+      pathsIndent: `${indent}    `,
       events: events ? events.values : [],
       eventsInner: events
         ? { start: start + events.inner.start, end: start + events.inner.end }
@@ -236,22 +242,31 @@ export const parseBankUnits = (block: string): BankUnitBlock[] => {
 const spliceSpan = (text: string, span: Span, replacement: string): string =>
   text.slice(0, span.start) + replacement + text.slice(span.end);
 
-/** 按改动渲染一个 BankUnit 的文本；events 给了就整段换掉 */
+/** 按改动渲染一个 BankUnit 的文本；events / paths 给了就整段换掉 */
 export const renderBankUnit = (
   block: string,
   unit: BankUnitBlock,
-  edit: { name?: string; events?: string[] }
+  edit: { name?: string; events?: string[]; paths?: string[] }
 ): string => {
   let text = block.slice(unit.start, unit.end);
   const relative = (span: Span): Span => ({ start: span.start - unit.start, end: span.end - unit.start });
 
-  // 先改后面的（events），再改前面的（name）：前面一改，后面的偏移就变了
+  // 从后往前改：前面一改，后面的偏移就变了
   if (edit.events !== undefined && unit.eventsInner) {
     const fieldIndent = unit.eventsIndent;
     const lines = edit.events.map((event) => `\n${fieldIndent}    "${event}"`).join('');
     text = spliceSpan(
       text,
       relative(unit.eventsInner),
+      lines ? `${lines}\n${fieldIndent}` : `\n${fieldIndent}`
+    );
+  }
+  if (edit.paths !== undefined && unit.pathsInner) {
+    const fieldIndent = unit.pathsIndent;
+    const lines = edit.paths.map((bankPath) => `\n${fieldIndent}    "${bankPath}"`).join('');
+    text = spliceSpan(
+      text,
+      relative(unit.pathsInner),
       lines ? `${lines}\n${fieldIndent}` : `\n${fieldIndent}`
     );
   }
@@ -272,7 +287,7 @@ export const renderBankUnit = (
 export const rewriteBankUnits = (
   block: string,
   units: BankUnitBlock[],
-  edits: Array<{ name?: string; events?: string[] } | null>,
+  edits: Array<{ name?: string; events?: string[]; paths?: string[] } | null>,
   extraUnits: string[] = []
 ): string => {
   const parts: string[] = [];

@@ -10,7 +10,13 @@ import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
 import { wadPathHash } from '../utils/wad-hash';
 import { extractWadByHash, extractWadSkinBins } from './extract-wad-chunks';
 import { readAudioBlocks, type AudioBlocks } from './skin-audio';
-import { collectBankPaths, planBankAliases } from './skin-banks';
+import {
+  collectBankPaths,
+  collectVoiceBankPaths,
+  createSidecarRegistry,
+  flushSidecars,
+  planBankAliases,
+} from './skin-banks';
 import { findCaseInsensitive, readSkinMeshRefs, rebaseSkinPy } from './skin-rebase';
 
 // 模拟 __dirname
@@ -186,7 +192,8 @@ const extractWadAssets = async (
   wadPath: string,
   refs: string[],
   extractRoot?: string,
-  label = '资源'
+  label = '资源',
+  quiet = false
 ): Promise<Map<string, Buffer>> => {
   const assets = new Map<string, Buffer>();
   const wanted: string[] = [];
@@ -220,15 +227,71 @@ const extractWadAssets = async (
       error?: string;
     }>) {
       if (item.error || !item.filePath || !item.outputPath || !fs.existsSync(item.outputPath)) {
-        logData(` [base-skin] 取${label}失败 ${item.filePath ?? ''}: ${item.error ?? '没有输出'}`);
+        if (!quiet) {
+          logData(` [base-skin] 取${label}失败 ${item.filePath ?? ''}: ${item.error ?? '没有输出'}`);
+        }
         continue;
       }
       assets.set(item.filePath.replace(/\\/g, '/').toLowerCase(), fs.readFileSync(item.outputPath));
     }
   } catch (error) {
-    logData(` [base-skin] 从游戏 WAD 取${label}出错:`, error?.message ?? error);
+    if (!quiet) {
+      logData(` [base-skin] 从游戏 WAD 取${label}出错:`, error?.message ?? error);
+    }
   } finally {
     fs.rmSync(outputDir, { recursive: true, force: true });
+  }
+  return assets;
+};
+
+/**
+ * 从英雄 WAD 旁边的语言 WAD（`<英雄>.zh_CN.wad.client` 之类）里取文件。
+ *
+ * 语音 bank 只在语言 WAD 里；各个语言的事件/Action 是一样的，所以找到一份就够。
+ */
+const extractWadAssetsFromLocales = async (
+  wadPath: string,
+  refs: string[],
+  label = '语音 bank'
+): Promise<Map<string, Buffer>> => {
+  const assets = new Map<string, Buffer>();
+  if (refs.length === 0) {
+    return assets;
+  }
+  const directory = path.dirname(wadPath);
+  const stem = path.basename(wadPath).replace(/\.wad\.client$/i, '');
+  let candidates: string[] = [];
+  try {
+    candidates = fs
+      .readdirSync(directory)
+      .filter((name) =>
+        new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.[A-Za-z]{2}_[A-Za-z]{2}\\.wad\\.client$`, 'i').test(
+          name
+        )
+      )
+      .sort((left, right) => {
+        // 中文客户端优先：文件一定在，读起来最省事
+        const leftZh = /zh_CN/i.test(left) ? 0 : 1;
+        const rightZh = /zh_CN/i.test(right) ? 0 : 1;
+        return leftZh - rightZh || left.localeCompare(right);
+      })
+      .map((name) => path.join(directory, name));
+  } catch {
+    candidates = [];
+  }
+  let pending = refs.slice();
+  for (const candidate of candidates) {
+    if (pending.length === 0) {
+      break;
+    }
+    const found = await extractWadAssets(candidate, pending, undefined, label, true);
+    for (const [key, value] of found) {
+      assets.set(key, value);
+    }
+    pending = pending.filter((ref) => !assets.has(ref.replace(/\\/g, '/').toLowerCase()));
+  }
+  if (pending.length > 0) {
+    logData(` [base-skin] 语言 WAD 里还差 ${pending.length} 个${label}：${pending.join(', ')}`);
   }
   return assets;
 };
@@ -407,6 +470,8 @@ export const loadSkinDataByFile = async (
     if (!fs.existsSync(sourceBinPath)) {
       break;
     }
+    // 一份皮肤里几个角色（vayne / jade_vayne）共用语音 bank，sidecar 要累计它们
+    const sidecarRegistry = createSidecarRegistry();
     for (const heroNameInLine of heroes) {
       const skinsDir = path.join(charactersDir, heroNameInLine, 'skins');
       let binFileName = `skin${skinId}.bin`;
@@ -463,11 +528,17 @@ export const loadSkinDataByFile = async (
         if (baseSkin.audio) {
           const pyText = fs.readFileSync(pyPath, 'utf-8');
           const bankRefs = collectBankPaths(pyText, baseSkin.audio);
+          const voiceRefs = collectVoiceBankPaths(pyText);
           const bankBytes = await extractWadAssets(fullWadPath, bankRefs, currentExtraPath, 'bank');
+          const voiceBytes = await extractWadAssetsFromLocales(fullWadPath, voiceRefs);
+          for (const [key, value] of voiceBytes) {
+            bankBytes.set(key, value);
+          }
           const plan = await planBankAliases({
             pyText,
             character: heroNameInLine,
             baseAudio: baseSkin.audio,
+            sidecars: sidecarRegistry,
             readBank: async (bankPath) =>
               bankBytes.get(bankPath.replace(/\\/g, '/').toLowerCase()) ?? null,
             log: logData,
@@ -481,16 +552,16 @@ export const loadSkinDataByFile = async (
             }
             logData(
               ` [base-skin] ${heroNameInLine}: 音效别名 ${plan.aliasedEvents} 个` +
-                `${plan.missingEvents > 0 ? `（${plan.missingEvents} 个事件在 bank 里找不到）` : ''}` +
+                `，语音别名 ${plan.voiceAliases} 个（${plan.voiceUnits.join(', ') || '无'}）` +
+                `${plan.missingEvents > 0 ? `，${plan.missingEvents} 个事件在 bank 里找不到` : ''}` +
                 `，单位 ${plan.renamedUnits.map((unit) => `${unit.from}->${unit.to}`).join(', ') || '不改名'}` +
-                `，随包 bank ${plan.files.length} 个` +
-                `${plan.voiceUnits.length > 0 ? `，语音走 base（${plan.voiceUnits.join(', ')}）` : ''}`
+                `，随包 bank ${plan.files.length} 个`
             );
             for (const note of plan.notes.slice(0, 5)) {
               logData(` [base-skin] ${heroNameInLine}: ${note}`);
             }
           } else {
-            logData(` [base-skin] ${heroNameInLine}: 补不了音效别名，音频整段换成 base 皮肤的`);
+            logData(` [base-skin] ${heroNameInLine}: 补不了音效/语音别名，音频整段换成 base 皮肤的`);
           }
         }
 
@@ -518,6 +589,20 @@ export const loadSkinDataByFile = async (
       await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), true, pyPath);
       logData(` [封包完成 ritobin] ${pyPath}`);
       deleteFile(pyPath);
+    }
+    // 所有角色的语音别名攒在 registry 里，最后统一写成 sidecar bank
+    const sidecarFiles = flushSidecars(sidecarRegistry);
+    if (sidecarFiles.length > 0) {
+      const sidecarDir = path.join(OUTPUT_BASE_DIR, heroName, `skin${skinId}`);
+      for (const file of sidecarFiles) {
+        const target = path.join(sidecarDir, file.path);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, file.data);
+      }
+      logData(
+        ` [base-skin] 语音 sidecar ${sidecarFiles.length} 个: ` +
+          sidecarFiles.map((file) => `${file.path}(${file.aliases})`).join(', ')
+      );
     }
     if (flag) {
       break;

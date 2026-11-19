@@ -57,6 +57,10 @@
   补 base 名字的别名 Event，并删掉 base 事件 bank 里同 id 的 Event；bank 读写是
   `electron/export/bnk.ts`（照 Rose 的 `bnk.py`，没改过的 bank 必须逐字节写回）。
   bank 不搬到 base 路径（省体积），所以包里只多两个十几 KB 的事件 bank。
+- 语音别名：语音 bank 在**语言 WAD**（`<英雄>.zh_CN.wad.client`）里，不能改，所以建一个
+  语言无关的 sidecar bank（`..._basetag_events.bnk`，`flushSidecars` 统一产出），
+  里面复制源事件的 Action、放 base 名字的别名；同一份皮肤的几个角色共用一个 sidecar
+  （`createSidecarRegistry` 由调用方持有）。
 - 改源文件**不要**用 PowerShell 的 `Get-Content`/`Set-Content` 改写（会把 UTF-8 读成 ANSI，
   整篇变乱码、中文串破坏语法）；用编辑工具或 `write`。
 - 改完重建包后，可以先用 `%TEMP%\harness\check-ltk.mjs`（离线复刻检查规则）验证，再去游戏里试；

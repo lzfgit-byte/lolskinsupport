@@ -307,4 +307,78 @@ export class Bank {
     this.index = null;
     return removed;
   }
+
+  /**
+   * 造一个新的「只有事件」的 bank：对每个 (别名 id, 源事件 id) 对，把源事件的
+   * Action 对象**复制**进来（Event 不能指向别的 bank 里的 Action：客户端的 bank
+   * 是各自加载的，另一个 bank 晚加载时那些 Action 就不在了），再放一个别名的
+   * Event。头部的 bank id / language id 换成传进来的，其余字段照抄源 bank。
+   *
+   * 对应 Rose 的 `bnk.py` 的 `Bank.extract_events`（语音 bank 是语言相关的，
+   * mod 装不全所有语言，所以别名放进一个语言无关的 sidecar bank）。
+   */
+  extractEvents(
+    bankId: number,
+    languageId: number,
+    pairs: Array<[number, number]>
+  ): { bank: Bank; count: number } {
+    let header: Buffer | null = null;
+    for (const chunk of this.chunks) {
+      if (chunk.kind === 'raw' && chunk.tag === 'BKHD') {
+        header = chunk.body;
+        break;
+      }
+    }
+    if (header === null) {
+      throw new BankError('bank has no BKHD chunk');
+    }
+    if (header.length < 12) {
+      throw new BankError('BKHD chunk is too short');
+    }
+    const ids = Buffer.alloc(8);
+    ids.writeUInt32LE(bankId, 0);
+    ids.writeUInt32LE(languageId, 4);
+    const newHeader = Buffer.concat([header.subarray(0, 4), ids, header.subarray(12)]);
+
+    const actionsById = new Map<number, HircObject>();
+    for (const object of this.objects()) {
+      if (object.kind === HIRC_ACTION && !actionsById.has(object.id)) {
+        actionsById.set(object.id, object);
+      }
+    }
+
+    const actionsOut: HircObject[] = [];
+    const eventsOut: HircObject[] = [];
+    for (const [aliasId, sourceId] of pairs) {
+      if (eventsOut.some((event) => event.id === aliasId)) {
+        continue;
+      }
+      const actions = this.eventActions(sourceId);
+      if (actions === null) {
+        continue;
+      }
+      const objects = actions.map((action) => actionsById.get(action));
+      if (objects.some((object) => object === undefined)) {
+        continue;
+      }
+      for (const object of objects as HircObject[]) {
+        if (!actionsOut.some((existing) => existing.id === object.id)) {
+          actionsOut.push({ kind: object.kind, id: object.id, body: object.body });
+        }
+      }
+      eventsOut.push({
+        kind: HIRC_EVENT,
+        id: aliasId,
+        body: encodeActions(actions, this.version),
+      });
+    }
+    const count = eventsOut.length;
+    return {
+      bank: new Bank(this.version, [
+        { kind: 'raw', tag: 'BKHD', body: newHeader },
+        { kind: 'hirc', objects: [...actionsOut, ...eventsOut] },
+      ]),
+      count,
+    };
+  }
 }

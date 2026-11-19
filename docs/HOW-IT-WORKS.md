@@ -352,12 +352,18 @@ bank 不搬家：音频 bank 留在游戏原来的路径上（游戏本来就有
 事件 bank（皮肤的自己一份 + base 的改过一份）。Rose 是把 bank 整个搬到 base 路径
 （包大 1 MB 级），我们这样省体积。
 
-语音（voiceOver）：本地化 bank 每个语言一份、mod 装不全，所以换成游戏 base 皮肤的
-VO 单位，语音走 base 的（同一个人配音，差别很小）。
+语音（voiceOver）：语音 bank 是**语言相关**的（放在 `<英雄>.zh_CN.wad.client` 这类语言
+WAD 里，路径里带 `VO/en_US/`），mod 不可能把所有语言都装进来，所以不能改它。做法是
+建一个**语言无关的 sidecar bank**（`..._VO_basetag_events.bnk`，路径里去掉语言目录，
+随英雄 WAD 走），里面放语音事件的 base 名字别名，并把源事件的 **Action 对象复制进去**
+（Event 不能指向别的 bank 的 Action，bank 是各自加载的）。Action 沿用源 bank 的 id，
+所以客户端加载哪个语言的语音 bank，声音都找得到；bin 里语音单位的 `bankPath` 追加这个
+sidecar 路径。同一份皮肤的几个角色（Vayne / jade_vayne）共用一个 sidecar，别名累计。
 
 音效核对方式：`%TEMP%\harness\check-ltk.mjs`（离线复刻 patcher 的检查）、
 `check-audio.mjs`（单位列的事件都能被包里的 bank 解析）、`check-alias-actions.mjs`
-（别名指向的 Action 与游戏原始 bank 一致）。
+（别名指向的 Action 与游戏原始 bank 一致）、`check-voice.mjs`（语音 sidecar 的别名
+与语言 WAD 里原始事件一致）。
 
 还没做的另一步：把 48 个内嵌 VFX 条目精简掉（Rose 输出只留 `Skin0` + `Resources` 两个条目），
 不影响 LTK 的检查。
