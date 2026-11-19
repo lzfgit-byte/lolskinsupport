@@ -26,7 +26,7 @@
     "app:build": "npm version patch && vite build && electron-builder",
     "app:prebuild": "vite build && node script/build.js && electron-builder",
     "app:elbuild": "electron-builder",
-    "index:gen": "node script/gen-skinbins-index.mjs",
+    "index:gen": "node script/gen-skinbins-index.mjs - D:\\projects\\hash-game\\hashes\\lol\\hashes.game.txt",
     "app:preview": "vite preview",
     "data:gen": "node script/gen-lol-data.mjs --force",
     "ltf:build": "node script/build-ltf.mjs",

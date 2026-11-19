@@ -10,7 +10,7 @@
  *   1. WAD 目录里只有路径哈希，所以「哪些路径在这个 WAD 里」= 路径哈希命中；
  *   2. 候选路径来自工具目录里随包的 `skinbins-index.txt`：从游戏的
  *      `hashes.game.txt`（219 MB）筛出所有 `data/characters/<角色>/skins/skin<n>.bin`
- *      （路径 + 哈希，21446 条 / 1.25 MB）。这份索引进安装包，所以既不用带 219 MB
+ *      （路径 + 哈希，22662 条 / 1.32 MB）。这份索引进安装包，所以既不用带 219 MB
  *      的名字表，也不用每次解析 2.5 s；
  *   3. 用 WAD 的 chunk 哈希表（只读前 100 KB）过一遍，剩下的就是这个 WAD
  *      真正包含的皮肤 bin。
@@ -50,7 +50,7 @@ const cacheFile = (name: string): string => path.join(getCacheDir(), name);
 /**
  * 读皮肤 bin 索引（`<16 位路径哈希> <相对路径>` 每行一条）。
  *
- * 索引是随包的现成文件（21446 条 / 1.25 MB），这里只是按文件大小 + 修改时间缓存一份
+ * 索引是随包的现成文件（22662 条 / 1.32 MB），这里只是按文件大小 + 修改时间缓存一份
  * 解析结果；万一传进来的是完整的 `hashes.game.txt`，也照样能筛（只是慢一点）。
  */
 export const buildSkinBinIndex = (

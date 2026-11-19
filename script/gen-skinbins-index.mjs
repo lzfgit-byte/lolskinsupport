@@ -3,7 +3,7 @@
  * 重新生成 `native/tools/skinbins-index.txt`（游戏更新后要重跑这个）。
  *
  * 这个索引是「所有 `data/characters/<角色>/skins/skin<n>.bin` 的路径 + WAD 路径哈希」，
- * 从游戏的 `hashes.game.txt`（219 MB 的文本）里筛出来，21446 条 / 1.25 MB。
+ * 从游戏的 `hashes.game.txt`（219 MB 的文本）里筛出来，22662 条 / 1.32 MB。
  * 随包带上它之后：安装包不用带 219 MB 的名字表，构建皮肤时也不用每次解析 2.5 s
  * （见 electron/export/wad-index.ts）。
  *
@@ -36,7 +36,10 @@ const SKIN_BIN_PATTERN = /^data\/characters\/[^/]+\/skins\/skin\d+\.bin$/;
 const MAX_EXAMPLES = 5;
 
 const userData = path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'lol-skin-ll');
-const arg = process.argv[2];
+// `node script/... -- <路径>` 和 `npm run index:gen -- <路径>` 都会把 `--` 传进来，
+// 这里直接忽略它（以及其它以 - 开头的开关）
+const cliArgs = process.argv.slice(2).filter((item) => item !== '--' && !item.startsWith('-'));
+const arg = cliArgs[0];
 
 /** 参数是目录时，在里面找 hashes.game.txt（最多下探 5 层） */
 const findInDir = (dir) => {

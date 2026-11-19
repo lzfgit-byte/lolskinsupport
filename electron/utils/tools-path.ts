@@ -8,7 +8,7 @@
  * 工具目录里有两样「别人以为很大」的东西，我们都不带：
  *
  *   - `hashes.game.txt`（219 MB）：只用它筛「皮肤 bin 的路径 + 哈希」，结果存成
- *     `skinbins-index.txt`（21446 条 / 1.25 MB）随包带走，见 `electron/export/wad-index.ts`；
+ *     `skinbins-index.txt`（22662 条 / 1.32 MB）随包带走，见 `electron/export/wad-index.ts`；
  *   - `ltk-manager.exe`（95 MB）：注入用的是系统安装的 LTK Manager，
  *     找不到才提示安装（见 `electron/export/ltfSession.ts` 的 `resolveLtkManager()`）。
  *
@@ -30,7 +30,16 @@ export const bundledToolsDir = (): string => {
     return path.join(process.cwd(), 'native', TOOLS_DIR_NAME);
   }
   const resources = process.resourcesPath || path.join(process.cwd(), 'resources');
-  return path.join(resources, TOOLS_DIR_NAME);
+  const packaged = path.join(resources, TOOLS_DIR_NAME);
+  // 既不是 electron dev、也没有 resourcesPath（测试 harness / 构建脚本）：
+  // 退到仓库里的 native/tools，别让这些场景去找 <cwd>/resources
+  if (!process.resourcesPath && !fs.existsSync(packaged)) {
+    const repo = path.join(process.cwd(), 'native', TOOLS_DIR_NAME);
+    if (fs.existsSync(repo)) {
+      return repo;
+    }
+  }
+  return packaged;
 };
 
 /** 旧版「初始化配置环境」解压的位置（只用来识别老配置，不再往里写东西） */
@@ -62,7 +71,7 @@ export const REQUIRED_TOOL_FILES = [
   'wad-make.exe',
   'wad-extract.exe',
   'skinbins-index.txt',
-  path.join('ritobin', 'bin', 'ritobin_cli.exe'),
+  path.join('ritobin', 'bin', 'ritobin-tools.exe'),
 ];
 
 export const missingToolFiles = (toolsDir: string = resolveToolsDir()): string[] =>

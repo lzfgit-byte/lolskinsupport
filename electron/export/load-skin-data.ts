@@ -10,7 +10,7 @@ import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
 import { wadPathHash } from '../utils/wad-hash';
 import { extractWadByHash, extractWadFiles, extractWadSkinBins } from './extract-wad-chunks';
 import { readAudioBlocks, type AudioBlocks } from './skin-audio';
-import { convertBinsToPy } from './ritobin';
+import { binsToPyCall, convertBinsToPy, pyToBinsCall, ritobinToolPath } from './ritobin';
 import { resolveSkinBinIndexPath } from '../utils/tools-path';
 import { discoverWadSkinBins } from './wad-index';
 import {
@@ -180,7 +180,8 @@ const readBaseSkinData = async (
     if (prefetchedPy && fs.existsSync(prefetchedPy)) {
       basePy = prefetchedPy;
     } else if (fs.existsSync(baseBinPath)) {
-      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), false, baseBinPath);
+      const call = binsToPyCall(baseBinPath);
+      await runCommand(call.command, false, ...call.args);
       basePy = baseBinPath.replace(/\.bin$/, '.py');
     }
     if (!basePy || !fs.existsSync(basePy)) {
@@ -570,7 +571,7 @@ export const loadSkinDataByFile = async (
     }
 
     // 一次批量把「本皮肤 + base 皮肤」的 bin 转成 py：
-    // ritobin 每次启动都要读 219 MB 名字表，逐次转 4 次要 12 s，批量一次只要几十毫秒
+    // 一个皮肤里几个角色加起来 4~8 个 bin，逐个起进程要 8 × 150 ms，批量一次就够
     const ritobinWork = path.join(OUTPUT_BASE_DIR, heroName, '_ritobin', `skin${skinId}`);
     fs.rmSync(ritobinWork, { recursive: true, force: true });
     const skinPyOf = new Map<string, string>();
@@ -595,7 +596,7 @@ export const loadSkinDataByFile = async (
       }
     }
     const ritobinRunner = (args: string[]) =>
-      runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), false, ...args);
+      runCommand(ritobinToolPath(), false, ...args);
     if (skinPyOf.size > 0) {
       const converted = await convertBinsToPy(ritobinRunner, ritobinWork, logData);
       logData(
@@ -721,7 +722,8 @@ export const loadSkinDataByFile = async (
       } else {
         logData(` [base-skin] 跳过 ${heroNameInLine}：没有读到 base 皮肤名`);
       }
-      await runCommand(Path.join(MOD_TOOLS_PATH, 'ritobin', 'bin', 'ritobin_cli'), true, pyPath);
+      const packCall = pyToBinsCall(pyPath);
+      await runCommand(packCall.command, true, ...packCall.args);
       logData(` [封包完成 ritobin] ${pyPath}`);
       deleteFile(pyPath);
       onProgress?.(

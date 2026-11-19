@@ -39,22 +39,24 @@
 
 > 整包里的 `classic/` 条目（经典模式皮肤）会被自动跳过——本程序目前只支持常规模式。
 
-### 只有「自己生成皮肤」才需要：cslol-tools
+### 只有「自己生成皮肤」才需要：随包工具
 
-程序本身不打包这套工具，也不带自动下载。要用「（多个）全部皮肤文件 /（一个）当前皮肤文件」
-从游戏 WAD 里生成皮肤时，准备一个工具目录，里面至少要有：
+从 4.0.78 起工具随安装包走（`<安装目录>\resources\tools`，仓库里是 `native/tools`），
+**不需要手动准备、也不需要在界面里点「初始化」**。要用「（多个）全部皮肤文件 /
+（一个）当前皮肤文件」从游戏 WAD 里生成皮肤时，里面至少要有：
 
 ```
-mod-tools\
+resources\tools\
 ├── mod-tools.exe
 ├── wad-make.exe
 ├── wad-extract.exe
-├── hashes.game.txt
-└── ritobin\bin\ritobin_cli.exe
+├── skinbins-index.txt
+└── ritobin\bin\ritobin-tools.exe
 ```
 
-来源：<https://github.com/LeagueToolkit/cslol-manager>（cslol-manager 的 cslol-tools 目录）。
-在「设置 → toolsPath」里选中 `mod-tools.exe` 保存即可（默认位置 `%LOCALAPPDATA%\lol-skin-ll\mod-tools\mod-tools.exe`）。
+`ritobin-tools` 是 [LeagueToolkit/ritobin-tools](https://github.com/LeagueToolkit/ritobin-tools)
+的官方发行版（0.2.3）。工具目录不完整时程序会直接说缺哪个文件，重装本程序即可。
+「设置 → toolsPath」只在你想换成自己的 cslol-tools 目录时才需要改。
 
 ### 首次启动建议配置
 

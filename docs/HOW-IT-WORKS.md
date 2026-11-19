@@ -332,19 +332,19 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
 ```
 
 工具目录（`MOD_TOOLS_PATH` 的父目录）需要 `wad-make.exe`、`wad-extract.exe`、
-`ritobin\bin\ritobin_cli.exe`、`skinbins-index.txt`（皮肤 bin 索引）。
+`ritobin\bin\ritobin-tools.exe`、`skinbins-index.txt`（皮肤 bin 索引）。
 **注入本身完全不需要它。**
 
 ### 6.0 工具环境：工具随安装包走（`resources\tools`）
 
-工具就是仓库里的 `native/tools`（15 个文件 / 8.1 MB），打包时由 electron-builder 的
+工具就是仓库里的 `native/tools`（15 个文件 / 19.2 MB），打包时由 electron-builder 的
 `extraResources` 原样拷到 `<安装目录>\resources\tools`：
 
 ```
 native/tools/                ← 直接进 git，不是构建产物
   ├─ wad-make.exe / wad-extract.exe / mod-tools.exe / cslol-* / ltk_patcher_*
-  ├─ ritobin\bin\ritobin_cli.exe + hashes\{binfields,bintypes}.txt
-  └─ skinbins-index.txt      ← 21446 条「皮肤 bin 路径 + WAD 路径哈希」，1.25 MB
+  ├─ ritobin\bin\ritobin-tools.exe + hashes\{binfields,bintypes}.txt
+  └─ skinbins-index.txt      ← 22662 条「皮肤 bin 路径 + WAD 路径哈希」，1.32 MB
 ```
 
 两个大文件**故意不带**：
@@ -361,7 +361,7 @@ native/tools/                ← 直接进 git，不是构建产物
 - 只会改「空的 / 旧的 `%LOCALAPPDATA%\lol-skin-ll\tools\mod-tools.exe`」这类我们自己的路径；
   用户自己填的、文件还在的 cslol-tools 目录不动。
 - **用户数据位置没变**：`config.json`、`skins\`、`overlays\` 仍然在 `%LOCALAPPDATA%\lol-skin-ll`。
-- `getToolsEnvStatus()` 用 mod-tools / wad-make / wad-extract / ritobin_cli / skinbins-index.txt
+- `getToolsEnvStatus()` 用 mod-tools / wad-make / wad-extract / ritobin-tools / skinbins-index.txt
   这 5 个文件判断工具目录是否完整。
 
 > 打包：`electron-builder.json5` 的 `extraResources` 把 `native/tools` 拷到 `resources/tools`
@@ -378,7 +378,7 @@ native/tools/                ← 直接进 git，不是构建产物
 1. 拿到新的 `hashes.game.txt`：cslol-manager 的 cslol-tools 包，或者旧工具目录里那份被更新后；
 2. `npm run index:gen -- <hashes.game.txt 或它所在目录>`
    （不给参数时会在 `%LOCALAPPDATA%\lol-skin-ll\tools` 和仓库 `.tmp` 里找）；
-   输出形如 `21446 条 / 1.25 MB`，还会列出「相比上一版：新增 N 条，删除 M 条」；
+   输出形如 `22662 条 / 1.32 MB`，还会列出「相比上一版：新增 N 条，删除 M 条」；
 3. `npm run wadindex:test`，再随便构建一个皮肤确认；
 4. 重新打包（`npm run app:build`）。
 
@@ -397,14 +397,14 @@ native/tools/                ← 直接进 git，不是构建产物
 | 步骤 | 原来 | 现在 | 原因 |
 | --- | --- | --- | --- |
 | 解包英雄 WAD | 5.6 s | 0.05 s | `wad-extract.exe` 把 144 MB 全解开（503 MB 落盘）再删，其实只要 4 个 bin |
-| ritobin 转 bin→py | 4 × 3.1 s | 0.05 s | 每次启动都读 `ritobin\bin\hashes\hashes.game.txt`（219 MB）建名字表；现在只带 `binfields`/`bintypes` 两张精简表，再加 `-d` 指定字段名 |
+| ritobin 转 bin→py | 4 × 3.1 s | 0.07 s | 老 `ritobin_cli` 每次启动都读 `hashes\hashes.game.txt`（219 MB）建名字表，还转不了 16.21 之后的 bin；换成 `ritobin-tools` 0.2.3 后按需读表，12 个 bin 一次 69 ms |
 | ritobin 转 py→bin | 2 × 0.02 s | 0.02 s | 反向不需要名字表 |
 | 网格/bank/语音/打包 | ~0.15 s | ~0.15 s | 本来就不慢 |
 
 **定向解包**（`electron/export/wad-index.ts`）：WAD 目录里只有路径哈希，所以
 
 1. 候选路径来自随包的 `skinbins-index.txt`：所有 `data/characters/<角色>/skins/skin<n>.bin`
-   连同 WAD 路径哈希（21446 条 / 1.25 MB，是从 219 MB 的 `hashes.game.txt` 里筛出来的，
+   连同 WAD 路径哈希（22662 条 / 1.32 MB，是从 219 MB 的 `hashes.game.txt` 里筛出来的，
    用 `npm run index:gen` 重生成）—— 读一次几十毫秒，不再每次解析名字表；
 2. 读 WAD 的 chunk 表（只读前 100 KB，`readWadChunkHashes`），命中索引里哪些哈希 =
    这个 WAD 里有哪些皮肤 bin；
@@ -413,12 +413,23 @@ native/tools/                ← 直接进 git，不是构建产物
 不做「按英雄名猜角色目录」的过滤：安妮的 WAD 里还有 `annietibbers`、`jade_annie_tibbers`，
 名字里不含完整英雄名，猜会漏条目。查不到任何 bin 时退回全量解包，行为与以前一致。
 
-**ritobin 批量 + 精简名字表**（`electron/export/ritobin.ts`）：`-r` 一次转完目录，
-名字表只加载一次；再让 `-d` 指向只含 15 个「我们改写要用到的字段名」的小表
-（`hashes.binfields/bintypes/binentries.txt` 各写一份，ritobin 只认这几个固定文件名），
-连 219 MB 都不读。没列进小表的名字保持 `0x...` 哈希形式 —— bin 里本来就是哈希，
-转回 bin 后字节完全一致（已用真实 bin 逐字节验证）。哪天游戏改了字段名、锚点解不出来，
-`convertBinsToPy` 会删掉这批 py 并用默认名字表重转，保证正确性优先。
+**ritobin-tools 批量 + 精简名字表**（`electron/export/ritobin.ts`）：换成 LeagueToolkit 的
+`ritobin-tools` 0.2.3 之后，调用方式也变了：
+
+```
+bin→py：ritobin-tools -H <精简表> --hashtable-dir <空目录> convert <目录> -r --ext py
+py→bin：ritobin-tools convert <目录> -r --to bin
+```
+
+- `-H` 指向临时目录里的精简表（只含 15 个「我们改写要用到的字段名」，三个固定文件名
+  `hashes.binfields/bintypes/binentries.txt` 各写一份）。没列进去的名字照旧是 `0x...`
+  哈希 —— bin 里本来就是哈希，转回 bin 后字节完全一致（Jade_Vayne Skin11 234728 B、
+  Ahri skin0/skin100 都验证过逐字节相同，新旧工具对同一份文本产出的 bin 也一模一样）。
+- `--hashtable-dir` 指向一个空目录：新工具默认读 LTK 共享缓存
+  （`%LOCALAPPDATA%\LeagueToolkit\hashes`，约 58 MB）。装了 LTK Manager 的机器会解出
+  所有名字、没装的全是哈希，同一份 bin 转出来的文本就不一样。指到空目录后行为统一。
+- 游戏改了字段名、锚点解不出来时，`convertBinsToPy` 会删掉这批 py，改用随包那份完整表
+  （`ritobin\bin\hashes`）重转一次，保证正确性优先。
 
 缓存都在系统临时目录 `%TEMP%\lol-skin-cache\`（纯派生物，不碰用户数据）：
 皮肤 bin 索引、每个 WAD 的探测结果。实测 Vayne Skin11：冷启动 1.3 s、之后 0.46 s。

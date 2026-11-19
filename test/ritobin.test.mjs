@@ -1,6 +1,6 @@
 /**
- * ritobin 批量转换的测试（不依赖游戏文件）：哈希算法、精简名字表目录、
- * 「锚点没解出来就退回默认名字表」的分支。
+ * ritobin-tools 批量转换的测试（不依赖游戏文件）：哈希算法、精简名字表目录、
+ * 「锚点没解出来就退回随包完整表」的分支、新旧命令行参数的拼法。
  *
  * 运行：node test/ritobin.test.mjs
  */
@@ -20,6 +20,7 @@ const {
   RITOBIIN_NAMES,
   ritobinHash,
   ensureRitobinHashDir,
+  ritobinHashTablesDir,
   convertBinsToPy,
   convertPyToBins,
 } = await import(`file:///${BUNDLE.replace(/\\/g, '/')}`);
@@ -69,28 +70,34 @@ const makeWork = () => {
   return workDir;
 };
 
-await check('精简名字表能解出锚点：只调一次，不退回默认', async () => {
+await check('精简名字表能解出锚点：只调一次，不退回完整表', async () => {
   const dir = makeWork();
   const calls = [];
   const run = async (args) => {
     calls.push(args);
-    // 模拟 ritobin：带 -d 时解出名字
+    // 模拟 ritobin-tools：-H 指到精简表时解出名字
     fs.writeFileSync(path.join(dir, 'skin', 'vayne', 'skin11.py'), 'championSkinName: string = "VayneBase"\nSkinCharacterDataProperties {');
   };
   const result = await convertBinsToPy(run, dir);
+  const args = calls[0];
   assert.equal(calls.length, 1, '只该调一次');
-  assert.ok(calls[0].includes('-d'), '该带 -d');
+  assert.equal(args[0], '-H', '前置参数该是 -H <表目录>');
+  assert.equal(args[1], ensureRitobinHashDir(), '该用精简名字表目录');
+  assert.ok(args.includes('--hashtable-dir'), '该屏蔽 LTK 共享缓存');
+  assert.ok(args.includes('convert'), '新工具要带 convert 子命令');
+  assert.ok(args.includes('-r'), '批量要递归');
+  assert.deepEqual(args.slice(-2), ['--ext', 'py'], '输出扩展名要是 .py');
   assert.equal(result.slimHashes, true);
   assert.equal(result.count, 1);
   return `${result.elapsedMs}ms`;
 });
 
-await check('锚点没解出来：删掉 py 并用默认名字表重转一次', async () => {
+await check('锚点没解出来：删掉 py 并用随包完整表重转一次', async () => {
   const dir = makeWork();
   const calls = [];
   const run = async (args) => {
     calls.push(args);
-    const slim = args.includes('-d');
+    const slim = args[1] === ensureRitobinHashDir();
     fs.writeFileSync(
       path.join(dir, 'skin', 'vayne', 'skin11.py'),
       slim ? '0x2d78c328: string = "VayneBase"' : 'championSkinName: string = "VayneBase"\nSkinCharacterDataProperties {'
@@ -98,14 +105,14 @@ await check('锚点没解出来：删掉 py 并用默认名字表重转一次', 
   };
   const logs = [];
   const result = await convertBinsToPy(run, dir, (message) => logs.push(message));
-  assert.equal(calls.length, 2, '先 -d 再默认名字表');
-  assert.ok(!calls[1].includes('-d'), '第二次不该带 -d');
+  assert.equal(calls.length, 2, '先精简表再完整表');
+  assert.equal(calls[1][1], ritobinHashTablesDir(), '第二次该用随包完整名字表');
   assert.equal(result.slimHashes, false);
-  assert.ok(logs.some((line) => line.includes('默认名字表')), '应该有回退日志');
+  assert.ok(logs.some((line) => line.includes('完整名字表')), '应该有回退日志');
   return '回退正常';
 });
 
-await check('py→bin 批量：不带 -d（反向不需要名字表）', async () => {
+await check('py→bin 批量：不带名字表参数（反向不需要）', async () => {
   const dir = makeWork();
   fs.writeFileSync(path.join(dir, 'skin', 'vayne', 'skin11.py'), 'championSkinName: string = "x"');
   const calls = [];
@@ -115,8 +122,9 @@ await check('py→bin 批量：不带 -d（反向不需要名字表）', async (
   };
   const result = await convertPyToBins(run, dir);
   assert.equal(calls.length, 1);
-  assert.ok(calls[0].includes('-i') && calls[0].includes('py'));
-  assert.ok(!calls[0].includes('-d'));
+  assert.ok(calls[0].includes('convert') && calls[0].includes('-r'));
+  assert.deepEqual(calls[0].slice(-2), ['--to', 'bin']);
+  assert.ok(!calls[0].includes('-H') && !calls[0].includes('--hashtable-dir'));
   assert.equal(result.count, 1);
   return `${result.elapsedMs}ms`;
 });

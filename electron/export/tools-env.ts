@@ -9,9 +9,9 @@
  *     用户自己填的、文件还在的 cslol-tools 目录不动；
  *   - 用户数据目录（config.json / skins / overlays）位置没变。
  *
- * 工具目录里只有 15 个文件 / 8.1 MB：除了 wad-make / wad-extract / ritobin，
+ * 工具目录里只有 15 个文件 / 19.2 MB：除了 wad-make / wad-extract / ritobin-tools，
  * 关键的 `skinbins-index.txt` 是从 219 MB 的 `hashes.game.txt` 里筛出来的
- * 「皮肤 bin 路径 + 哈希」（21446 条），见 `electron/export/wad-index.ts`。
+ * 「皮肤 bin 路径 + 哈希」（22662 条），见 `electron/export/wad-index.ts`。
  */
 
 import fs from 'node:fs';
@@ -36,7 +36,7 @@ export interface ToolsEnvStatus {
   indexSourceDate?: string;
 }
 
-/** 读索引文件头前三行（只有几百字节，不读整个 1.25 MB） */
+/** 读索引文件头前三行（只有几百字节，不读整个 1.32 MB） */
 const readIndexHeader = (
   toolsDir: string
 ): Pick<ToolsEnvStatus, 'indexEntries' | 'indexGeneratedAt' | 'indexSourceDate'> => {

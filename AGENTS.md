@@ -72,12 +72,18 @@
 
 单个皮肤从 19 s 压到 0.5 s 的关键，别改回去：
 
-- **`ritobin_cli` 每次启动读 219 MB 名字表**（`ritobin\bin\hashes\hashes.game.txt`）：
-  5 KB 的 bin 也要 3.3 s，1 字节的只要 10 ms。所以 bin→py 必须**批量**
-  （`-r -i bin <目录>`，`electron/export/ritobin.ts`），再配 `-d` 精简名字表。
-- `-d` **只认 `hashes.binfields.txt` / `hashes.bintypes.txt` / `hashes.binentries.txt`
-  这几个固定文件名**（`hashes.other.txt`、`hashes.txt` 会被忽略，实测），所以同一份内容写三份。
-- 精简表 = 「我们改写会用到的名字」（`RITOBIIN_NAMES`）。少写一个就会出现「字段没被改名」
+- **ritobin 一定要批量转**（`electron/export/ritobin.ts`）：每次起进程都有固定开销，
+  一个皮肤里几个角色的 bin 要一次性转完。老 `ritobin_cli`（2025-10）更夸张 —— 每次启动
+  都把 219 MB 的 `hashes.game.txt` 读一遍，5 KB 的 bin 也要 3.3 s。**2026-11-19 换成了
+  `ritobin-tools` 0.2.3**（LeagueToolkit 官方的 Rust 版），按需读表，12 个 bin 只要 69 ms，
+  而且能转 16.21 之后的新 bin —— 老的 `ritobin_cli` 遇到 Ahri `skin0.bin` 直接报
+  `read_sections() / read_entries()` 错误。
+- 新工具的参数：`convert <目标> [-r] --ext py`（bin→py）、`convert <目标> -r --to bin`
+  （py→bin）；名字表用 `-H <目录>`（CDragon 文本表，`hashes.binfields.txt` 等），
+  `--hashtable-dir <空目录>` 用来屏蔽 LTK 共享缓存（不屏蔽的话，装了 LTK Manager 的机器
+  会解出所有名字，转出来的文本因机而异）。
+- `-H` 表 = 「我们改写会用到的名字」（`RITOBIIN_NAMES`），三个固定文件名
+  `hashes.binfields/bintypes/binentries.txt` 各写一份。少写一个就会出现「字段没被改名」
   这类静默错误（踩过：漏了 `championSkinId`，生成的 bin 与旧流程差 9 字节，LTK 可能判 skinhack）。
   改完一定要和旧流程比 **WAD 条目内容**（不是 zip 字节：zip 带时间戳会变）。
 - **不要按英雄名猜角色目录**：安妮 WAD 里有 `annietibbers`、`jade_annie_tibbers`，猜会漏条目。
@@ -89,7 +95,7 @@
 
 ## 五、工具环境与自动构建（2026-11-19）
 
-- 工具跟着安装包走：`native/tools` **直接进 git**（15 个文件 / 8.1 MB），
+- 工具跟着安装包走：`native/tools` **直接进 git**（15 个文件 / 19.2 MB），
   `electron-builder.json5` 的 `extraResources` 把它拷到 `<安装目录>\resources\tools`。
   运行时用 `electron/utils/tools-path.ts` 的 `resolveToolsDir()` 找它（开发时是 `native/tools`）。
   **不需要用户点「初始化配置环境」了**：启动时 `ensureToolsConfigured()`
@@ -97,12 +103,13 @@
   `%LOCALAPPDATA%\lol-skin-ll\tools\...`；用户数据位置（config.json / skins / overlays）没变。
 - 工具里**不带**两个大文件（历史原因见下）：
   - `hashes.game.txt`（219 MB）：只用它筛「皮肤 bin 路径 + WAD 路径哈希」，结果就是随包的
-    `skinbins-index.txt`（21446 条 / 1.25 MB）。读索引统一用 `resolveSkinBinIndexPath()`；
+    `skinbins-index.txt`（22662 条 / 1.32 MB）。读索引统一用 `resolveSkinBinIndexPath()`；
     游戏更新新增皮肤后，用 `npm run index:gen` 从新的 `hashes.game.txt` 重新生成。
   - `ltk-manager.exe`（95 MB）：注入用系统安装的 LTK Manager（`%ProgramFiles%\LTK Manager`），
     找不到才提示安装，不再随包带。
 - `ritobin\bin\hashes\` 只留 `binfields` + `bintypes` 两张表：15 个改写锚点全在里面；
-  没解出来的名字在 py 里保持 `0x...` 哈希形式，转回 bin 还是同一个哈希（输出不变）。
+  平时用临时目录里的精简表（`-H`），这两张完整表只做兜底。没解出来的名字在 py 里保持
+  `0x...` 哈希形式，转回 bin 还是同一个哈希（输出不变）。
 - `skinbins-index.txt` 文件头是 `# skinbins-index / # source / # generated` 三行注释，
   解析时跳过（`buildSkinBinIndex`、`parseHashesFile` 都跳过 `#`）。游戏更新出新英雄/新皮肤后：
   `npm run index:gen -- <新的 hashes.game.txt 或目录>` → 看「新增 / 删除」条数 →
