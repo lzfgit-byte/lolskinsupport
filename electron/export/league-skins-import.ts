@@ -131,6 +131,66 @@ const GB = 1024 * 1024 * 1024;
 /** 文件夹导入同时复制的文件数；小文件很多，串行会被建文件/改名开销拖住 */
 const FOLDER_COPY_CONCURRENCY = 4;
 
+/** 「内容一致」比对时同时读的文件对数；比对要把源和目标都读完，串行太慢 */
+const DEDUPE_CONCURRENCY = 4;
+
+/** 按固定并发跑一遍列表，结果按原顺序返回（单项抛错会中断整批，调用方自己兜住） */
+const mapLimit = async <T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T, index: number) => Promise<R>
+): Promise<R[]> => {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    for (;;) {
+      const index = cursor++;
+      if (index >= items.length) {
+        return;
+      }
+      results[index] = await task(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+};
+
+/** 进度日志的节流：每 500 项或每 2 秒打一行，最后一项必打 */
+const PROGRESS_EVERY = 500;
+const PROGRESS_INTERVAL_MS = 2000;
+
+/** 从某个时间点到现在过了多少秒，用于日志里的「用时」 */
+const secondsSince = (from: number) => `${((Date.now() - from) / 1000).toFixed(1)} 秒`;
+
+/**
+ * 长循环的进度日志。
+ *
+ * 「内容一致」的判断要读源文件和目标文件算 CRC32，整库导入时要读好几个 GB，
+ * 这一段以前几十秒没有任何输出，看起来像卡死了；这里按项数 + 时间双阈值打点。
+ */
+const createProgress = (log: (message: string) => void, prefix: string) => {
+  const startedAt = Date.now();
+  let lastAt = startedAt;
+  let lastDone = -PROGRESS_EVERY;
+  return (done: number, total: number, detail: string) => {
+    if (total <= 0) {
+      return;
+    }
+    const now = Date.now();
+    const final = done >= total;
+    if (!final && done - lastDone < PROGRESS_EVERY && now - lastAt < PROGRESS_INTERVAL_MS) {
+      return;
+    }
+    lastAt = now;
+    lastDone = done;
+    const percent = Math.min(100, Math.floor((done / total) * 100));
+    log(
+      `${prefix} 进度 ${done}/${total}（${percent}%），${detail}，` +
+        `已用 ${((now - startedAt) / 1000).toFixed(1)} 秒`
+    );
+  };
+};
+
 const isDirectory = async (target: string): Promise<boolean> => {
   try {
     return (await fsp.stat(target)).isDirectory();
@@ -237,6 +297,7 @@ export const importLeagueSkinsFromZip = async (
 
   log(`[LeagueSkins导入] 压缩包: ${zipPath}`);
   log(`[LeagueSkins导入] 目标目录: ${outDir}`);
+  const startedAt = Date.now();
 
   let archive: ZipArchive;
   try {
@@ -275,28 +336,40 @@ export const importLeagueSkinsFromZip = async (
   }
 
   // 已存在的按内容比对：大小 + CRC32 都一致才算「已经有了」，否则覆盖
-  const todo: { entry: ZipEntry; target: string }[] = [];
+  log('[LeagueSkins导入] 比对已导入的皮肤（大小 + CRC32 一致才算重复，否则覆盖）…');
   let skipped = 0;
   let replaced = 0;
-  for (const item of plan.values()) {
-    let existingSize = -1;
-    try {
-      existingSize = fs.statSync(item.target).size;
-    } catch {
-      // 还没有导入过
-    }
-    if (existingSize >= 0) {
-      if (existingSize === item.entry.size && item.entry.size > 0) {
-        const localCrc = await fileCrc32(item.target);
-        if (localCrc !== null && localCrc === item.entry.crc32 >>> 0) {
+  const checkProgress = createProgress(log, '[LeagueSkins导入] 校验已导入的皮肤');
+  let checked = 0;
+  const checkedItems = await mapLimit(
+    Array.from(plan.values()),
+    DEDUPE_CONCURRENCY,
+    async (item) => {
+      let existingSize = -1;
+      try {
+        existingSize = fs.statSync(item.target).size;
+      } catch {
+        // 还没有导入过
+      }
+      let same = false;
+      if (existingSize >= 0) {
+        if (existingSize === item.entry.size && item.entry.size > 0) {
+          const localCrc = await fileCrc32(item.target);
+          same = localCrc !== null && localCrc === item.entry.crc32 >>> 0;
+        }
+        if (same) {
           skipped++;
-          continue;
+        } else {
+          replaced++;
         }
       }
-      replaced++;
+      checkProgress(++checked, plan.size, `内容一致 ${skipped} 个，待覆盖 ${replaced} 个`);
+      return { item, same, existed: existingSize >= 0 };
     }
-    todo.push(item);
-  }
+  );
+  const todo: { entry: ZipEntry; target: string }[] = checkedItems
+    .filter((result) => !(result.existed && result.same))
+    .map((result) => result.item);
 
   const bytesNeeded = todo.reduce((sum, item) => sum + item.entry.size, 0);
   const free = diskFreeBytes(fs.existsSync(outDir) ? outDir : skinRoot);
@@ -335,6 +408,9 @@ export const importLeagueSkinsFromZip = async (
   let count = 0;
   let failed = 0;
   const total = todo.length;
+  if (total > 0) {
+    log(`[LeagueSkins导入] 开始解压 ${total} 个皮肤文件…`);
+  }
   for (let index = 0; index < total; index++) {
     const item = todo[index];
     try {
@@ -345,13 +421,16 @@ export const importLeagueSkinsFromZip = async (
       log(`[LeagueSkins导入] 失败 ${item.entry.name}: ${error?.message ?? error}`);
     }
     if ((index + 1) % 50 === 0 || index + 1 === total) {
-      log(`[LeagueSkins导入] 进度 ${index + 1}/${total}，成功 ${count}，失败 ${failed}`);
+      log(
+        `[LeagueSkins导入] 进度 ${index + 1}/${total}，成功 ${count}，失败 ${failed}，` +
+          `已用 ${secondsSince(startedAt)}`
+      );
     }
   }
 
   log(
     `[LeagueSkins导入] 完成: 写入 ${count}（覆盖 ${replaced}），内容一致跳过 ${skipped}，` +
-      `失败 ${failed}，未识别 ${unrecognized}/${fantomeCount}`
+      `失败 ${failed}，未识别 ${unrecognized}/${fantomeCount}，用时 ${secondsSince(startedAt)}`
   );
 
   return { canceled: false, count, skipped, replaced, failed, unrecognized, outDir };
@@ -385,6 +464,7 @@ export const importLeagueSkinsFromFolder = async (
 
   log(`[LeagueSkins文件夹导入] 选择的文件夹: ${folderPath}`);
   log(`[LeagueSkins文件夹导入] 目标目录: ${outDir}`);
+  const startedAt = Date.now();
 
   const skinsDir = await resolveLeagueSkinsFolder(folderPath);
   if (!skinsDir) {
@@ -404,7 +484,13 @@ export const importLeagueSkinsFromFolder = async (
   }
   log(`[LeagueSkins文件夹导入] 皮肤目录: ${skinsDir}`);
 
+  log('[LeagueSkins文件夹导入] 扫描目录，查找 .fantome 文件…');
+  const scanStartedAt = Date.now();
   const { files, unreadable } = await collectFantomeFiles(skinsDir, log);
+  log(
+    `[LeagueSkins文件夹导入] 扫描完成: ${files.length} 个 .fantome 文件，` +
+      `用时 ${secondsSince(scanStartedAt)}`
+  );
   if (files.length === 0) {
     const message = `skins 目录下没有找到 .fantome 皮肤文件: ${skinsDir}`;
     log(`[LeagueSkins文件夹导入] ${message}`);
@@ -425,6 +511,8 @@ export const importLeagueSkinsFromFolder = async (
   let unrecognized = 0;
   let duplicates = 0;
   let failed = 0;
+  const statProgress = createProgress(log, '[LeagueSkins文件夹导入] 读取文件信息');
+  let statDone = 0;
   for (const item of files) {
     const parsed = parseLeagueSkinsEntry(`skins/${item.relative}`);
     if (!parsed) {
@@ -446,34 +534,47 @@ export const importLeagueSkinsFromFolder = async (
         }`
       );
     }
+    statProgress(++statDone, files.length, `已读取 ${plan.size} 个皮肤`);
   }
 
   // 已存在的按内容比对：大小 + CRC32 都一致才算「已经有了」，否则覆盖
-  const todo: { target: string; source: string; size: number }[] = [];
+  log('[LeagueSkins文件夹导入] 比对已导入的皮肤（大小 + CRC32 一致才算重复，否则覆盖）…');
+  const checkProgress = createProgress(log, '[LeagueSkins文件夹导入] 校验已导入的皮肤');
   let skipped = 0;
   let replaced = 0;
-  for (const [target, item] of plan) {
-    let existingSize = -1;
-    try {
-      existingSize = (await fsp.stat(target)).size;
-    } catch {
-      // 还没有导入过
-    }
-    if (existingSize >= 0) {
-      if (existingSize === item.size && item.size > 0) {
-        const [localCrc, sourceCrc] = await Promise.all([
-          fileCrc32(target),
-          fileCrc32(item.source),
-        ]);
-        if (localCrc !== null && sourceCrc !== null && localCrc === sourceCrc) {
+  let checked = 0;
+  const checkedItems = await mapLimit(
+    Array.from(plan.entries()),
+    DEDUPE_CONCURRENCY,
+    async ([target, item]) => {
+      let existingSize = -1;
+      try {
+        existingSize = (await fsp.stat(target)).size;
+      } catch {
+        // 还没有导入过
+      }
+      let same = false;
+      if (existingSize >= 0) {
+        if (existingSize === item.size && item.size > 0) {
+          const [localCrc, sourceCrc] = await Promise.all([
+            fileCrc32(target),
+            fileCrc32(item.source),
+          ]);
+          same = localCrc !== null && sourceCrc !== null && localCrc === sourceCrc;
+        }
+        if (same) {
           skipped++;
-          continue;
+        } else {
+          replaced++;
         }
       }
-      replaced++;
+      checkProgress(++checked, plan.size, `内容一致 ${skipped} 个，待覆盖 ${replaced} 个`);
+      return { target, item, same, existed: existingSize >= 0 };
     }
-    todo.push({ target, ...item });
-  }
+  );
+  const todo: { target: string; source: string; size: number }[] = checkedItems
+    .filter((result) => !(result.existed && result.same))
+    .map((result) => ({ target: result.target, ...result.item }));
 
   const bytesNeeded = todo.reduce((sum, item) => sum + item.size, 0);
   const free = diskFreeBytes(fs.existsSync(outDir) ? outDir : skinRoot);
@@ -520,6 +621,9 @@ export const importLeagueSkinsFromFolder = async (
   let completed = 0;
   const total = todo.length;
   let cursor = 0;
+  if (total > 0) {
+    log(`[LeagueSkins文件夹导入] 开始复制 ${total} 个皮肤文件…`);
+  }
   const copyWorker = async () => {
     while (true) {
       const index = cursor++;
@@ -543,7 +647,7 @@ export const importLeagueSkinsFromFolder = async (
       if (completed % 50 === 0 || completed === total) {
         log(
           `[LeagueSkins文件夹导入] 进度 ${completed}/${total}，成功 ${count}，失败 ${failed}，` +
-            `已写入 ${(bytesCopied / GB).toFixed(2)} GB`
+            `已写入 ${(bytesCopied / GB).toFixed(2)} GB，已用 ${secondsSince(startedAt)}`
         );
       }
     }
@@ -554,7 +658,8 @@ export const importLeagueSkinsFromFolder = async (
 
   log(
     `[LeagueSkins文件夹导入] 完成: 写入 ${count}（覆盖 ${replaced}），` +
-      `内容一致跳过 ${skipped}，失败 ${failed}，未识别 ${unrecognized}/${files.length}`
+      `内容一致跳过 ${skipped}，失败 ${failed}，未识别 ${unrecognized}/${files.length}，` +
+      `用时 ${secondsSince(startedAt)}`
   );
 
   return { canceled: false, count, skipped, replaced, failed, unrecognized, outDir };
