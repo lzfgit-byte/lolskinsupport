@@ -52,7 +52,11 @@
   追加的尾巴被忽略。必须真改内容 —— 我们的做法（照 Rose 1.5.9）是骨架加 `null_bone` 关节、
   网格加末顶点拷贝，见 `electron/export/skin-mesh.ts`。
 - 名字也要换：`ChampionSkinName`、`TagEventList`、`BankUnits[].Name`、非 voiceOver 单位的
-  事件名，见 `electron/export/skin-audio.ts`。
+  事件名，见 `electron/export/skin-audio.ts`。patcher 的判定是「名字里出现
+  `<hero>skin<n>`（n≠0）」的**子串**匹配，所以事件名的两种写法都要处理：
+  `Play_sfx_<tag>_…`（tag 在第三段）和状态类 `Play_<tag>_<状态>` / `Switch_<tag>_<状态>`
+  （tag 在第二段，例如 `Play_AkaliSkin102_Attack1_To_Idle`）。按段位置取 tag 会漏掉后者，
+  Akali skin102 就是这么被 LTK 拒的（`otherSkinSegment()` 按段找标记，2026-11-19 修）。
 - 音效别名（保住皮肤专属音效）：`electron/export/skin-banks.ts` 在皮肤自己的事件 bank 里
   补 base 名字的别名 Event，并删掉 base 事件 bank 里同 id 的 Event；bank 读写是
   `electron/export/bnk.ts`（照 Rose 的 `bnk.py`，没改过的 bank 必须逐字节写回）。

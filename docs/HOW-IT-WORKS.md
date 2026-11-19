@@ -452,8 +452,12 @@ patcher 的规则在 LTK 的 `crates/ltk-manager-problems/src/rules/bin_skinhack
    例如 `VayneBase`），去掉 `championSkinId`；`SkinAudioProperties` 的
    `tagEventList` / `bankUnits` 整段换成游戏 base 皮肤的（`Vayne_Base_SFX`、
    `Play_sfx_Vayne_...`）。patcher 还会查 `TagEventList`、`BankUnits[].Name`
-   （`<英雄>_Skin<n>_SFX`）和非 voiceOver 单位的事件名（`Play_sfx_<英雄>Skin<n>_...`），
-   这些名字留在包里就还是 skinhack。
+   （`<英雄>_Skin<n>_SFX`）和非 voiceOver 单位的事件名，这些名字留在包里就还是 skinhack。
+   > 事件名有**两种**写法，都要换：`Play_sfx_<tag>_…`（tag 在第三段，例如
+   > `Play_sfx_AkaliSkin102_Idle1`）和状态类 `Play_<tag>_<状态>` / `Switch_<tag>_<状态>`
+   > （tag 在第二段，例如 `Play_AkaliSkin102_Attack1_To_Idle`、`Switch_AkaliSkin102_Footsteps_Brush`）。
+   > 只按段位置取第三段的话，后者会漏掉 —— Akali skin102 的包就是这样被 LTK 拒的
+   > （见 §8「挂载被拒」），现在用 `otherSkinSegment()` 按段找 `<英雄>skin<n>` 标记。
 
 音效（`skin-banks.ts` + `bnk.ts`，对齐 Rose 的 `audio.py`）：皮肤的 `tagEventList`
 是优先级链，`{"Vayne", "VayneSkin11"}` 里最后有同名事件的 tag 赢，所以皮肤实际放的是
@@ -527,6 +531,7 @@ sidecar 路径。同一份皮肤的几个角色（Vayne / jade_vayne）共用一
 | 导入中途崩溃 | 残留 `.part` / 未登记文件 | 下次导入按大小判断覆盖；`.part` 不会被当成皮肤 |
 | 退出清理超时（桥不应答） | 最多等 15 秒后强制结束 LTK Manager | 看日志 `[EXIT]`；未删掉的条目留在 `ltf_session.json`，下次启动补清 |
 | 关程序后仍有 `ltk-manager.exe` | 见第 3.5 节 | 那是你手动开的实例，本程序不关；确认是残留就结束它，下次启动补清 |
+| 进游戏没换肤、overlay 被关 | LTK 日志 `overlay verification failed, disabling overlay: base-skin check: skin0 is another skin: SkinAudioProperties.BankUnits.Events names <英雄>Skin<n>`，同目录 `incidents\*.json` 里 `verdict.kind = skinhack-detected` | 包里还留着别的皮肤的事件名（Akali skin102 就是 `Play_AkaliSkin102_Attack1_To_Idle` 这类**状态类**事件漏改）。用当前版本重新生成这个皮肤；仍报就把日志里的事件名发出来 |
 
 ---
 

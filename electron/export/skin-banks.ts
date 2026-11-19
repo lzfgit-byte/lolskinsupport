@@ -18,6 +18,9 @@
  *      id，客户端只会留一个，皮肤的音效可能输给 base 的），改过的随包一起走；
  *   3. bin 里：单位名 `<英雄>_Skin<n>_SFX` → `<英雄>_Base_SFX`，事件列表换成别名
  *      （Skin<n> 的老名字列出来就是给 patcher 抓的），`tagEventList` 换成 base 的；
+ *      注意事件名有两种写法 —— `Play_sfx_<tag>_…`（tag 在第三段）和状态类
+ *      `Play_<tag>_<状态>`（tag 在第二段），两种都要换（见 `otherSkinSegment`，
+ *      Akali skin102 的 `Play_AkaliSkin102_Attack1_To_Idle` 就因为只认第三段漏掉了）；
  *   4. 语音（voiceOver）单位不动：本地化 bank 每个语言一份、mod 装不全，换成游戏
  *      base 皮肤的 VO 单位，语音走 base 的（同一个人配音，差别很小）。
  *
@@ -221,6 +224,50 @@ export const renameTag = (name: string, from: string, to: string): string | null
   return `${name.slice(0, at)}${to}${after.slice(from.length)}`;
 };
 
+/** 这个角色的「别的皮肤」标记：`akali` -> `akaliskin`，`jade_vayne` -> 也认 `vayneskin` */
+const skinMarkers = (champion: string): string[] => {
+  const lower = champion.toLowerCase();
+  const markers = new Set([`${lower.replace(/_/g, '')}skin`]);
+  const last = lower.split('_').filter(Boolean).pop();
+  if (last) {
+    markers.add(`${last}skin`);
+  }
+  return Array.from(markers);
+};
+
+/**
+ * 事件名里「别的皮肤」的那一段：`AkaliSkin102`、`TalonSkin12`（`Skin0` 不算）。
+ *
+ * 大部分事件是 `<Action>_<分类>_<tag>_…`，tag 在第三段；但**状态类**事件是
+ * `Play_<tag>_<状态>`（例如 `Play_AkaliSkin102_Attack1_To_Idle`），按段位置取 tag
+ * 会取成 `Attack1` —— 这类名字就被漏掉、留在包里，LTK 照样判 skinhack
+ * （它的规则只看名字里有没有 `<英雄>skin<n>`，n≠0；Akali skin102 就是这么被拒的）。
+ */
+export const otherSkinSegment = (name: string, champion: string): string | null => {
+  const markers = skinMarkers(champion);
+  for (const segment of name.split('_')) {
+    const lower = segment.toLowerCase();
+    for (const marker of markers) {
+      const at = lower.indexOf(marker);
+      if (at < 0) {
+        continue;
+      }
+      const digits = /^\d+/.exec(lower.slice(at + marker.length));
+      if (digits && Number(digits[0]) !== 0) {
+        return segment;
+      }
+    }
+  }
+  return null;
+};
+
+/** 把名字里与 *from* 相同的那一段换成 *to*（tag 不在第三段时用这个） */
+export const renameSegment = (name: string, from: string, to: string): string =>
+  name
+    .split('_')
+    .map((segment) => (sameName(segment, from) ? to : segment))
+    .join('_');
+
 const quoted = (text: string): string[] =>
   (text.match(/"([^"\n]*)"/g) ?? []).map((value) => value.slice(1, -1));
 
@@ -369,11 +416,13 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
       for (const event of unit.events) {
         const at = tagStart(event);
         const tag = at === null ? '' : event.slice(at).split('_')[0];
-        if (!droppedTags.some((dropped) => sameName(dropped, tag))) {
+        const marked = otherSkinSegment(event, options.character);
+        if (!marked && !droppedTags.some((dropped) => sameName(dropped, tag))) {
           listed.push(event);
           continue;
         }
-        const alias = renameTag(event, tag, baseTag);
+        // 状态类事件（Play_<tag>_<状态>）的 tag 不在第三段，按段替换
+        const alias = marked ? renameSegment(event, marked, baseTag) : renameTag(event, tag, baseTag);
         const sourceId = wwiseHash(event);
         if (!alias || !source.bank.hasEvent(sourceId) || source.bank.eventActions(sourceId) === null) {
           plan.missingEvents++;
@@ -413,6 +462,9 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
     if (!eventsBank || !target) {
       // 读不到事件 bank 就补不了别名：皮肤 tag 的事件只能不再列出来（列出来就是给 patcher 抓）
       const kept = unit.events.filter((event) => {
+        if (otherSkinSegment(event, options.character)) {
+          return false;
+        }
         const at = tagStart(event);
         const tag = at === null ? '' : event.slice(at).split('_')[0];
         return !droppedTags.some((dropped) => sameName(dropped, tag));
@@ -430,12 +482,14 @@ export const planBankAliases = async (options: BankAliasOptions): Promise<BankAl
     for (const event of unit.events) {
       const at = tagStart(event);
       const tag = at === null ? '' : event.slice(at).split('_')[0];
+      const marked = otherSkinSegment(event, options.character);
       const fromDropped = droppedTags.some((dropped) => sameName(dropped, tag));
-      if (!fromDropped) {
+      if (!marked && !fromDropped) {
         listed.push(event);
         continue;
       }
-      const alias = renameTag(event, tag, baseTag);
+      // 状态类事件（Play_<tag>_<状态>）的 tag 不在第三段，按段替换
+      const alias = marked ? renameSegment(event, marked, baseTag) : renameTag(event, tag, baseTag);
       if (!alias) {
         plan.missingEvents++;
         plan.notes.push(`${event} 认不出 tag，补不了别名`);

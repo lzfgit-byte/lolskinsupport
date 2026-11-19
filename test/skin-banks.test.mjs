@@ -35,6 +35,8 @@ const {
   tagStart,
   isLocalizedPath,
   renameTag,
+  otherSkinSegment,
+  renameSegment,
 } = await import(`file:///${BUNDLE.replace(/\\/g, '/')}`);
 const { readAudioBlocks, parseBankUnits } = await import(`file:///${AUDIO.replace(/\\/g, '/')}`);
 const { Bank, wwiseHash, HIRC_EVENT, HIRC_ACTION } = await import(`file:///${BNK.replace(/\\/g, '/')}`);
@@ -272,6 +274,48 @@ await step('补别名：音效进皮肤 bank，语音进 sidecar', async () => {
   assert.equal(sidecarFile.data.readUInt32LE(12), wwiseHash('Vayne_Skin11_VO_basetag_events'));
   assert.equal(sidecarFile.data.readUInt32LE(16), wwiseHash('SFX'));
   return `${plan.aliasedEvents} 音效 + ${plan.voiceAliases} 语音，${plan.files.length + sidecarFiles.length} 个 bank`;
+});
+
+await step('状态类事件（Play_<tag>_<状态>）也要换成 base 名字', async () => {
+  // Akali skin102 的 `Play_AkaliSkin102_Attack1_To_Idle` 的 tag 在第二段，
+  // 只按第三段取 tag 会漏掉，名字留在包里就被 LTK 判 skinhack
+  assert.equal(otherSkinSegment('Play_AkaliSkin102_Attack1_To_Idle', 'akali'), 'AkaliSkin102');
+  assert.equal(otherSkinSegment('Play_sfx_AkaliSkin102_Idle1', 'akali'), 'AkaliSkin102');
+  assert.equal(otherSkinSegment('Play_sfx_Akali_AkaliP_Activate', 'akali'), null);
+  assert.equal(otherSkinSegment('Play_AkaliSkin0_Idle', 'akali'), null, 'Skin0 是 base，不算');
+  assert.equal(otherSkinSegment('Play_sfx_Jade_VayneSkin11_A', 'jade_vayne'), 'VayneSkin11');
+  assert.equal(renameSegment('Play_AkaliSkin102_Attack1_To_Idle', 'AkaliSkin102', 'Akali'), 'Play_Akali_Attack1_To_Idle');
+
+  const py = SKIN_PY.replace(
+    '"Play_sfx_VayneSkin11_B"',
+    '"Play_VayneSkin11_Attack1_To_Idle"'
+  );
+  const data = banks();
+  data[SKIN_BANK.toLowerCase()] = makeBank(145, {
+    Play_sfx_VayneSkin11_A: [11],
+    Play_VayneSkin11_Attack1_To_Idle: [13],
+  });
+  const registry = createSidecarRegistry();
+  const plan = await planBankAliases({
+    pyText: py,
+    character: 'vayne',
+    baseAudio: baseAudio(),
+    sidecars: registry,
+    readBank: async (bankPath) => data[bankPath.toLowerCase()] ?? null,
+  });
+  assert.ok(plan);
+  const units = parseBankUnits(plan.blocks.bankUnits);
+  assert.deepEqual(units[0].events, ['Play_sfx_Vayne_A', 'Play_Vayne_Attack1_To_Idle']);
+  assert.equal(plan.blocks.bankUnits.includes('VayneSkin11'), false, '不该再出现别的皮肤名字');
+  assert.equal(plan.aliasedEvents, 2);
+  const skinFile = plan.files.find((file) => file.path.endsWith('vayne_skin11_sfx_events.bnk'));
+  const skinBank = Bank.parse(skinFile.data);
+  assert.deepEqual(
+    skinBank.eventActions(wwiseHash('Play_Vayne_Attack1_To_Idle')),
+    [13],
+    '状态事件的别名指向原 Action'
+  );
+  return '2 个别名';
 });
 
 await step('两个角色共用一个 sidecar：别名累计', async () => {

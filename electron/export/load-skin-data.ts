@@ -718,6 +718,16 @@ export const loadSkinDataByFile = async (
               .map((item) => `${item.path}(${item.added})`)
               .join(', ')}`
           );
+          // 名字没换干净 = 这个包进游戏一定会被 LTK 判 skinhack（整包注入被关掉），
+          // 光写日志没人看得到，这里直接弹错误提示
+          if (rebase.audioLeftover.length > 0) {
+            MessageUtil.error(
+              `皮肤 ${heroName}_${skinId}：bin 里还留着别的皮肤的名字` +
+                `（${rebase.audioLeftover.slice(0, 3).join('、')}` +
+                `${rebase.audioLeftover.length > 3 ? ' 等' : ''}），` +
+                `LTK 会判 skinhack、注入会被关掉。把这条日志发给开发者`
+            );
+          }
         }
       } else {
         logData(` [base-skin] 跳过 ${heroNameInLine}：没有读到 base 皮肤名`);
