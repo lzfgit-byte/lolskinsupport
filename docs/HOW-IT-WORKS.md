@@ -323,6 +323,9 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
 
 ## 6. 生成皮肤（可选功能）
 
+> 生成流程、LTK skinhack 判定与「怎么让包通过」的完整说明见
+> [SKIN-BUILD-AND-SKINHACK.md](SKIN-BUILD-AND-SKINHACK.md)（本节是它的摘要）。
+
 只有「（多个）全部皮肤文件 /（一个）当前皮肤文件」这条路径会用到 cslol-tools：
 
 ```

@@ -58,6 +58,9 @@ resources\tools\
 的官方发行版（0.2.3）。工具目录不完整时程序会直接说缺哪个文件，重装本程序即可。
 「设置 → toolsPath」只在你想换成自己的 cslol-tools 目录时才需要改。
 
+生成流程、LTK 的 skinhack 判定规则、以及包怎么才算「符合 base 皮肤规范」（不触发
+`0xC0000229`），见 [docs/SKIN-BUILD-AND-SKINHACK.md](docs/SKIN-BUILD-AND-SKINHACK.md)。
+
 ### 首次启动建议配置
 
 打开「设置」，确认这几项（没设过会落在默认值）：
