@@ -24,14 +24,20 @@ if (!fs.existsSync(BUNDLE)) {
 }
 
 const {
+  collectEntryKeys,
+  composeEmitters,
+  copyResolvedEntries,
   dropChampionSkinId,
   dropIdleEffectsWithoutJoints,
   dropSkinKeywordGates,
   ensureSkinParent,
+  findUnresolvedResourceRefs,
   mergeLinkedBins,
   readChampionSkinName,
   readEntryKeyOfClass,
+  readHashRefs,
   readLinkedBins,
+  readMapValues,
   stripInlineEntries,
 } = await import(`file:///${BUNDLE.replace(/\\/g, '/')}`);
 
@@ -265,6 +271,123 @@ step('整套顺序跑一遍不留坏结构', () => {
   assert.equal(readLinkedBins(text).length, 3);
   assert.equal((text.match(/^ {4}"[^"]*" = /gm) || []).length, 2, '只该剩两个 entry');
   return 'ok';
+});
+
+step('只搬补丁点名的条目（按 hash 从皮肤 bin 里取，不是手抄）', () => {
+  const shell = `entries: map[hash, embed] = {
+    "Characters/Rumble/Skins/Skin0" = SkinCharacterDataProperties {
+        mResourceResolver: link = "Characters/Rumble/Skins/Skin0/Resources"
+    }
+    "Characters/Rumble/Skins/Skin0/Resources" = ResourceResolver {
+        resourceMap: map[hash, link] = {
+            0x6f608837 = 0xa075fcc1
+            0x74ad149b = 0xcccfc449
+        }
+    }
+}`;
+  const skin = `entries: map[hash, embed] = {
+    0xa075fcc1 = VfxSystemDefinitionData {
+        particleName: string = "Rumble_Skin03_R_tar_team_green"
+    }
+    0xcccfc449 = VfxSystemDefinitionData {
+        particleName: string = "Rumble_Skin03_r_burn"
+    }
+}`;
+  const sources = [{ label: 'skin3.bin', text: skin }];
+
+  // 点名了才搬
+  const one = copyResolvedEntries(shell, sources, { keys: ['0xa075fcc1'] });
+  assert.equal(one.copied.length, 1);
+  assert.equal(one.copied[0].className, 'VfxSystemDefinitionData');
+  assert.match(one.text, /^ {4}0xa075fcc1 = VfxSystemDefinitionData \{/m);
+  assert.doesNotMatch(one.text, /0xcccfc449 = VfxSystemDefinitionData/);
+
+  // 没点名（resolver 里能对上也不搬）—— 全搬就是 builder 6 的老毛病
+  const none = copyResolvedEntries(shell, sources, { keys: [] });
+  assert.equal(none.copied.length, 0);
+  assert.equal(none.text, shell);
+
+  // 已经有的不重复搬
+  const twice = copyResolvedEntries(one.text, sources, { keys: ['0xa075fcc1'] });
+  assert.equal(twice.copied.length, 0);
+  return 'ok';
+});
+
+step('诊断：Resources 里指向其它 bin 条目的 value 会被报出来', () => {
+  const text = `entries: map[hash, embed] = {
+    "Resources" = ResourceResolver {
+        resourceMap: map[hash, link] = {
+            0x6f608837 = 0xa075fcc1
+            0x74ad149b = 0xcccfc449
+            0x11111111 = 0x22222222
+        }
+    }
+}`;
+  const skin = `entries: map[hash, embed] = {
+    0xa075fcc1 = VfxSystemDefinitionData {
+        particleName: string = "p"
+    }
+    0xcccfc449 = VfxSystemDefinitionData {
+        particleName: string = "q"
+    }
+}`;
+  const refs = findUnresolvedResourceRefs(text, [{ label: 'skin3.bin', text: skin }]);
+  assert.deepEqual(refs.map((ref) => ref.value), ['0xa075fcc1', '0xcccfc449']);
+  assert.equal(refs[0].className, 'VfxSystemDefinitionData');
+  // 文件路径 hash（谁都没定义）不报，避免全是误报
+  assert.equal(refs.some((ref) => ref.value === '0x22222222'), false);
+  return `${refs.length} 处`;
+});
+
+step('合并伴随系统的 emitter（按名字前缀，emitter 来自游戏数据）', () => {
+  const src = `entries: map[hash, embed] = {
+    0xaa = VfxSystemDefinitionData {
+        complexEmitterDefinitionData: list[pointer] = {
+            VfxEmitterDefinitionData {
+                emitterName: string = "main"
+            }
+        }
+        particleName: string = "Rumble_Skin03_R_tar_team_green"
+    }
+    0xbb = VfxSystemDefinitionData {
+        complexEmitterDefinitionData: list[pointer] = {
+            VfxEmitterDefinitionData {
+                emitterName: string = "crater1"
+            }
+        }
+        particleName: string = "Rumble_Skin03_R_Crater_01"
+    }
+    0xcc = VfxSystemDefinitionData {
+        complexEmitterDefinitionData: list[pointer] = {
+            VfxEmitterDefinitionData {
+                emitterName: string = "crater2"
+            }
+        }
+        particleName: string = "Rumble_Skin03_R_Crater_02"
+    }
+    0xdd = VfxSystemDefinitionData {
+        complexEmitterDefinitionData: list[pointer] = {
+            VfxEmitterDefinitionData {
+                emitterName: string = "other"
+            }
+        }
+        particleName: string = "Rumble_Skin03_Q_cas_01"
+    }
+}`;
+  const spec = [{ key: '0xaa', alsoByName: 'Rumble_Skin03_R_Crater_' }];
+  const merged = composeEmitters(src, [{ label: 'skin3.bin', text: src }], spec);
+  assert.equal(merged.merged.length, 1);
+  assert.deepEqual(merged.merged[0].from, ['0xbb', '0xcc']);
+  const main = merged.text.slice(merged.text.indexOf('0xaa ='), merged.text.indexOf('0xbb ='));
+  assert.match(main, /emitterName: string = "main"/);
+  assert.match(main, /emitterName: string = "crater1"/);
+  assert.match(main, /emitterName: string = "crater2"/);
+  assert.doesNotMatch(main, /emitterName: string = "other"/, '不相关系统不能被并进来');
+  // 幂等：再来一遍不会重复
+  const again = composeEmitters(merged.text, [{ label: 'skin3.bin', text: src }], spec);
+  assert.equal(again.merged.length, 0);
+  assert.equal(again.text, merged.text);
+  return `${merged.merged[0].from.length} 个伴随系统`;
 });
 
 console.log(failures === 0 ? '\nbase-slot: 全部通过' : `\nbase-slot: ${failures} 个失败`);

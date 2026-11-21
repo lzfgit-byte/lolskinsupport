@@ -183,35 +183,35 @@ step('resourceMap.remove 删掉多余的 key（同一个粒子别挂两遍）', 
   assert.match(result.added[0], /删 1 条/);
 });
 
-step('Rumble 补丁带 R 燃烧特效的两块数据', () => {
+step('Rumble 补丁只剩「游戏数据里没有」的触发条件', () => {
   const patch = findSkinPatch('rumble');
   assert.ok(patch, 'rumble 补丁应该注册了');
   assert.equal(patch.propsInsert.length, 1);
-  assert.equal(patch.entriesInsert.length, 1);
+  assert.equal(patch.entriesInsert, undefined, '粒子定义在皮肤自己的 bin 里，不该抄进来');
   assert.equal(Object.keys(patch.resourceMap.set).length, 3);
+  assert.deepEqual(patch.resourceMap.remove, ['0x52c319c0', '0x55c31e79']);
+  assert.equal(patch.resourceMap.set['0x74ad149b'], '0xa075fcc1', 'R 的燃烧引用要指到系统本体');
   const conditions = patch.propsInsert[0].text;
   assert.match(conditions, /ChromaData: pointer = 0xe7ee4f28/);
   assert.match(conditions, /PersistentEffectConditions: list2\[pointer\] = \{/);
   assert.match(conditions, /mScriptName: string = "RumbleFlameThrower"/);
-  const vfx = patch.entriesInsert[0].text;
-  assert.match(vfx, /^\s*0xa075fcc1 = VfxSystemDefinitionData \{/m);
-  assert.match(vfx, /particleName: string = "Rumble_Skin03_R_tar_team_green"/);
-  assert.match(vfx, /particlePath: string = "Characters\/Rumble\/Skins\/Skin3\/Particles\/Rumble_Skin03_R_tar_team_green"/);
-  assert.match(vfx, /soundPersistentDefault: string = "Play_sfx_Rumble_RumbleREffect_hit"/);
-  return `${conditions.split('\n').length + vfx.split('\n').length} 行数据`;
+  assert.match(conditions, /boneName: string = "R_Flame"/);
+  assert.match(conditions, /effectKey: hash = 0x97e29b7d/);
+  assert.doesNotMatch(conditions, /VfxSystemDefinitionData/, '补丁里不该再有粒子定义副本');
+  return `${conditions.split('\n').length} 行条件`;
 });
 
 step('Rumble 补丁套到 shell 上后结构正确', () => {
   const result = applySkinPatch(shellPy(), findSkinPatch('rumble'));
-  assert.equal(result.added.length, 3);
+  assert.equal(result.added.length, 2);
   const lines = result.text.split('\n');
   const chroma = lines.findIndex((line) => line.trim().startsWith('ChromaData: pointer'));
   const parent = lines.findIndex((line) => line.trim() === 'skinParent: i32 = 0');
   assert.equal(chroma, parent + 1);
-  const vfx = lines.findIndex((line) => line === '    0xa075fcc1 = VfxSystemDefinitionData {');
-  assert.ok(vfx > 0);
-  // entries 表收尾还在最后一行
+  // 没有再往 entries 表里加条目
   assert.equal(lines[lines.length - 1], '}');
+  assert.equal(lines.filter((line) => /^ {4}(0x|\S+= )/.test(line)).length,
+    shellPy().split('\n').filter((line) => /^ {4}(0x|\S+= )/.test(line)).length);
   // 身份对象里的 mEmblems 没被动过
   assert.match(result.text, /mEmblems: list\[embed\] = \{/);
 });

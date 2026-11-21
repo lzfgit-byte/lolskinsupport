@@ -295,3 +295,212 @@ export const dropIdleEffectsWithoutJoints = (
 };
 
 export { entryKeys };
+
+/** 条目 key（字符串 key 和 `0x…` key 都算），小写 */
+export const collectEntryKeys = (text: string): string[] =>
+  Array.from(text.matchAll(/^ {4}(?:"([^"]*)"|(0x[0-9a-fA-F]+)) = /gm)).map((match) =>
+    (match[1] ?? match[2]).toLowerCase()
+  );
+
+/** `map[hash, link]` 里的取值（`0xkey = 0xvalue`，任意缩进） */
+export const readMapValues = (text: string): string[] =>
+  Array.from(text.matchAll(/^\s+0x[0-9a-fA-F]+ = (0x[0-9a-fA-F]+)$/gm)).map((match) =>
+    match[1].toLowerCase()
+  );
+
+/** `link = 0x…` / `effectKey: hash = 0x…` 这类「指向别处」的引用 */
+export const readHashRefs = (text: string): { kind: 'link' | 'hash'; value: string }[] =>
+  Array.from(text.matchAll(/\b(link|hash) = (0x[0-9a-fA-F]+)\b/g)).map((match) => ({
+    kind: match[1] as 'link' | 'hash',
+    value: match[2].toLowerCase(),
+  }));
+
+/**
+ * 把「本 bin 的 `Resources` 指向、但条目定义在别的 bin 里」的条目搬进来。
+ *
+ * 为什么需要：base-slot 的 bin 只留身份 + `Resources`（builder 7），可 `Resources`
+ * 的 `map[hash, link]` 里有些 value 不是文件路径 hash，而是**同一个 bin 里的条目 key**
+ * （Rumble 的 `0x6f608837 = 0xa075fcc1`，指向 `VfxSystemDefinitionData`）。这些条目在
+ * 原皮肤 bin 里，随包一起加载，但 props 的解析只认**自己这个 bin** 的条目 —— 不搬进来就是
+ * 断链，游戏里表现为特效/系统解析不到。以前这一份是照着能跑的手改包手抄的（1,471 行），
+ * 现在按 hash 从随包的皮肤 bin 里取游戏自己那份，生成时自动完成。
+ *
+ * **只搬 `keys` 点名的**，不做「凡是能解析到的都搬」：Rumble 的 resolver 里有 50 个 value
+ * 能对上皮肤 bin 的条目，全搬等于把整份粒子内嵌回 base bin，正是 builder 7 验证过会破坏
+ * 特效链的老做法。`keys` 由需要它们的调用方给（目前是英雄补丁里 `resourceMap.set` 的目标）。
+ */
+export const copyResolvedEntries = (
+  text: string,
+  sources: { label: string; text: string }[],
+  options: { keys: string[]; classes?: string[] }
+): SlotEdit & { copied: { key: string; className: string; from: string }[] } => {
+  const copied: { key: string; className: string; from: string }[] = [];
+  const lines = text.split('\n');
+  const entriesStart = lines.findIndex((line) => /^entries: map\[hash, embed\] = \{/.test(line));
+  if (entriesStart < 0) return { ...emptyEdit(text), copied };
+  const have = new Set(collectEntryKeys(text));
+  const wanted = Array.from(new Set(options.keys.map((key) => key.trim().toLowerCase()))).filter(
+    (key) => /^0x[0-9a-f]+$/.test(key) && !have.has(key)
+  );
+  if (wanted.length === 0) return { ...emptyEdit(text), copied };
+
+  const blocks: string[] = [];
+  for (const hash of wanted) {
+    for (const source of sources) {
+      const sourceLines = source.text.split('\n');
+      const at = sourceLines.findIndex((line) =>
+        new RegExp(`^ {4}${hash} = `).test(line)
+      );
+      if (at < 0) continue;
+      const head = /^ {4}0x[0-9a-fA-F]+ = (\w+) \{/.exec(sourceLines[at]);
+      const className = head ? head[1] : '';
+      if (options.classes && className && !options.classes.includes(className)) continue;
+      const stop = blockEnd(sourceLines, at);
+      blocks.push(...sourceLines.slice(at, stop + 1));
+      copied.push({ key: hash, className, from: source.label });
+      have.add(hash);
+      break;
+    }
+  }
+  if (blocks.length === 0) return { ...emptyEdit(text), copied };
+
+  const end = blockEnd(lines, entriesStart);
+  const out = [...lines.slice(0, end), ...blocks, ...lines.slice(end)];
+  return { text: out.join('\n'), removed: [], added: [], copied };
+};
+
+/** 取一个条目里的所有 `VfxEmitterDefinitionData` 块（相对缩进归零，便于比较/重排） */
+const emitterBlocks = (block: string[]): string[] => {
+  const out: string[] = [];
+  for (let i = 0; i < block.length; i++) {
+    if (!/VfxEmitterDefinitionData \{/.test(block[i])) continue;
+    const base = indentOf(block[i]);
+    let depth = 0;
+    const lines: string[] = [];
+    for (let j = i; j < block.length; j++) {
+      for (const ch of block[j]) {
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+      }
+      lines.push(block[j].slice(base));
+      if (depth === 0) {
+        i = j;
+        break;
+      }
+    }
+    out.push(lines.join('\n'));
+  }
+  return out;
+};
+
+const entryBlockLines = (lines: string[], key: string): string[] | null => {
+  const start = lines.findIndex((line) => new RegExp(`^ {4}${key} = `).test(line));
+  if (start < 0) return null;
+  return lines.slice(start, blockEnd(lines, start) + 1);
+};
+
+/**
+ * 把「伴随系统」的 emitter 并进主系统。
+ *
+ * 游戏把同一个技能特效拆成多个系统：Rumble 的 R 地面是 `…_R_tar_team_green`（13 个
+ * emitter）**加上** 6 个独立的 `…_R_Crater_01..06`（各 1 个 emitter）。base-slot 的
+ * 条件一次只能挂一个系统，只挂 tar 那个在游戏里几乎看不见 —— 实测 R 完全没有效果。
+ * 能跑的包里是把 6 个裂坑的 emitter 直接并进 tar 系统（逐字节相同）。
+ *
+ * 这里做的同一件事，但并体来源是**游戏数据**（随包的皮肤 bin），补丁只写规则：
+ * `{ key: '0xa075fcc1', alsoByName: 'Rumble_Skin03_R_Crater_' }` —— 名字前缀在生成时
+ * 展开成具体条目，补丁里没有任何 emitter 定义。
+ */
+export const composeEmitters = (
+  text: string,
+  sources: { label: string; text: string }[],
+  specs: { key: string; also?: string[]; alsoByName?: string }[]
+): SlotEdit & { merged: { key: string; from: string[] }[] } => {
+  const merged: { key: string; from: string[] }[] = [];
+  let current = text;
+  for (const spec of specs) {
+    const lines = current.split('\n');
+    const target = entryBlockLines(lines, spec.key.toLowerCase());
+    if (!target) continue;
+    const targetStart = lines.indexOf(target[0]);
+    const listAt = lines.findIndex(
+      (line, index) =>
+        index >= targetStart &&
+        index < targetStart + target.length &&
+        /^\s*complexEmitterDefinitionData: list\[pointer\] = \{/.test(line)
+    );
+    if (listAt < 0) continue;
+    const listEnd = blockEnd(lines, listAt);
+    const emitterIndent = ' '.repeat(indentOf(lines[listAt]) + 4);
+    const existing = new Set(
+      emitterBlocks(lines.slice(listAt, listEnd + 1)).map((item) => item.trim())
+    );
+
+    const additions: string[] = [];
+    const from: string[] = [];
+    for (const source of sources) {
+      const sourceLines = source.text.split('\n');
+      const keys = (spec.also ?? []).map((key) => key.toLowerCase());
+      if (spec.alsoByName) {
+        for (const line of sourceLines) {
+          if (!/^ {4}0x[0-9a-fA-F]+ = /.test(line)) continue;
+          const key = line.slice(4).split(' = ')[0];
+          const block = entryBlockLines(sourceLines, key);
+          if (!block) continue;
+          if (!block.join('\n').includes(`particleName: string = "${spec.alsoByName}`)) continue;
+          if (!keys.includes(key)) keys.push(key);
+        }
+      }
+      for (const key of keys) {
+        const block = entryBlockLines(sourceLines, key);
+        if (!block) continue;
+        for (const emitter of emitterBlocks(block)) {
+          if (existing.has(emitter.trim())) continue;
+          existing.add(emitter.trim());
+          additions.push(...emitter.split('\n').map((line) => `${emitterIndent}${line}`));
+          if (!from.includes(key)) from.push(key);
+        }
+      }
+    }
+    if (additions.length === 0) continue;
+    current = [...lines.slice(0, listEnd), ...additions, ...lines.slice(listEnd)].join('\n');
+    merged.push({ key: spec.key, from });
+  }
+  return { text: current, removed: [], added: [], merged };
+};
+
+/**
+ * 诊断：`Resources` 里那些「其实指向某个条目」的 value，有多少在本 bin 里解析不到。
+ *
+ * `resourceMap` 的 value 大多数是文件路径 hash（贴图、粒子文件），少数是**条目 key**
+ * （同 bin 里的 `VfxSystemDefinitionData` 之类）。后者如果没被搬进 base bin，props 就解析
+ * 不到 —— 这正是 Rumble 的 R 燃烧特效缺的那一层（`0x6f608837 = 0xa075fcc1`，皮肤 bin 里
+ * 有定义，base bin 里没有）。
+ *
+ * 只做这一种判断：value 在本 bin 里没有、在随包其它 bin 里**有条目** → 报出来。文件路径
+ * hash 一律不判（没法确定在不在 WAD 里，全是误报）。
+ */
+export const findUnresolvedResourceRefs = (
+  text: string,
+  sources: { label: string; text: string }[]
+): { value: string; className: string; from: string }[] => {
+  const have = new Set(collectEntryKeys(text));
+  const out: { value: string; className: string; from: string }[] = [];
+  const seen = new Set<string>();
+  for (const value of readMapValues(text)) {
+    if (have.has(value) || seen.has(value)) continue;
+    for (const source of sources) {
+      const line = source.text
+        .split('\n')
+        .find((item) => new RegExp(`^ {4}${value} = `).test(item));
+      if (!line) continue;
+      const head = /^ {4}0x[0-9a-fA-F]+ = (\w+) \{/.exec(line);
+      if (!head) continue;
+      seen.add(value);
+      out.push({ value, className: head[1], from: source.label });
+      break;
+    }
+  }
+  return out;
+};
+

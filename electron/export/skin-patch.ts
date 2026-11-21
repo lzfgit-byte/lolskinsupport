@@ -45,6 +45,16 @@ export interface SkinPatchResourceMap {
   remove?: string[];
 }
 
+/** 把伴随系统的 emitter 并进主系统（游戏把同一个技能特效拆成了多个系统） */
+export interface SkinPatchCompose {
+  /** 主系统条目 key（必须也在 `resourceMap.set` 里被指到，才会被搬进 base bin） */
+  key: string;
+  /** 显式列出伴随系统的条目 key */
+  also?: string[];
+  /** 按 `particleName` 前缀找伴随系统（生成时展开成具体 key） */
+  alsoByName?: string;
+}
+
 export interface SkinPatch {
   /** 角色目录名（小写，和 `data/characters/<x>/` 一致） */
   champion: string;
@@ -58,6 +68,7 @@ export interface SkinPatch {
   propsInsert?: SkinPatchPropsInsert[];
   entriesInsert?: SkinPatchEntryInsert[];
   resourceMap?: SkinPatchResourceMap;
+  composeEntries?: SkinPatchCompose[];
 }
 
 const indentOf = (line: string): number => line.length - line.trimStart().length;

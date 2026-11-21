@@ -46,10 +46,13 @@ import {
 } from './skin-animation';
 import { checkSkinNames, describeSkinCheck, SKIN_ARCHIVE_BUILDER, writeSkinCheck } from './skin-check';
 import {
+  composeEmitters,
+  copyResolvedEntries,
   dropChampionSkinId,
   dropIdleEffectsWithoutJoints,
   dropSkinKeywordGates,
   ensureSkinParent,
+  findUnresolvedResourceRefs,
   mergeLinkedBins,
   readChampionSkinName,
   readEntryKeyOfClass,
@@ -597,11 +600,14 @@ const applyBaseSlotShell = async (options: {
   if (!fs.existsSync(pyPath)) {
     return;
   }
+  /** 随包的皮肤 bin 文本（已删皮肤名闸门），补丁要按 hash 从里面搬条目 */
+  let gatedText = '';
 
   if (skinId > 0 && fs.existsSync(options.sourcePyPath)) {
     const sourceText = fs.readFileSync(options.sourcePyPath, 'utf-8');
     const sourceSkinName = readChampionSkinName(sourceText);
     const gated = dropSkinKeywordGates(sourceText, sourceSkinName);
+    gatedText = gated.text;
     const overridePy = path.join(packDir, `data/characters/${character}/skins/skin${skinId}.py`);
     fs.mkdirSync(path.dirname(overridePy), { recursive: true });
     fs.writeFileSync(overridePy, gated.text, 'utf-8');
@@ -660,6 +666,24 @@ const applyBaseSlotShell = async (options: {
   const patched = applySkinPatch(text, findSkinPatch(character, skinId));
   text = patched.text;
 
+  // builder 8：补丁把 `Resources` 里的映射指到某个条目时，那个条目本体要从随包的皮肤
+  // bin 里搬进 base bin（props 的解析只认自己这个 bin）。键来自补丁自己的映射目标，
+  // 不是「凡是能解析到的都搬」—— 那会把整份粒子内嵌回 base bin。
+  const sourceTexts: { label: string; text: string }[] = gatedText
+    ? [{ label: `skin${skinId}.bin`, text: gatedText }]
+    : [];
+  const patchEntries = Object.values(findSkinPatch(character, skinId)?.resourceMap?.set ?? {});
+  const resolved = copyResolvedEntries(text, sourceTexts, { keys: patchEntries });
+  text = resolved.text;
+  // builder 8：伴随系统合并（游戏把同一个技能特效拆成多个系统，条件只能挂一个）
+  const composed = composeEmitters(
+    text,
+    sourceTexts,
+    findSkinPatch(character, skinId)?.composeEntries ?? []
+  );
+  text = composed.text;
+  const unresolved = findUnresolvedResourceRefs(text, sourceTexts);
+
   fs.writeFileSync(pyPath, text, 'utf-8');
 
   log(
@@ -669,8 +693,20 @@ const applyBaseSlotShell = async (options: {
       `${noId.removed.length > 0 ? '，去掉 championSkinId' : ''}` +
       `${parent.added.length > 0 ? '，补 skinParent=0' : ''}` +
       `${idleDropped.length > 0 ? `，删 ${idleDropped.length} 条挂点不存在的 idle 特效` : ''}` +
-      `${patched.added.length > 0 ? `，套用 ${character} 专属补丁 ${patched.added.length} 块（${patched.added.join('；')}）` : ''}`
+      `${patched.added.length > 0 ? `，套用 ${character} 专属补丁 ${patched.added.length} 块（${patched.added.join('；')}）` : ''}` +
+      `${resolved.copied.length > 0 ? `，按 hash 搬进 ${resolved.copied.length} 个条目（${resolved.copied.map((item) => `${item.key} ${item.className}`).join('、')}）` : ''}` +
+      `${composed.merged.length > 0 ? `，合并伴随系统的 emitter（${composed.merged.map((item) => `${item.key} ← ${item.from.join('、')}`).join('；')}）` : ''}`
   );
+  if (unresolved.length > 0) {
+    log(
+      ` [base-slot] ${character}: Resources 有 ${unresolved.length} 个 value 指向本包其它 bin 的条目` +
+        `（${unresolved
+          .slice(0, 4)
+          .map((ref) => `${ref.value} ${ref.className}`)
+          .join('、')}${unresolved.length > 4 ? '…' : ''}）` +
+        `，props 解析不到；需要的话用补丁的 resourceMap.set 点名才会搬进来`
+    );
+  }
   if (idleDropped.length > 0) {
     log(` [base-slot] ${character}: 删掉的 idle 特效 ${idleDropped.slice(0, 8).join('、')}`);
   }

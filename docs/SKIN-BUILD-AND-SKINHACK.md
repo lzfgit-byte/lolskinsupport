@@ -480,8 +480,8 @@ base-slot 外壳是**通用规则**，能重建的东西全靠数据推导；但
 | 操作 | 位置 | 典型用途 |
 | --- | --- | --- |
 | `propsInsert` | `SkinCharacterDataProperties` 里，锚在某个字段之后（`after: 'skinParent'`） | `ChromaData`、`PersistentEffectConditions` |
-| `entriesInsert` | 顶层 `entries` 表末尾 | `0x… = VfxSystemDefinitionData { … }` 这类独立条目 |
-| `resourceMap.set` | `Resources.resourceMap` 里（有就覆盖值，没有就追加） | 让新加的粒子定义被引用、补齐 `PersistentVfxData.effectKey` |
+| `entriesInsert` | 顶层 `entries` 表末尾 | 数据块**不在这里再抄一遍**时才用（见下） |
+| `resourceMap.set` | `Resources.resourceMap` 里（有就覆盖值，没有就追加） | 补齐 `PersistentVfxData.effectKey`、把某个引用指到条目 |
 | `resourceMap.remove` | 同上，删掉指定的 key | 同一个粒子被两套 key 各解析一遍 → 渲染两遍（Rumble 的 Q 两个方向火焰） |
 
 细节：
@@ -491,17 +491,43 @@ base-slot 外壳是**通用规则**，能重建的东西全靠数据推导；但
 - 幂等：片段首行已存在就跳过，同一个包重复构建不会插第二遍；
 - `skins: [3]` 可以只对某几个皮肤序号生效（不填 = 该英雄所有皮肤）。补丁里的粒子路径
   经常写死原皮肤的命名空间（`Skins/Skin3/Particles/…`），没验证过的皮肤不要跟着套；
-- 日志：`[base-slot] … 套用 rumble 专属补丁 3 块（…）`。
+- 日志：`[base-slot] … 套用 rumble 专属补丁 2 块（…）`。
 
-现有的补丁只有 Rumble（`skin-patches/rumble.ts`，出处 Rose 的 `68003.fantome`）：
-R 的「燃烧」特效在游戏数据里没有，纯数据重建出来 R 完全不显示。补丁补三块 ——
-`ChromaData` 占位、`PersistentEffectConditions`（`RumbleFlameThrower` buff 的
-`AllTrueMaterialDriver` + 定时驱动，两处 `PersistentVfxData.boneName = "R_Flame"`）、
-`0xa075fcc1 = VfxSystemDefinitionData`（`Rumble_Skin03_R_tar_team_green` 整段粒子），
-再用 `resourceMap.set` 把 `0x74ad149b` 指到这段粒子、补上两个 `effectKey`
-（`0x97e29b7d` / `0x68ba7d5d`），并用 `resourceMap.remove` 删掉我们这边多出来的
-`0x52c319c0` / `0x55c31e79` —— 那两条也指向 `Rumble_Skin03_Q_cas_01/_02`，不删的话
-Q 的火焰会从两个方向各喷一次。
+**不再手抄数据块**（builder 8 之后的两条通用能力，`skin-base-slot.ts`）：
+
+1. `copyResolvedEntries()`：补丁的 `resourceMap.set` 把某个引用指到一个**条目 key** 时，
+   生成时会按这个 hash 从随包的皮肤 bin 里把条目本体取出来放进 base bin（props 的
+   `mResourceResolver` 只认自己这个 bin 的条目）。只搬点名的，不做「凡是能对上就搬」——
+   Rumble 的 resolver 有 50 个 value 能对上皮肤 bin 的条目，全搬等于把整份粒子内嵌回
+   base bin，正是 builder 7 验证过会破坏特效链的老做法。
+2. `findUnresolvedResourceRefs()`：生成后扫 `Resources` 的 value，凡是「本 bin 没有、但随包
+   其它 bin 有同名条目」的，日志会打
+   `[base-slot] … Resources 有 N 个 value 指向本包其它 bin 的条目（…），props 解析不到`。
+   这是「靠一份能跑的包来对照」的替代品：缺层会在日志里直接现形（Rumble 现在报 46 个，
+   大部分是皮肤 bin 自带、props 本来就不该解析到的系统）。
+3. `composeEmitters()`：游戏常把同一个技能特效拆成多个系统，而 base-slot 的条件一次只能
+   挂一个系统。补丁写 `composeEntries: [{ key: '0xa075fcc1', alsoByName: '…_R_Crater_' }]`，
+   生成时按名字前缀把伴随系统的 `VfxEmitterDefinitionData` 并进主系统 —— emitter 本体
+   仍然全部来自游戏数据。Rumble 的 R 地面就是这样：`tar_team_green`（13 个 emitter）+
+   6 个 `…_R_Crater_01..06`（各 1 个），并完与能跑的包**逐字节相同**（19 个 emitter、
+   1,474 行）。只挂 tar 的话游戏里 R 完全看不见（实测）。
+
+现有的补丁只有 Rumble（`skin-patches/rumble.ts`），只剩**两条映射 + 一段条件**：
+
+- **条件**（游戏数据里确实没有）：把 Rumble 的 52 个 bin 全转成文本扫过，
+  `PersistentEffectConditions` / `PersistentVfxData` **0 命中**，`0x97e29b7d` /
+  `0x68ba7d5d` 也不在任何 bin 里。所以 `propsInsert` 补 100 行：三段 buff 条件 +
+  `PersistentVfxData`，挂点 `R_Flame` 来自皮肤骨架，buff 名 `RumbleFlameThrower` /
+  `RumbleDangerZoneBuff` / `RumbleOverheat` 都是游戏数据里的真实字段。
+- **映射**：`0x74ad149b → 0xa075fcc1`（R 的燃烧引用，游戏里指向 5 行的 `r_burn` 存根，
+  要指到 `Rumble_Skin03_R_tar_team_green`）+ 两个 `effectKey → Q_cas_01/_02`；
+  `resourceMap.remove` 删掉 base 皮肤 resolver 里指向同一对粒子的两条（否则 Q 两个方向）。
+- 上面三个 value 都是**条目 key**，所以 `copyResolvedEntries()` 会把系统本体从随包的皮肤
+  bin 里搬进 base bin（各 1,206 / 580 / 430 行，都是**游戏自己的数据**）。补丁里一行粒子
+  定义都没有：之前照着 Rose 的包手抄的那 1,471 行已经删掉了。
+
+实测结论（游戏内）：条件不补 → R 完全没有；映射不指 → R 也没有（解析到 5 行的存根）；
+三条都补 + 自动搬条目 → Q 单方向、E 火箭、R 燃烧都正常。
 
 ### 4.3 音频身份
 
@@ -599,7 +625,7 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | 炫彩（chroma）的技能特效歪/没有 | 模型和走路都对，Q 的火焰方向不对、E 的火箭看不到、R 没特效 | 源皮肤是炫彩（`skinParent` + `skinClassification = 2`），塞进 base 槽位后父皮肤不在，特效解析链（动画图 `mEffectKey` → `Resources.resourceMap` → 父皮肤粒子）失效；按独立皮肤的身份写（§4.2，日志 `炫彩按独立皮肤写`） |
 | 独立皮肤（不是炫彩）也 Q 火焰歪 / E 火箭和 R 特效没有 | 皮肤是自己带粒子、带动画图的那种（Rumble 68003 最典型） | builder ≤ 6 把粒子内嵌进 base bin，且身份改写把 `objectPath` 挪到了 `Skin0`、`linked` 漏了 base 清单 —— 见 §4.2.1（builder 7 的 base-slot 外壳） |
 | 皮肤脚下一直挂着一团光/闪电 | 技能/被动都对，就是模型原点有常驻特效 | 两个来源，都在 §4.2.1：① `idleParticlesEffects` 的 `boneName` 在皮肤骨架里不存在（`Spike`/`robot_root`…），塌到原点；② 删 `keywordsRequired` 时把 `keywordsExcluded` 也删了，base 皮肤的 `P_buf` 光晕变成常驻 |
-| 改完还是缺特效，翻遍游戏数据都找不到那段定义 | 某个技能（Rumble 的 R）纯数据重建后完全没有特效 | 这段定义游戏里就没有，手改包是搬进包里的 → 走英雄专属补丁（§4.2.2，`skin-patches/`） |
+| 改完还是缺特效，翻遍游戏数据都找不到那段定义 | 某个技能（Rumble 的 R）纯数据重建后完全没有特效 | 缺的是 props 里的**触发条件**（游戏数据没有），粒子定义本身在皮肤 bin 里；`mResourceResolver` 只能引用同一个 bin 的条目 → 走英雄专属补丁（§4.2.2） |
 | 补丁插进去了但游戏里还是不亮 | 包里能看到 `VfxSystemDefinitionData`，游戏不渲染 | 没人引用它。`PersistentVfxData.effectKey` 要在 `Resources.resourceMap` 里解析得到，R 的燃烧引用（`0x74ad149b`）也要指过来 —— `resourceMap.set`（§4.2.2） |
 | 同一段特效渲染两遍（Q 的火焰两个方向） | 特效出现了，但方向/位置有两份 | 同一个粒子被两套 key 各解析一遍：base 皮肤那份 resolver 里的 key 和皮肤自己的 key 都指向同一段粒子。用 `resourceMap.remove` 删掉多的那套（§4.2.2，Rumble 的 `0x52c319c0`/`0x55c31e79`） |
 | 换版本后旧包还是老样子 | 界面里已经有 zip，不会重新生成 | 包内容版本变了（`SKIN_ARCHIVE_BUILDER`），旧包会被当成「没有」自动重建；想强制重来就删掉那个 zip（或 `*.zip.check.json`） |
