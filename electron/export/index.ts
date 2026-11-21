@@ -41,8 +41,15 @@ import {
   unpackWadFile,
 } from './load-skin-data';
 import { getToolsEnvStatus } from './tools-env';
-import { blockedSkinCheck, describeSkinCheck, isStaleSkinCheck, readSkinCheck } from './skin-check';
+import {
+  blockedSkinCheck,
+  describeSkinCheck,
+  isStaleSkinCheck,
+  readSkinCheck,
+  skinCheckPath,
+} from './skin-check';
 import { isManagedToolsPath, resolveToolsDir } from '../utils/tools-path';
+import { isUnderDir, removeFilesUnder } from '../utils/skin-archive';
 import { toSkinIndex as resolveSkinIndex } from './skin-id';
 import { ltfInjector } from './ltfSession';
 import { importLeagueSkinsFromFolder, importLeagueSkinsFromZip } from './league-skins-import';
@@ -108,15 +115,40 @@ const toSkinIndex = (heroId: string, skinId: string): number =>
   resolveSkinIndex(`${heroId}`, `${skinId}`);
 
 /**
+ * 删掉一个已生成的包（zip + 旁边的 `.check.json`），给强制重建用。
+ *
+ * 只动 `skins/` 目录下的文件：路径由 heroId/skinId 拼出来，万一哪天拼错也不至于
+ * 删到别处。返回是否真的删了东西。
+ */
+const discardSkinArchive = (skinPath: string): boolean => {
+  const root = getSkinPath();
+  const target = Path.resolve(skinPath);
+  if (!isUnderDir(target, root)) {
+    LogMsgUtil.sendLogMsg(`[构建] 不删 ${target}：不在皮肤目录 ${root} 下`);
+    return false;
+  }
+  return removeFilesUnder(root, [target, skinCheckPath(target)]) > 0;
+};
+
+/**
  * 「没有皮肤就直接构建」用：后台静默构建一个皮肤包。
  *
  * 页面日志抽屉不动（`setBuildLogSink` 把日志改道到构建窗口），进度和结果都发到
- * 侧边通知；已经有包时直接返回。
+ * 侧边通知；已经有包时直接返回 —— `force` 为真时跳过这个复用，「构建并注入」
+ * 按钮就靠它保证每次点了都重新出包。
  */
-export const autoBuildSkin = async (wadPath: string, heroId: string, skinId: string) => {
+export const autoBuildSkin = async (
+  wadPath: string,
+  heroId: string,
+  skinId: string,
+  /** 无条件重新构建：已有的包就算能通过检查也重做 */
+  force = false
+) => {
   setConfigData(getGamePath(), getSkinPath(), getModToolsPath(), getSkinDefaultSuffix());
   const skinPath = buildSkinPath(`${heroId}`, `${skinId}`);
-  if (existsSync(skinPath)) {
+  // 「构建并注入」要求每次都重新构建：旧包能过检查也不复用，否则改过生成逻辑
+  // 以后点按钮，注入的还是上一次的旧包。
+  if (!force && existsSync(skinPath)) {
     // 上次生成没通过 LTK 检查（可能是旧版本留下的包）：重新生成一次
     const check = readSkinCheck(skinPath);
     if (isEmptySkinArchive(skinPath)) {
@@ -149,6 +181,17 @@ export const autoBuildSkin = async (wadPath: string, heroId: string, skinId: str
     showBuildWindow('构建皮肤');
     updateBuildWindow({ state: 'error', percent: 100, message: '工具环境未初始化', detail: error });
     return { ok: false, existed: false, path: skinPath, error };
+  }
+
+  if (force) {
+    // 真正开始构建之前才删：上面这些前置检查（WAD、皮肤 id、工具环境）没过时，
+    // 不该把上一次还能用的包删掉。删完构建失败也不会「旧包冒充成功」
+    // （下面 `const ok = existsSync(skinPath)` 就是看有没有文件）。
+    const removed = discardSkinArchive(skinPath);
+    LogMsgUtil.sendLogMsg(
+      `[构建] 强制重新构建 ${heroId}_${skinId}` +
+        (removed ? '（已删掉旧包和检查结果）' : '（原来没有包）')
+    );
   }
 
   showBuildWindow(`构建皮肤 ${heroId}_${skinId}`);

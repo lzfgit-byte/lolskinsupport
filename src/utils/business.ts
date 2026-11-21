@@ -118,10 +118,17 @@ export const f_checkHasSkins = async (heroId: string, skinId: string) => {
 };
 /**
  * 没有皮肤时直接构建（后台静默，进度发到独立的构建窗口）
- * export const autoBuildSkin = (wadPath, heroId, skinId) => {}
+ * export const autoBuildSkin = (wadPath, heroId, skinId, force = false) => {}
  */
 export const f_autoBuildSkin = async (wadPath: string, heroId: string, skinId: string) => {
-  return executeFunction('autoBuildSkin', wadPath, heroId, skinId);
+  return executeFunction('autoBuildSkin', wadPath, heroId, skinId, false);
+};
+/**
+ * 强制重新构建一个皮肤包（无视已有的包）——「构建并注入」按钮用，
+ * 保证点一下拿到的就是当前代码产出的包
+ */
+export const f_rebuildSkin = async (wadPath: string, heroId: string, skinId: string) => {
+  return executeFunction('autoBuildSkin', wadPath, heroId, skinId, true);
 };
 /**
  * 工具环境状态（关键工具是否齐全、工具目录在哪）

@@ -108,7 +108,9 @@
           <a-button class="action-btn-ghost" @click="doMkCurrentSkin">
             （一个）当前皮肤文件
           </a-button>
-          <a-button class="action-btn-secondary" @click="doMkOverlay"> 构建并注入 </a-button>
+          <a-button class="action-btn-secondary" :loading="rebuilding" @click="doMkOverlay">
+            构建并注入
+          </a-button>
           <a-button class="action-btn-primary" @click="applySelectedSkin"> 点击使用皮肤 </a-button>
         </footer>
       </main>
@@ -133,6 +135,7 @@
     f_loadSkinDataByFilePath,
     f_mkOverlay,
     f_openPath,
+    f_rebuildSkin,
     f_removePath,
     f_selectPathOrFile,
     f_setHeroChoseSkin,
@@ -158,6 +161,8 @@
   let skinIdImg = {};
   const allSkins = ref<skinInfo[]>([]);
   const choseSkinId = ref('');
+  /** 「构建并注入」正在重新构建：按钮转圈，避免连点重复构建 */
+  const rebuilding = ref(false);
   const showChromas = ref(false);
   /** 皮肤数据加载状态 */
   const skinLoading = ref(false);
@@ -358,11 +363,37 @@
     await f_loadSkin(heroId.value, choseSkin.value.skinId, getSkinImage());
   };
 
+  /**
+   * 「构建并注入」：每次都重新构建这个皮肤包，再注入。
+   *
+   * 不复用已有的包 —— 以前这里走 `ensureSkinBuilt()`，包还在就直接注入，
+   * 结果是改过生成逻辑以后点按钮，注入的仍是上一次的旧包。
+   */
   const doMkOverlay = async () => {
-    if (!(await ensureSkinBuilt(choseSkinId.value))) {
+    if (rebuilding.value) {
       return;
     }
-    await f_mkOverlay(heroId.value, choseSkin.value.skinId, getSkinImage());
+    if (!choseSkinId.value) {
+      message.warn('请先选择皮肤');
+      return;
+    }
+    if (!heroAlias.value) {
+      message.warn('请先选择英雄');
+      return;
+    }
+    const wadPath = `${gamePath.value}\\DATA\\FINAL\\Champions\\${heroAlias.value}.wad.client`;
+    rebuilding.value = true;
+    try {
+      LogUtil.log(`[构建] 重新构建 ${heroId.value}_${choseSkinId.value}`);
+      const result = await f_rebuildSkin(wadPath, heroId.value, choseSkinId.value);
+      if (!result?.ok) {
+        message.warn(`皮肤构建失败：${result?.error ?? '详见构建窗口'}`);
+        return;
+      }
+      await f_mkOverlay(heroId.value, choseSkinId.value, getSkinImage());
+    } finally {
+      rebuilding.value = false;
+    }
   };
 
   const getSkinImage = () => {

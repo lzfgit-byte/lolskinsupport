@@ -639,7 +639,8 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 
 1. `npm run skincheck:test`（LTK 名字规则）、`npm run banks:test`（别名规划）、
    `npm run rebase:test`（网格重建 + 身份改写）、`npm run audio:test`、`npm run anim:test`（动画图改名）、
-   `npm run baseslot:test`（base-slot 外壳）、`npm run patch:test`（英雄专属补丁层）；
+   `npm run baseslot:test`（base-slot 外壳）、`npm run patch:test`（英雄专属补丁层）、
+   `npm run archive:test`（强制重建前的删包范围）；
 2. 真实构建一个皮肤（选一个「有状态类事件」的，比如 Akali 102 或者新英雄），看日志里
    有没有 `[检查] … 通过 LTK 名字检查`；
 3. 进游戏 → 看 LTK Manager 日志里有没有 `c0000229`；有问题就去
