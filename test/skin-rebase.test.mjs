@@ -22,9 +22,15 @@ if (!fs.existsSync(BUNDLE)) {
   throw new Error(`缺少 ${BUNDLE}，先运行 npm run rebase:test 的构建步骤`);
 }
 
-const { rebaseSkinPy, findCaseInsensitive, capitalizeCharacter } = await import(
-  `file:///${BUNDLE.replace(/\\/g, '/')}`
-);
+const {
+  rebaseSkinPy,
+  findCaseInsensitive,
+  capitalizeCharacter,
+  readGearShowList,
+  unhideSubmeshes,
+  readGearVfxMap,
+  applyGearVfxMap,
+} = await import(`file:///${BUNDLE.replace(/\\/g, '/')}`);
 const { rebuildMesh, isRebuilt } = meshModule;
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'skin-rebase-'));
@@ -170,7 +176,9 @@ try {
     assert.match(text, /name: string = "Vayne_Base_SFX"/);
     assert.match(text, /"Play_sfx_Vayne_VayneTumble_OnCast"/);
     assert.equal(text.includes('Vayne_Skin11_SFX'), false, '旧的音频身份不该留');
-    assert.equal(text.includes('championSkinId'), false, 'base 皮肤不该带 championSkinId');
+    // 游戏自带的 base skin0.bin 里有 championSkinId（Sona 是 37000），Rose 也不删：
+    // 多形态皮肤的 gear form 与音频靠它绑定，删掉游戏会当成没有皮肤身份
+    assert.match(text, /championSkinId: i32 = 67011/, 'championSkinId 要保留');
     return `2 个网格 + 2 段音频，SKN ${SKN.length}->${fs.statSync(out.skn).size} 字节`;
   });
 
@@ -318,6 +326,208 @@ try {
     });
     assert.equal(result, null);
     return '跳过';
+  });
+
+  // ── objectPath / skinUpgradeData / base 引用照抄 ───────────────────────────
+  const fnv = (name) => {
+    let hash = 0x811c9dc5;
+    for (const byte of Buffer.from(name.toLowerCase(), 'utf8')) {
+      hash ^= byte;
+      hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+    }
+    return hash.toString(16).padStart(8, '0');
+  };
+
+  const withExtra = (extra) => {
+    const file = path.join(dir, `extra-${Math.random().toString(16).slice(2)}.py`);
+    fs.writeFileSync(file, PY.replace(/\n}\n$/, `\n${extra}\n}\n`), 'utf-8');
+    return file;
+  };
+
+  await step('objectPath：entry 自己的路径也换成 Skin0（哈希形态）', () => {
+    const oldHash = fnv('Characters/Vayne/Skins/Skin11');
+    const py = withExtra(`        objectPath: hash = 0x${oldHash}`);
+    const assets = new Map([
+      [SKN_KEY, SKN],
+      [SKL_KEY, SKL],
+    ]);
+    const result = rebaseSkinPy({
+      pyPath: py,
+      character: 'vayne',
+      skinId: 11,
+      baseChampionSkinName: 'VayneBase',
+      assets,
+      outputRoot: path.join(dir, 'pack-objectpath'),
+    });
+    assert.ok(result);
+    assert.equal(result.objectPathRenamed, true, '应该认出来并改写');
+    const text = fs.readFileSync(py, 'utf-8');
+    assert.ok(
+      text.includes(`0x${fnv('Characters/Vayne/Skins/Skin0')}`),
+      '要换成 Skin0 的哈希'
+    );
+    assert.equal(text.includes(`0x${oldHash}`), false, '旧哈希不该留');
+    return `0x${oldHash} -> Skin0`;
+  });
+
+  await step('skinUpgradeData：gear 目标不在本包里去整段', () => {
+    const py = withExtra(`        skinUpgradeData: embed = SkinUpgradeData {
+            mGearSkinUpgrades: list[link] = {
+                "Characters/Vayne/Skins/Skin11/Gear/Gun2025"
+            }
+        }`);
+    const assets = new Map([
+      [SKN_KEY, SKN],
+      [SKL_KEY, SKL],
+    ]);
+    const result = rebaseSkinPy({
+      pyPath: py,
+      character: 'vayne',
+      skinId: 11,
+      baseChampionSkinName: 'VayneBase',
+      assets,
+      outputRoot: path.join(dir, 'pack-upgrade-dangling'),
+    });
+    assert.ok(result);
+    assert.equal(result.upgradeDropped, true, '目标不在包里应该去掉');
+    assert.equal(fs.readFileSync(py, 'utf-8').includes('skinUpgradeData'), false);
+    return '去了 skinUpgradeData';
+  });
+
+  await step('skinUpgradeData：gear 目标在本包里就保留', () => {
+    const py = withExtra(`        skinUpgradeData: embed = SkinUpgradeData {
+            mGearSkinUpgrades: list[link] = {
+                "Characters/Vayne/Skins/Skin11/Gear/Gun2025"
+            }
+        }
+    "Characters/Vayne/Skins/Skin11/Gear/Gun2025" = GearSkinUpgrade {
+        mGearData: pointer = GearData {
+        }
+    }`);
+    const assets = new Map([
+      [SKN_KEY, SKN],
+      [SKL_KEY, SKL],
+    ]);
+    const result = rebaseSkinPy({
+      pyPath: py,
+      character: 'vayne',
+      skinId: 11,
+      baseChampionSkinName: 'VayneBase',
+      assets,
+      outputRoot: path.join(dir, 'pack-upgrade-kept'),
+    });
+    assert.ok(result);
+    assert.equal(result.upgradeDropped, false, '目标在包里应该保留');
+    assert.equal(fs.readFileSync(py, 'utf-8').includes('skinUpgradeData'), true);
+    return '保留';
+  });
+
+  await step('骨架/网格引用照抄 base bin 的写法（大小写照抄）', () => {
+    const py = makePy('base-case.py');
+    const assets = new Map([
+      [SKN_KEY, SKN],
+      [SKL_KEY, SKL],
+    ]);
+    const result = rebaseSkinPy({
+      pyPath: py,
+      character: 'vayne',
+      baseChampionSkinName: 'VayneBase',
+      baseSkeleton: 'ASSETS/Characters/VaYnE/Skins/Base/VaYnE.skl',
+      baseSimpleSkin: 'ASSETS/Characters/VaYnE/Skins/Base/VaYnE.skn',
+      assets,
+      outputRoot: path.join(dir, 'pack-case'),
+    });
+    assert.ok(result);
+    assert.equal(result.skeleton, 'ASSETS/Characters/VaYnE/Skins/Base/VaYnE.skl');
+    const text = fs.readFileSync(py, 'utf-8');
+    assert.match(text, /skeleton: string = "ASSETS\/Characters\/VaYnE\/Skins\/Base\/VaYnE\.skl"/);
+    // 文件按小写路径落盘（WAD 路径哈希不分大小写）
+    assert.ok(
+      fs.existsSync(
+        path.join(dir, 'pack-case', 'assets', 'characters', 'vayne', 'skins', 'base', 'vayne.skl')
+      )
+    );
+    return '大小写照抄';
+  });
+
+  await step('gear 的 mCharacterSubmeshesToShow：按哈希读出来', () => {
+    const link = 'Characters/Vayne/Skins/Skin11/Gear/Gun2025';
+    const py = `entries: map[hash, embed] = {
+    0x${fnv(link)} = 0x27dd6361 {
+        0x639b0013: pointer = 0xb43441ae {
+            mCharacterSubmeshesToShow: list[hash] = { 0x${fnv('A_Gun25')}, 0x${fnv('A_Gun25_Gem')} }
+        }
+    }
+    "Characters/Other" = OtherData {
+    }
+}
+`;
+    const show = readGearShowList(py, link);
+    assert.deepEqual(show, [fnv('A_Gun25'), fnv('A_Gun25_Gem')]);
+    assert.equal(readGearShowList(py, 'Characters/Vayne/Skins/Skin11/Gear/Nope'), null);
+    // 精简名字表里 link 是哈希时也能认
+    assert.deepEqual(readGearShowList(py, `0x${fnv(link)}`), show);
+    return show.join(', ');
+  });
+
+  await step('unhideSubmeshes：把 gear 会显示的 submesh 从隐藏列表删掉', () => {
+    const a = fnv('A_Gun25');
+    const b = fnv('A_Gun25_Gem');
+    const text = `        initialSubmeshToHide: string = "A_Gun25 A_Gun25_Gem B_Gun24 C_Gun23"\n`;
+    const result = unhideSubmeshes(text, [a, b, fnv('NotThere')]);
+    assert.deepEqual(result.removed, ['A_Gun25', 'A_Gun25_Gem']);
+    assert.match(result.text, /initialSubmeshToHide: string = "B_Gun24 C_Gun23"/);
+    // 字段名是哈希（精简名字表）时同样能改
+    const hashed = `        0x${fnv('initialSubmeshToHide')}: string = "A_Gun25 B_Gun24"\n`;
+    const hashedResult = unhideSubmeshes(hashed, [a]);
+    assert.deepEqual(hashedResult.removed, ['A_Gun25']);
+    assert.match(hashedResult.text, /string = "B_Gun24"/);
+    return 'A_Gun25, A_Gun25_Gem';
+  });
+
+  await step('gear 的 mVFXResourceResolver：value 是哈希时用 particlePath 反查路径', () => {
+    const link = 'Characters/Vayne/Skins/Skin11/Gear/Gun2025';
+    const particlePath = 'Characters/Vayne/Skins/Skin11/Gear/Gun2025/Particles/Vayne_Skin11_W_Max00';
+    const gearPy = `entries: map[hash, embed] = {
+    0x${fnv(link)} = 0x27dd6361 {
+        0x639b0013: pointer = 0xb43441ae {
+            mVFXResourceResolver: pointer = ResourceResolver {
+                resourceMap: map[hash, link] = {
+                    0x${fnv('Vayne_W_Max_gear_key')} = 0x${fnv(particlePath)}
+                }
+            }
+        }
+    }
+    "Characters/Vayne/Skins/Vayne_Particle" = VfxSystemDefinitionData {
+        particlePath: string = "${particlePath}"
+    }
+}
+`;
+    const pairs = readGearVfxMap(gearPy, link);
+    assert.equal(pairs?.length, 1);
+    assert.equal(pairs[0].path, particlePath, '要反查出粒子路径');
+    return pairs[0].path;
+  });
+
+  await step('applyGearVfxMap：把皮肤 Resources 里的 0x0 补成粒子（名字 key 和哈希 key 都补）', () => {
+    const particlePath = 'Characters/Vayne/Skins/Skin11/Gear/Gun2025/Particles/Vayne_Skin11_W_Max00';
+    const pairs = [
+      { key: `0x${fnv('Vayne_W_Max_gear_key')}`, value: `"${particlePath}"`, path: particlePath },
+    ];
+    const skinPy = `entries: map[hash, embed] = {
+    "Characters/Vayne/Skins/Skin0/Resources" = ResourceResolver {
+        resourceMap: map[hash, link] = {
+            "Vayne_W_Max" = 0x0
+            0x${fnv('Vayne_W_Max_gear_key')} = 0x0
+        }
+    }
+}
+`;
+    const applied = applyGearVfxMap(skinPy, pairs);
+    assert.deepEqual(applied.mapped.sort(), ['Vayne_W_Max', `0x${fnv('Vayne_W_Max_gear_key')}`].sort());
+    assert.match(applied.text, new RegExp(`"Vayne_W_Max" = "${particlePath}"`));
+    assert.doesNotMatch(applied.text, /= 0x0/);
+    return '2 条';
   });
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });

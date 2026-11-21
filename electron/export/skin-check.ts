@@ -34,6 +34,23 @@ export interface SkinCheckProblem {
   value: string;
 }
 
+/**
+ * 包内容版本：出包内容变了（旧的包需要重新生成）就 +1。
+ *
+ *   1（没有这个字段）→ 2：开始随包带皮肤自己的动画图 `animations/skin0.bin`，
+ *   并把皮肤 bin 的 `animationGraphData` 指到它（见 `skin-animation.ts`）。
+ *   2 → 3：`objectPath` 换成 base 皮肤自己的路径、骨架/网格引用照抄 base bin 的写法
+ *   （大小写）、去掉目标不在本包里的 `skinUpgradeData`（见 `skin-rebase.ts`）——
+ *   这三处不改，传说皮肤（例如 MissFortune 21_69）进游戏走路/技能都不播动画。
+ *   3 → 4：去掉 gear 数据后，把第一档 gear 会显示的 submesh 从 `initialSubmeshToHide`
+ *   删掉（`unhideSubmeshes()`），否则模型上少两把枪。
+ *   4 → 5：同样为了补 gear，把 gear 的 `mVFXResourceResolver.resourceMap` 补进皮肤的
+ *   `Resources`（`applyGearVfxMap()`），否则 W 的枪口特效没有。
+ *
+ * `checkHasSkins()` / `autoBuildSkin()` 看到旧版本会把包当成「没有」，重新生成一次。
+ */
+export const SKIN_ARCHIVE_BUILDER = 5;
+
 export interface SkinCheckResult {
   /** 检查通过 */
   ok: boolean;
@@ -42,6 +59,8 @@ export interface SkinCheckResult {
   /** 检查时间（ISO） */
   checkedAt: string;
   problems: SkinCheckProblem[];
+  /** 生成这个包的构建版本（`SKIN_ARCHIVE_BUILDER`）；老包没有这个字段 */
+  builder?: number;
 }
 
 /** base 皮肤的身份：改名用的名字 + 音频段（事件白名单从这里面取） */
@@ -167,11 +186,20 @@ export const readSkinCheck = (zipPath: string): SkinCheckResult | null => {
       problems: raw.problems
         .filter((item: any) => item && typeof item.value === 'string')
         .map((item: any) => ({ kind: item.kind, value: item.value })),
+      ...(Number.isFinite(raw.builder) ? { builder: Number(raw.builder) } : {}),
     };
   } catch {
     return null;
   }
 };
+
+/**
+ * 这个包是旧版本构建的（内容格式变了，需要重新生成）。
+ *
+ * 没有 `.check.json`（不是我们生成的包，比如手动拖进来的）返回 false —— 不去动它。
+ */
+export const isStaleSkinCheck = (check: SkinCheckResult | null): boolean =>
+  !!check && check.builder !== SKIN_ARCHIVE_BUILDER;
 
 /** 注入前用：这个包是不是「检查没通过、不许加载」；没检查过（老包）返回 null 放行 */
 export const blockedSkinCheck = (zipPath: string): SkinCheckResult | null => {

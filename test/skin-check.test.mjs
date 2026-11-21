@@ -27,6 +27,8 @@ const {
   writeSkinCheck,
   readSkinCheck,
   blockedSkinCheck,
+  isStaleSkinCheck,
+  SKIN_ARCHIVE_BUILDER,
 } = await import(`file:///${BUNDLE.replace(/\\/g, '/')}`);
 
 let failures = 0;
@@ -194,6 +196,24 @@ await step('检查结果写到 zip 旁边，读回来一致', () => {
   assert.equal(blockedSkinCheck(zip), null, '通过的包放行');
   fs.rmSync(dir, { recursive: true, force: true });
   return 'roundtrip 正常';
+});
+
+await step('旧版本出的包会被认成「要重新生成」', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'skin-stale-'));
+  const zip = path.join(dir, '21', '21_69.zip');
+  fs.mkdirSync(path.dirname(zip), { recursive: true });
+  fs.writeFileSync(zip, 'not a real zip');
+  const base = { ok: true, champion: 'MissFortune', checkedAt: '2026-11-20T00:00:00.000Z', problems: [] };
+  // 没有 builder 字段 = 动画图之前的版本
+  writeSkinCheck(zip, base);
+  assert.equal(isStaleSkinCheck(readSkinCheck(zip)), true, '没有 builder 的老包应该重新生成');
+  // 没检查结果（手动放进来的包）不动它
+  assert.equal(isStaleSkinCheck(null), false, '没有 .check.json 不重新生成');
+  writeSkinCheck(zip, { ...base, builder: SKIN_ARCHIVE_BUILDER });
+  assert.equal(isStaleSkinCheck(readSkinCheck(zip)), false, '当前版本生成的包是最新的');
+  assert.deepEqual(readSkinCheck(zip), { ...base, builder: SKIN_ARCHIVE_BUILDER });
+  fs.rmSync(dir, { recursive: true, force: true });
+  return '版本判定正常';
 });
 
 console.log(failures === 0 ? '\nLTK 名字检查测试通过' : `\n${failures} 个用例失败`);

@@ -41,7 +41,7 @@ import {
   unpackWadFile,
 } from './load-skin-data';
 import { getToolsEnvStatus } from './tools-env';
-import { blockedSkinCheck, describeSkinCheck, readSkinCheck } from './skin-check';
+import { blockedSkinCheck, describeSkinCheck, isStaleSkinCheck, readSkinCheck } from './skin-check';
 import { isManagedToolsPath, resolveToolsDir } from '../utils/tools-path';
 import { toSkinIndex as resolveSkinIndex } from './skin-id';
 import { ltfInjector } from './ltfSession';
@@ -82,6 +82,21 @@ export const loadSkinDataByFilePath = async (fullWadPath: string, current = -1) 
   await loadSkinDataByFile(idName, fullWadPath, null, current);
 };
 
+const SKIN_ARCHIVE_MIN_BYTES = 8 * 1024;
+
+/**
+ * 空包判定：正常的皮肤包至少几十 KB；工具失败时以前会静默写出 335 字节的 zip
+ * （里面只有一个 272 字节的空 WAD）。这种包 LTK 导入后覆盖数是 0，游戏里什么都不换，
+ * 但 `.check.json` 还是 `ok: true`，所以不能只信 sidecar。
+ */
+const isEmptySkinArchive = (file: string): boolean => {
+  try {
+    return fs.statSync(file).size < SKIN_ARCHIVE_MIN_BYTES;
+  } catch {
+    return false;
+  }
+};
+
 /** 工具环境状态：关键工具齐不齐、工具目录在哪（工具随安装包走，不需要手动初始化） */
 export const getToolsEnvState = () => getToolsEnvStatus();
 
@@ -104,10 +119,16 @@ export const autoBuildSkin = async (wadPath: string, heroId: string, skinId: str
   if (existsSync(skinPath)) {
     // 上次生成没通过 LTK 检查（可能是旧版本留下的包）：重新生成一次
     const check = readSkinCheck(skinPath);
-    if (!check || check.ok) {
+    if (isEmptySkinArchive(skinPath)) {
+      LogMsgUtil.sendLogMsg(`[检查] ${skinPath} 是空包（只有几百字节），重新生成`);
+    } else if (isStaleSkinCheck(check)) {
+      // 旧版本出的包（比如还没有皮肤自己的动画图）：按需重新生成一次
+      LogMsgUtil.sendLogMsg(`[检查] ${skinPath} 是旧版本生成的包，重新生成`);
+    } else if (!check || check.ok) {
       return { ok: true, existed: true, path: skinPath };
+    } else {
+      LogMsgUtil.sendLogMsg(`[检查] ${skinPath} 上次没过 LTK 检查，重新生成`);
     }
-    LogMsgUtil.sendLogMsg(`[检查] ${skinPath} 上次没过 LTK 检查，重新生成`);
   }
   if (!wadPath || !existsSync(wadPath)) {
     const error = `找不到英雄 WAD：${wadPath}`;
@@ -307,7 +328,12 @@ const buildSkinPath = (heroId: string, skinId: string) => {
 };
 export const checkHasSkins = (heroId: string, skinId: string) => {
   const skinPath = buildSkinPath(`${heroId}`, `${skinId}`);
-  return existsSync(skinPath);
+  if (!existsSync(skinPath) || isEmptySkinArchive(skinPath)) {
+    // 空包当作「没有」：否则界面上会以为已经有包，跳过重新生成，最后注入时才失败
+    return false;
+  }
+  // 旧版本出的包（缺动画图等）也当作「没有」，让界面自动重新生成一次
+  return !isStaleSkinCheck(readSkinCheck(skinPath));
 };
 /** 已启用皮肤的账本：overlays/<heroId>_<skinId> 目录，「皮肤使用中」页面按它列皮肤 */
 const markAppliedSkin = (heroId: string, skinId: string) => {
@@ -345,6 +371,15 @@ const injectSkin = async (
   const skinPath = buildSkinPath(heroId, skinId);
   if (!existsSync(skinPath)) {
     showToast(`${skinPath} not exists`);
+    return false;
+  }
+  // 空包（只有几百字节、里面是空 WAD）导进 LTK 是 0 个覆盖，游戏里什么都看不到：
+  // 直接拒绝，提示重新生成，比让用户以为「挂载失败」好排查
+  if (isEmptySkinArchive(skinPath)) {
+    const size = fs.statSync(skinPath).size;
+    LogMsgUtil.sendLogMsg(`[检查] ${skinPath} 是空包（${size} 字节），不注入`);
+    MessageUtil.error(`皮肤 ${heroId}_${skinId} 的包是空的（${size} 字节），请重新生成这个皮肤`);
+    showToast(`--${heroId}_${skinId}-- 是空包，请重新生成`);
     return false;
   }
   // 生成时做过一次 LTK 名字检查：不通过就别注入 —— patcher 一进游戏就会把整个
@@ -396,11 +431,22 @@ export const loadSkins = async () => {
   const skins = [];
   let missing = 0;
   let blocked = 0;
+  let empty = 0;
+  let stale = 0;
   for (const { heroId, skinId } of applied) {
     const archive = buildSkinPath(heroId, skinId);
     if (!existsSync(archive)) {
       missing++;
       continue;
+    }
+    // 空包（只有几百字节）导入 LTK 是 0 个覆盖，等于没装：跳过并让用户重新生成
+    if (isEmptySkinArchive(archive)) {
+      empty++;
+      continue;
+    }
+    // 旧版本出的包（比如没有动画图）：还能用，但提示一下重新生成
+    if (isStaleSkinCheck(readSkinCheck(archive))) {
+      stale++;
     }
     const check = blockedSkinCheck(archive);
     if (check) {
@@ -411,6 +457,12 @@ export const loadSkins = async () => {
   }
   if (missing > 0) {
     MessageUtil.warning(`有 ${missing} 个皮肤文件不存在，已跳过`);
+  }
+  if (empty > 0) {
+    MessageUtil.warning(`有 ${empty} 个皮肤包是空的（生成失败），已跳过，请重新生成`);
+  }
+  if (stale > 0) {
+    MessageUtil.warning(`有 ${stale} 个皮肤包是旧版本生成的，建议重新生成一次（否则可能缺动作/音效）`);
   }
   if (blocked > 0) {
     MessageUtil.warning(`有 ${blocked} 个皮肤没过 LTK 检查（会被判 skinhack），已跳过`);

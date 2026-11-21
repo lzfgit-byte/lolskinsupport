@@ -38,6 +38,8 @@ import { resolveToolsDir } from '../utils/tools-path';
  * 改写逻辑依赖的字段/类型名，必须出现在精简名字表里。
  * `skin-audio.ts` 认 tagEventList / bankUnits / bankPath / events / voiceOver / name，
  * `skin-rebase.ts` 认 championSkinName / skeleton / simpleSkin，
+ * `skin-animation.ts` 认 animationGraphData（皮肤 bin 里的动画图链接），
+ * `skin-rebase.ts` 认 skinUpgradeData / SkinUpgradeData / mGearSkinUpgrades（gear 形态），
  * `load-skin-data.ts` 的 patchPyFile 认 SkinCharacterDataProperties / mResourceResolver / ResourceResolver。
  */
 export const RITOBIIN_NAMES = [
@@ -48,6 +50,15 @@ export const RITOBIIN_NAMES = [
   'BankUnit',
   'championSkinId',
   'championSkinName',
+  'animationGraphData',
+  'skinUpgradeData',
+  'SkinUpgradeData',
+  'mGearSkinUpgrades',
+  'mCharacterSubmeshesToShow',
+  'mCharacterSubmeshesToHide',
+  'initialSubmeshToHide',
+  'mVFXResourceResolver',
+  'resourceMap',
   'skeleton',
   'simpleSkin',
   'tagEventList',

@@ -75,19 +75,24 @@
 | 4 | 读 base 皮肤身份：从游戏 `skin0.bin` 里读 `championSkinName` 和音频两段 | `readBaseSkinData()` | `[base-skin] akali 的 base 皮肤: Akali，音频段 已读到` |
 | 5 | 音效别名：改单位名/事件名，往皮肤事件 bank 里补 base 名字的别名 Event，语音补 sidecar bank | `electron/export/skin-banks.ts` | `音效别名 94 个，语音别名 62 个（…），单位 Akali_Skin102_SFX->Akali_Base_SFX，随包 bank 2 个` |
 | 6 | 网格重建 + 身份改名 | `skin-rebase.ts` + `skin-mesh.ts` | `ASSETS/…/Skin102/Akali_Skin102.skn -> assets/characters/akali/skins/base/akali.skn (null vertex，2491860 字节)` |
-| 7 | 转回 bin | `pyToBinsCall()` | `[封包完成 ritobin]` |
-| 8 | **LTK 名字检查** | `electron/export/skin-check.ts` | `[检查] 84_102 通过 LTK 名字检查` 或 `[检查] … 会被 LTK 判 skinhack（9 处）：…` |
-| 9 | 打 WAD | `wad-make.exe` | `[正在封包] 生成 WAD` + `[INF] Packing / Reading / Writing / Done!` |
-| 10 | 打 zip（`META/info.json` + `WAD/<英雄>.wad.client`） | `createZipFile()` | `[ZIP完成] 84_102.zip` |
-| 11 | 写检查结果 sidecar | `writeSkinCheck()` | 文件 `<zip>.check.json` |
+| 7 | 动画图：把皮肤自己那份 `animations/skin<n>.bin` 改名成 Skin0 放进包，链接一起改 | `skin-animation.ts` | `[动画图] akali: DATA/Characters/Akali/Animations/Skin102.bin -> data/characters/akali/animations/skin0.bin（… -> …/Skin0，改写 animationGraphData + linked）` |
+| 8 | 转回 bin | `pyToBinsCall()` | `[封包完成 ritobin]` |
+| 9 | **LTK 名字检查** | `electron/export/skin-check.ts` | `[检查] 84_102 通过 LTK 名字检查` 或 `[检查] … 会被 LTK 判 skinhack（9 处）：…` |
+| 10 | 打 WAD | `wad-make.exe` | `[正在封包] 生成 WAD` + `[INF] Packing / Reading / Writing / Done!` |
+| 11 | 打 zip（`META/info.json` + `WAD/<英雄>.wad.client`） | `createZipFile()` | `[ZIP完成] 84_102.zip` |
+| 12 | 写检查结果 sidecar | `writeSkinCheck()` | 文件 `<zip>.check.json` |
 
 ### 1.4 产物
 
 ```
 %LOCALAPPDATA%\lol-skin-ll\skins\<SKIN_DEFAULT_SUFFIX>\<heroId>\
   ├─ 84_102.zip               ← 交给 LTK Manager 的 mod 包
-  └─ 84_102.zip.check.json    ← 生成时的 LTK 名字检查结果 { ok, champion, checkedAt, problems }
+  └─ 84_102.zip.check.json    ← 生成时的 LTK 名字检查结果 { ok, champion, checkedAt, problems, builder }
 ```
+
+> `.check.json` 里的 `builder` 是包内容版本（`SKIN_ARCHIVE_BUILDER`）。跟当前版本不一致的老包
+> （比如还没带动画图的那批）会被 `checkHasSkins()` / `autoBuildSkin()` 当成「没有」，重新生成一次；
+> 没有 `.check.json` 的包（手动放进来的）不动。
 
 zip 里面只有两样东西：
 
@@ -95,11 +100,15 @@ zip 里面只有两样东西：
 META/info.json                 { Author, Description, Name: "84_102", Version }
 WAD/Akali.wad.client           ← wad-make 打包，chunk 是下面的文件
    data/characters/akali/skins/skin0.bin                     皮肤数据（已改写）
+   data/characters/akali/animations/skin0.bin                皮肤自己的动画图（改成 Skin0，见 §4.7）
    assets/characters/akali/skins/base/akali.skn|.skl          重建过的网格/骨架
    assets/sounds/…/sfx/…/akali_skin102_sfx_events.bnk         改过的皮肤事件 bank
    assets/sounds/…/sfx/…/base/akali_base_sfx_events.bnk       让位过的 base 事件 bank
    assets/sounds/…/vo/…/akali_skin102_vo_basetag_events.bnk   语音别名 sidecar
 ```
+
+> `animations/skin0.bin` 只有「皮肤的 bin 链接到别的皮肤动画图」时才有（`data/characters/<角色>/skins/skin0.bin`
+> 里 `animationGraphData` 指向非 Skin0，见 §4.7）；本来就指 Skin0 的皮肤不会多这个文件。
 
 > 多角色皮肤（如 `JarvanIV.wad.client` 里有 `jarvaniv`、`jade_jarvaniv`、
 > `jarvanivstandard`…）每个角色各一份 `data/characters/<角色>/skins/skin0.bin`，
@@ -372,11 +381,35 @@ LTK Manager 启动 patcher 前还有一层**按 mod 元数据**的拦截
 
 - `championSkinName` → 该英雄 **base 皮肤**的名字（从游戏 `skin0.bin` 读，例如 `Akali`、
   `Jade_JarvanIV`，不能靠拼字符串猜）；
-- **删掉 `championSkinId`**（base 皮肤没有这个字段，Rose 的 rebase 也去掉）；
-- `skeleton` / `simpleSkin` → 指到重建后的 base 路径
-  `ASSETS/Characters/<角色>/Skins/Base/<角色>.skl|.skn`；
-- 顺便把 entry key 改成 `"Characters/<角色>/Skins/Skin0"`（`patchPyFile()`，
-  另含 `mResourceResolver` / `ResourceResolver` 指向 `.../Skin0/Resources`）。
+- **保留 `championSkinId`**：游戏自带的 base `skin0.bin` 里本来就有（Sona 是 `37000`），
+  Rose 的 rebase 也不删。多形态皮肤（`skinUpgradeData` 的 gear form）和音频靠它绑定
+  「哪个皮肤」，删掉会让游戏把这份数据当成没有皮肤身份的数据；
+- `skeleton` / `simpleSkin` → 指到重建后的 base 路径。**路径字符串照抄**游戏 base
+  `skin0.bin` 里的原写法（`ASSETS/Characters/MissFortune/Skins/Base/MissFortune.skl`）——
+  不能拿目录名拼（`missfortune` 拼出来是 `Missfortune`，大小写和游戏不一致）；
+- entry key 改成 `"Characters/<角色>/Skins/Skin0"`（`patchPyFile()`，另含
+  `mResourceResolver` / `ResourceResolver` 指向 `.../Skin0/Resources`）；
+- **`objectPath` 也改成 `"Characters/<角色>/Skins/Skin0"`**（`rebaseSkinObjectPath()`）：
+  这条 entry 自己的身份路径，游戏自带 base `skin0.bin` 里就是 Skin0，Rose 的 21069 包也改了；
+- **去掉目标不在本包里的 `skinUpgradeData`**（`dropDanglingSkinUpgrade()`）：
+  `mGearSkinUpgrades` 指向 gear 对象（`.../Skins/Skin<n>/Gear/<名>`）。一部分皮肤的 gear 对象
+  在「多皮肤」bin 里、不随皮肤包走；换成 base 皮肤后 gear 系统也没意义。Rose 的 21069 包
+  把整段去掉了（我们留着时游戏里走路/技能都不播动画），目标在本包里的皮肤（例如 MF 21016、
+  Lux 99007）保持原样；
+- **补回 gear 的 submesh**（`unhideSubmeshes()`，`load-skin-data.ts` 的 `revealGearSubmeshes()`）：
+  `initialSubmeshToHide` 把 A/B/C 三套枪全藏起来、靠 gear 系统按档位显示；去掉 gear 数据后
+  没人显示它们，模型上就少两把枪。按皮肤 bin 的 `linked` 清单去游戏 WAD 里找到 gear 对象，
+  读它的 `mCharacterSubmeshesToShow`（MF 21069 是 `A_Gun25 A_Gun25_Gem`），把这几个名字
+  从 `initialSubmeshToHide` 里删掉 —— 结果和 Rose 的包逐字一致；
+- **补回 gear 的特效映射**（`applyGearVfxMap()`，同一个 `revealGearSubmeshes()`）：
+  皮肤 `Resources.resourceMap` 里 `MissFortune_W_Buf_LWeapon` / `W_Max` / `P_Buff` 这些 key
+  是 `0x0`，平时靠 gear 的 `mVFXResourceResolver` 补 —— 去掉 gear 后 W 的枪口特效就没了。
+  把 gear 的 `resourceMap` 补进皮肤的 `Resources`：key 按哈希对，value 是哈希时用粒子的
+  `particlePath` 反查路径；key 名和皮肤里不一致的，再从粒子路径反推名字
+  （`.../MissFortune_Skin69_W_Buf_LWeapon00` → `MissFortune_W_Buf_LWeapon`）再按哈希匹配。
+
+> 这三条（骨架引用照抄、`objectPath`、`skinUpgradeData`）就是「我们的 21_69 走路没动画、
+> Rose 的包正常」的全部差别 —— 网格文件逐字节相同、皮肤 bin 其余字段一致。
 
 ### 4.3 音频身份
 
@@ -430,6 +463,30 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | base 皮肤自己也列的事件 | `stock` 例外 |
 | `Skin0`（序号 0） | 数字 0 不算「别的皮肤」 |
 
+### 4.7 动画图：皮肤自己的动作（不参与检查，但不做游戏里动作不对）
+
+`electron/export/skin-animation.ts`。这条**不是** LTK 的门，是「游戏里看起来对不对」：
+
+- 皮肤 bin 里有一句 `animationGraphData: link = "Characters/<角色>/Animations/Skin<n>"`
+  （bin 里存的是这个路径的 FNV-1a 哈希，精简名字表下 py 里看到的就是 `0x…`），指到**皮肤自己**
+  的动画图 `data/characters/<角色>/animations/skin<n>.bin`；
+- 改成 base 皮肤后，游戏按 base 那边读 `animations/skin0.bin`。传说/终极这类皮肤的动作
+  （走路 `run.anm` 等）在皮肤自己的动画图里，base 那份里没有 —— 模型就会**滑步、走路没有动画**；
+- 做法（照 Rose 的皮肤包，例如 `LeagueSkins/skins/21/21069/21069.fantome`）：
+  1. 按路径哈希从游戏 WAD 取出 `animations/skin<n>.bin`（动画文件 `.anm` 不用随包，游戏里有）；
+  2. 把它的 entry key 和 `objectPath` 从 `Characters/<角色>/Animations/Skin<n>` 改成 `.../Skin0`
+     （py 里可能是字符串、也可能是哈希，两种都换）；
+  3. 放进包里 `data/characters/<角色>/animations/skin0.bin`；
+  4. 皮肤 bin 里的 `animationGraphData` 链接、以及 `linked` 清单里 `"DATA/…/Animations/Skin<n>.bin"`
+     那一行，都改到 Skin0；
+- 本来链接就是 `Skin0` 的皮肤跳过；游戏 WAD 里找不到那份动画图时保持原引用（和以前一样）。
+
+> 这一条只解决「动作来自哪份动画图」。MissFortune 21_69 实测只加这条还不够：还得把
+> 骨架引用的大小写、`objectPath`、悬空的 `skinUpgradeData` 一起换干净（§4.2）。
+
+已核对：我们出的 `21_69` 里那份动画图和 Rose 包里的逐条相同（只差他们自己加的一个
+`SubmeshVisibilityEventData`），`skin0.bin` 与上一版只差上面两处链接。
+
 ---
 
 ## 5. 常见坑
@@ -442,6 +499,12 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | 只改名字不改网格 | `SkinMeshProperties` 命中 | 同上 |
 | 事件名只改 `Play_sfx_` 那种 | 状态类事件漏掉 | 见 §4.4，两种写法都要换 |
 | 事件改名了但没往 bank 补别名 | **不报 skinhack，但游戏里没声音** | 别名 Event 必须写进包里加载的 bank（§4.3） |
+| 同一个英雄的几个皮肤同时构建 | 其中一个 zip 只有 **335 字节**，LTK 日志 `overrides added=0`，游戏里什么都不换 | 解包/输出目录是按英雄分的、构建开头还会清空，两个构建会互相删文件。现在同一英雄的构建在 `loadSkinDataByFile()` 里串行；空 WAD（<1 KB）和空包（<8 KB）也会直接报错/拒收 |
+| 传说/终极皮肤「走路没有动画」、滑步 | 包能挂上、名字检查也过，就是走起来不播动作 | 三处身份没换干净：骨架引用大小写、`objectPath`、目标不在包里的 `skinUpgradeData`（§4.2）。参照 Rose 的 `21069.fantome` 逐项对齐后正常 |
+| 皮肤专属动作（跑步/技能动作）不对 | 模型在、动作像 base 皮肤的 | 皮肤 bin 的 `animationGraphData` 指向 `Animations/Skin<n>`，包里没带那份动画图 → §4.7 |
+| 模型少枪/少挂件 | 动作、声音都对了，模型上少一两个部件 | 这些 submesh 被 `initialSubmeshToHide` 藏着、原本靠 gear 系统显示；gear 数据被去掉后要补显示（§4.2，日志 `… submesh 补显示：…`） |
+| 放技能后模型上的特效没有 | 皮肤、动作都正常，W/被动这类挂在枪上的特效不显示 | 这些特效 key 在皮肤 `Resources` 里是 `0x0`，靠 gear 的 `mVFXResourceResolver` 补；gear 去掉后要把映射补进 `Resources`（§4.2，日志 `特效映射补 N 条`） |
+| 换版本后旧包还是老样子 | 界面里已经有 zip，不会重新生成 | 包内容版本变了（`SKIN_ARCHIVE_BUILDER`），旧包会被当成「没有」自动重建；想强制重来就删掉那个 zip（或 `*.zip.check.json`） |
 | 直接改语言 WAD 里的语音 bank | 某些语言没声音 | 用语言无关的 sidecar（§4.5） |
 | 转文本时没屏蔽 LTK 共享缓存 | 同一份 bin 在不同机器上转出来的文本不一样（装了 LTK Manager 的会解出名字，没装的全是哈希），排查时对不上 | 转换时用 `--hashtable-dir` 指到空目录，只用我们自己的精简表（见 `ritobin.ts`） |
 | 检查通过但游戏里仍没换肤 | 看 LTK 日志是不是**别的 mod** 被拒 | patcher 一次拒一个 WAD，可能不是你这个包 |
@@ -451,7 +514,7 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 ## 6. 每次改动后的自检清单
 
 1. `npm run skincheck:test`（LTK 名字规则）、`npm run banks:test`（别名规划）、
-   `npm run rebase:test`（网格重建 + 身份改写）、`npm run audio:test`；
+   `npm run rebase:test`（网格重建 + 身份改写）、`npm run audio:test`、`npm run anim:test`（动画图改名）；
 2. 真实构建一个皮肤（选一个「有状态类事件」的，比如 Akali 102 或者新英雄），看日志里
    有没有 `[检查] … 通过 LTK 名字检查`；
 3. 进游戏 → 看 LTK Manager 日志里有没有 `c0000229`；有问题就去
@@ -468,6 +531,7 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | `electron/export/load-skin-data.ts` | 生成流程主控（解包 → 转换 → 改写 → 打包 → 检查） |
 | `electron/export/ritobin.ts` | `ritobin-tools` 调用封装（批量、精简名字表、屏蔽共享缓存） |
 | `electron/export/skin-rebase.ts` | 身份改写（championSkinName / skeleton / simpleSkin / 音频段） |
+| `electron/export/skin-animation.ts` | 动画图（`animations/skin<n>.bin`）改名成 Skin0 + 链接改写 |
 | `electron/export/skin-mesh.ts` | SKN/SKL 重建（null_bone / 末顶点拷贝） |
 | `electron/export/skin-audio.ts` | 音频段解析与整段替换（brace 匹配，格式无关） |
 | `electron/export/skin-banks.ts` | 音效/语音别名规划（换事件名 + bank 补 Action + sidecar） |
@@ -476,6 +540,7 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | `electron/export/index.ts` | 注入入口 `injectSkin()`：读检查结果，不通过就不加载 |
 | `electron/export/wad-index.ts` | 皮肤 bin 索引（`skinbins-index.txt`）的读取与定向解包 |
 | `test/skin-check.test.mjs` | LTK 名字规则的单测 |
+| `test/skin-animation.test.mjs` | 动画图改名的单测（字符串 / 哈希两种文本形态） |
 | `docs/HOW-IT-WORKS.md` | 整体架构（本文件是它 §6 的展开） |
 
 ---

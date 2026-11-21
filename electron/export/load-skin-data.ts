@@ -10,7 +10,13 @@ import { LogMsgUtil, MessageUtil, NotifyMsgUtil } from '../utils/message';
 import { wadPathHash } from '../utils/wad-hash';
 import { extractWadByHash, extractWadFiles, extractWadSkinBins } from './extract-wad-chunks';
 import { readAudioBlocks, type AudioBlocks } from './skin-audio';
-import { binsToPyCall, convertBinsToPy, pyToBinsCall, ritobinToolPath } from './ritobin';
+import {
+  binsToPyCall,
+  convertBinsToPy,
+  pyToBinsCall,
+  ritobinHashTablesDir,
+  ritobinToolPath,
+} from './ritobin';
 import { resolveSkinBinIndexPath } from '../utils/tools-path';
 import { discoverWadSkinBins } from './wad-index';
 import {
@@ -20,8 +26,24 @@ import {
   flushSidecars,
   planBankAliases,
 } from './skin-banks';
-import { findCaseInsensitive, readSkinMeshRefs, rebaseSkinPy } from './skin-rebase';
-import { checkSkinNames, describeSkinCheck, writeSkinCheck } from './skin-check';
+import {
+  applyGearVfxMap,
+  findCaseInsensitive,
+  readGearShowList,
+  readGearVfxMap,
+  readSkinMeshFields,
+  readSkinMeshRefs,
+  rebaseSkinPy,
+  unhideSubmeshes,
+} from './skin-rebase';
+import {
+  animationGraphBinRef,
+  animationGraphTargetPath,
+  readAnimationGraphLink,
+  rebaseAnimationGraphPy,
+  rebaseSkinAnimationLink,
+} from './skin-animation';
+import { checkSkinNames, describeSkinCheck, SKIN_ARCHIVE_BUILDER, writeSkinCheck } from './skin-check';
 
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -156,7 +178,10 @@ const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
 };
 
 /** 该角色 base 皮肤的身份（championSkinName + 音频段），每个角色只读一次游戏 skin0.bin */
-const baseSkinCache = new Map<string, { name: string; audio: AudioBlocks | null }>();
+const baseSkinCache = new Map<
+  string,
+  { name: string; audio: AudioBlocks | null; mesh: { skeleton?: string; simpleSkin?: string } }
+>();
 
 /**
  * 从游戏 WAD 解出来的 skin0.bin 里读 base 皮肤的 championSkinName（如 VayneBase）
@@ -171,7 +196,12 @@ const readBaseSkinData = async (
   baseBinPath: string,
   character: string,
   prefetchedPy?: string
-): Promise<{ name: string; audio: AudioBlocks | null }> => {
+): Promise<{
+  name: string;
+  audio: AudioBlocks | null;
+  /** base 皮肤 bin 里的骨架/网格引用（大小写照抄，用来写回皮肤 bin） */
+  mesh: { skeleton?: string; simpleSkin?: string };
+}> => {
   const cached = baseSkinCache.get(character);
   if (cached !== undefined) {
     return cached;
@@ -186,26 +216,28 @@ const readBaseSkinData = async (
       basePy = baseBinPath.replace(/\.bin$/, '.py');
     }
     if (!basePy || !fs.existsSync(basePy)) {
-      baseSkinCache.set(character, { name: '', audio: null });
-      return { name: '', audio: null };
+      baseSkinCache.set(character, { name: '', audio: null, mesh: {} });
+      return { name: '', audio: null, mesh: {} };
     }
     const text = fs.readFileSync(basePy, 'utf-8');
     const matched = /championSkinName:\s*string\s*=\s*"([^"]*)"/.exec(text);
     const name = matched ? matched[1] : '';
     const audio = readAudioBlocks(text);
+    const mesh = readSkinMeshFields(text);
     if (!prefetchedPy) {
       fs.rmSync(basePy, { force: true });
     }
     logData(
       ` [base-skin] ${character} 的 base 皮肤: ${name || '(没找到)'}` +
-        `，音频段 ${audio ? '已读到' : '没读到'}`
+        `，音频段 ${audio ? '已读到' : '没读到'}` +
+        `，骨架 ${mesh.skeleton ?? '(没读到)'}`
     );
-    const result = { name, audio };
+    const result = { name, audio, mesh };
     baseSkinCache.set(character, result);
     return result;
   } catch (error) {
     logData(` [base-skin] 读取 ${character} base 皮肤数据失败:`, error?.message ?? error);
-    const result = { name: '', audio: null };
+    const result = { name: '', audio: null, mesh: {} };
     baseSkinCache.set(character, result);
     return result;
   }
@@ -326,8 +358,201 @@ const extractWadAssetsFromLocales = async (
   return assets;
 };
 
+/**
+ * 把皮肤自己的动画图（`animations/skin<N>.bin`）改名成 Skin0 放进包里，
+ * 并把皮肤 bin 里的链接（`animationGraphData` + `linked` 清单）指过去。
+ *
+ * 不做的话：改成 base 皮肤后游戏用的是 base 那份动画图，传说/终极皮肤自己的
+ * 动作（走路 `run.anm` 等）不在里面 —— 模型会滑步、不播走路动画。
+ * 依据见 `skin-animation.ts` 顶部说明，以及 Rose 的 21069 皮肤包
+ * （`LeagueSkins/skins/21/21069/21069.fantome`，里面就多这一份
+ * `data/characters/missfortune/animations/skin0.bin`）。
+ *
+ * 失败一律保持原来的引用（和以前的行为一样），不影响出包。
+ */
+const rebaseSkinAnimationGraph = async (options: {
+  /** 皮肤 bin 的 py（会被改写链接） */
+  pyPath: string;
+  /** 角色目录名（小写，`missfortune`） */
+  character: string;
+  /** 打包目录（wad-make 的输入） */
+  packDir: string;
+  /** 原 WAD 路径（按路径哈希取动画图） */
+  fullWadPath: string;
+  /** 解包目录（有就直接读磁盘） */
+  extractRoot?: string;
+}): Promise<void> => {
+  const { pyPath, character, packDir } = options;
+  if (!fs.existsSync(pyPath)) {
+    return;
+  }
+  const text = fs.readFileSync(pyPath, 'utf-8');
+  const link = readAnimationGraphLink(text);
+  // 没有这个字段（很老的皮肤）或者本来就指向 base 的动画图：不用动
+  if (!link || link.skin === 0) {
+    return;
+  }
+  // 链接到别的角色目录的动画图（很少见）：换成 Skin0 会指到我们没放进包的那份，保持原样
+  if (link.hero.toLowerCase() !== character.toLowerCase()) {
+    logData(
+      ` [动画图] ${character}: 皮肤链接到别的角色目录 ${link.hero}，动画图保持原来的引用`
+    );
+    return;
+  }
+  const ref = animationGraphBinRef(link);
+  const assets = await extractWadAssets(
+    options.fullWadPath,
+    [ref],
+    options.extractRoot,
+    '动画图',
+    true
+  );
+  const source = assets.get(ref.toLowerCase());
+  if (!source) {
+    logData(` [动画图] ${character}: 游戏 WAD 里没有 ${ref}，动画图保持原来的引用`);
+    return;
+  }
+  const work = path.join(OUTPUT_BASE_DIR, character, '_anim', `skin${link.skin}`);
+  try {
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.mkdirSync(work, { recursive: true });
+    const binPath = path.join(work, `skin${link.skin}.bin`);
+    fs.writeFileSync(binPath, source);
+    const toPy = binsToPyCall(binPath);
+    await runCommand(toPy.command, false, ...toPy.args);
+    const graphPy = binPath.replace(/\.bin$/, '.py');
+    if (!fs.existsSync(graphPy)) {
+      logData(` [动画图] ${character}: ritobin 没转出 ${ref} 的 py，保持原来的引用`);
+      return;
+    }
+    const graphText = fs.readFileSync(graphPy, 'utf-8');
+    const rebased = rebaseAnimationGraphPy(graphText, link);
+    fs.writeFileSync(graphPy, rebased.text, 'utf-8');
+    const toBin = pyToBinsCall(graphPy);
+    await runCommand(toBin.command, false, ...toBin.args);
+    if (!fs.existsSync(binPath)) {
+      logData(` [动画图] ${character}: ${ref} 转回 bin 失败，保持原来的引用`);
+      return;
+    }
+    const target = path.join(packDir, animationGraphTargetPath(character));
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(binPath, target);
+    // 链接最后改：上面任何一步失败都还留着原来的 Skin<N>，行为和以前一样
+    const relinked = rebaseSkinAnimationLink(text, link);
+    fs.writeFileSync(pyPath, relinked.text, 'utf-8');
+    logData(
+      ` [动画图] ${character}: ${ref} -> ${animationGraphTargetPath(character)}` +
+        `（${link.link} -> ${link.link.replace(/Skin\d+$/i, 'Skin0')}` +
+        `，改写 ${relinked.replaced.join(' + ') || '无'}）`
+    );
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+};
+
+/**
+ * gear 系统被去掉之后的补偿（两件事，都从 gear 对象里读）：
+ *
+ * 1. `initialSubmeshToHide` 把 A/B/C 三套枪的 submesh 全藏起来、靠 gear 按档位显示；
+ *    去掉 gear 后没人显示它们，模型上少两把枪 —— 把第一档 gear 的
+ *    `mCharacterSubmeshesToShow` 从隐藏列表里删掉（`unhideSubmeshes`）；
+ * 2. 皮肤自己的 `Resources` 里 `MissFortune_W_Buf_LWeapon` / `W_Max` / `P_Buff` 这些 key
+ *    是 `0x0`（空），靠 gear 的 `mVFXResourceResolver` 补 — 去掉 gear 后 W 的枪口特效就没了；
+ *    把 gear 的 `resourceMap` 补进皮肤自己的 `Resources`（`applyGearVfxMap`）。
+ *
+ * gear 对象不在皮肤包里（在「多皮肤」bin 里），所以按皮肤 bin 的 `linked` 清单去游戏 WAD 里
+ * 挨个找。Rose 的 21069 包也是这么补的（它的 `Resources` 里 W/被动那几个 key 都有值）。
+ */
+const revealGearSubmeshes = async (options: {
+  pyPath: string;
+  link: string;
+  character: string;
+  fullWadPath: string;
+  extractRoot?: string;
+}): Promise<void> => {
+  const { pyPath, link, character } = options;
+  if (!fs.existsSync(pyPath)) {
+    return;
+  }
+  const text = fs.readFileSync(pyPath, 'utf-8');
+  const candidates = [
+    ...new Set(
+      [...text.matchAll(/"(DATA\/[^"]+\.bin)"/g)].map((matched) => matched[1] as string)
+    ),
+  ];
+  if (candidates.length === 0) {
+    return;
+  }
+  const assets = await extractWadAssets(
+    options.fullWadPath,
+    candidates,
+    options.extractRoot,
+    'gear bin',
+    true
+  );
+  const work = path.join(OUTPUT_BASE_DIR, character, '_gear');
+  try {
+    for (const candidate of candidates) {
+      const data = assets.get(candidate.toLowerCase());
+      if (!data) {
+        continue;
+      }
+      fs.rmSync(work, { recursive: true, force: true });
+      fs.mkdirSync(work, { recursive: true });
+      const binPath = path.join(work, 'gear.bin');
+      fs.writeFileSync(binPath, data);
+      // 用完整名字表转：gear 的 `resourceMap` 值是粒子路径，名字解出来才能按名字对上
+      const toPy = binsToPyCall(binPath, false, ritobinHashTablesDir());
+      await runCommand(toPy.command, false, ...toPy.args);
+      const gearPy = binPath.replace(/\.bin$/, '.py');
+      if (!fs.existsSync(gearPy)) {
+        continue;
+      }
+      const gearText = fs.readFileSync(gearPy, 'utf-8');
+      const show = readGearShowList(gearText, link);
+      const vfx = readGearVfxMap(gearText, link);
+      if (!show && !vfx) {
+        continue;
+      }
+      let next = text;
+      const unhidden = unhideSubmeshes(next, show ?? []);
+      next = unhidden.text;
+      const mapped = applyGearVfxMap(next, vfx ?? []);
+      next = mapped.text;
+      if (next !== text) {
+        fs.writeFileSync(pyPath, next, 'utf-8');
+      }
+      logData(
+        ` [base-skin] ${character}: gear 补偿 —— submesh 补显示：` +
+          `${unhidden.removed.join(', ') || '无'}；特效映射补 ${mapped.mapped.length} 条`
+      );
+      return;
+    }
+    logData(` [base-skin] ${character}: 没找到 gear 对象 ${link}，枪械 submesh/特效不补`);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+};
+
 const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
   try {
+    // 先删掉旧包：这次构建如果失败，不能留一个上次的（哪怕是 335 字节的空包）
+    // 冒充构建成功 —— autoBuildSkin 是靠「zip 在不在」判断成功与否的。
+    fs.rmSync(path.join(OUTPUT_WAD_BASE_DIR, `${heroId}`, `${heroId}_${skinId}.zip`), {
+      force: true,
+    });
+    // 打包目录里一个 .bin 都没有 = 前面的 py→bin 转换失败了（工具报错被 runCommand 吞掉）。
+    // 这时候 wad-make 仍会写出一个 272 字节的空 WAD，zip 只有 335 字节，LTK 导入后
+    // 覆盖数是 0，游戏里什么都不换 —— 不如直接报错，不写空包。
+    const packedBins = fs.existsSync(skinFolderPath)
+      ? (fs.readdirSync(skinFolderPath, { recursive: true }) as string[]).filter(
+          (file) => typeof file === 'string' && file.toLowerCase().endsWith('.bin')
+        )
+      : [];
+    if (packedBins.length === 0) {
+      logData(` [封包失败] ${skinFolderPath}: 没有生成任何 .bin（转换失败？），不写空 WAD`);
+      return null;
+    }
     // 构建输出的 WAD 文件路径，例如: ...\annie\skin1\1.wad.client
     const wadName = `${heroId}_${skinId}`;
     const outputWadPath = path.join(OUTPUT_WAD_BASE_DIR, `${wadName}.wad.client`);
@@ -340,6 +565,14 @@ const packToWad = async (skinFolderPath, heroName, skinId, heroId) => {
 
     logData(` [正在封包] 生成 WAD: ${outputWadPath}`);
     await runCommand(command, true, skinFolderPath, outputWadPath);
+
+    // 空目录打出来的 WAD 只有 272 字节：宁可报错也不让这种包被当成正常包导入 LTK
+    const wadSize = fs.existsSync(outputWadPath) ? fs.statSync(outputWadPath).size : 0;
+    if (wadSize < 1024) {
+      logData(` [封包失败] ${wadName}: WAD 只有 ${wadSize} 字节（源目录是空的？），已删除`);
+      fs.rmSync(outputWadPath, { force: true });
+      return null;
+    }
 
     await createZipFile(wadName, outputWadPath, heroName, heroId);
     return outputWadPath;
@@ -481,7 +714,41 @@ export const unpackWadFile = async (fullWadPath) => {
 
   logData(` [解压完成] ${fullWadPath}`);
 };
+/**
+ * 同一个英雄的构建必须串行：解包目录（`EXTRACT_BASE_DIR/<英雄>`）和输出目录
+ * （`OUTPUT_BASE_DIR/<英雄>`）都是按英雄分的，每次构建开头还会 `emptyDir` 清空它们。
+ * 「加载全部皮肤」/批量生成时同一个英雄的几个皮肤会同时构建（例如索娜 37_75 和
+ * 37_77），后一个把前一个刚写好的 bin 清掉，前一个就封出一个 272 字节的空 WAD
+ * （zip 只有 335 字节），LTK 看到 0 个覆盖文件，游戏里什么都不换。
+ */
+const championBuildLocks = new Map<string, Promise<unknown>>();
+
 export const loadSkinDataByFile = async (
+  idNameMap: Record<string, any>,
+  fullWadPath: string,
+  nameIdMap_?: Record<string, any>,
+  currentSkinId = -1,
+  cb?: Function,
+  /** 构建进度回调（0~100 + 当前阶段说明），给构建窗口用 */
+  onProgress?: (percent: number, message: string) => void
+) => {
+  const champion = getHeroName(fullWadPath).toLowerCase();
+  const previous = championBuildLocks.get(champion) ?? Promise.resolve();
+  const task = previous
+    .catch(() => undefined)
+    .then(() => buildSkinDataByFile(idNameMap, fullWadPath, nameIdMap_, currentSkinId, cb, onProgress));
+  championBuildLocks.set(champion, task);
+  task
+    .catch(() => undefined)
+    .finally(() => {
+      if (championBuildLocks.get(champion) === task) {
+        championBuildLocks.delete(champion);
+      }
+    });
+  return task;
+};
+
+const buildSkinDataByFile = async (
   idNameMap: Record<string, any>,
   fullWadPath: string,
   nameIdMap_?: Record<string, any>,
@@ -712,6 +979,9 @@ export const loadSkinDataByFile = async (
           pyPath,
           character: heroNameInLine,
           baseChampionSkinName: baseSkin.name,
+          skinId,
+          baseSkeleton: baseSkin.mesh.skeleton,
+          baseSimpleSkin: baseSkin.mesh.simpleSkin,
           baseAudio: audioBlocks,
           extractRoot: currentExtraPath,
           assets,
@@ -724,6 +994,25 @@ export const loadSkinDataByFile = async (
               .map((item) => `${item.path}(${item.added})`)
               .join(', ')}`
           );
+          // 动画图也要跟着换成 base 皮肤的名字：皮肤自己的动作在 `animations/skin<N>.bin`，
+          // base 皮肤读的是 `animations/skin0.bin`，不随包的话传说皮肤走路没有动画。
+          await rebaseSkinAnimationGraph({
+            pyPath,
+            character: heroNameInLine,
+            packDir,
+            fullWadPath,
+            extractRoot: currentExtraPath,
+          });
+          // gear 数据被去掉时，把第一档 gear 的枪械 submesh 补显示（否则模型上少两把枪）
+          if (rebase.upgradeDropped && rebase.upgradeLinks.length > 0) {
+            await revealGearSubmeshes({
+              pyPath,
+              link: rebase.upgradeLinks[0],
+              character: heroNameInLine,
+              fullWadPath,
+              extractRoot: currentExtraPath,
+            });
+          }
         }
       } else {
         logData(` [base-skin] 跳过 ${heroNameInLine}：没有读到 base 皮肤名`);
@@ -790,6 +1079,7 @@ export const loadSkinDataByFile = async (
         champion: checkChampion || heroName,
         checkedAt: new Date().toISOString(),
         problems: checkProblems,
+        builder: SKIN_ARCHIVE_BUILDER,
       });
     }
     onProgress?.(
