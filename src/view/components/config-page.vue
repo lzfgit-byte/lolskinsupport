@@ -27,6 +27,7 @@
                   size="small"
                   type="primary"
                   :loading="importLeagueSkinsLoading"
+                  :disabled="clearAllSkinsLoading"
                   @click="handleImportLeagueSkinsPackage"
                 >
                   上传皮肤压缩包
@@ -39,6 +40,7 @@
                   <a-button
                     size="small"
                     :loading="importLeagueSkinsFolderLoading"
+                    :disabled="clearAllSkinsLoading"
                     @click="handleImportLeagueSkinsFolder"
                   >
                     从文件夹导入
@@ -50,6 +52,19 @@
               <span class="config-label">皮肤目录名称：</span>
               <a-input v-model:value="skinDefaultSuffix" size="small" style="width: 180px" />
               <a-button size="small" @click="setSkinDefaultSuffix">设置目录名称</a-button>
+              <a-tooltip placement="bottom" :title="`删除这个文件夹里的全部皮肤：${skinOutputDir}`">
+                <a-button
+                  size="small"
+                  danger
+                  :loading="clearAllSkinsLoading"
+                  :disabled="
+                    !skinDefaultSuffix || importLeagueSkinsLoading || importLeagueSkinsFolderLoading
+                  "
+                  @click="handleClearAllSkins"
+                >
+                  一键清理所有皮肤
+                </a-button>
+              </a-tooltip>
             </div>
             <div class="config-row">
               <span class="config-label">线程数：</span>
@@ -312,6 +327,51 @@
       </a-tabs>
     </div>
   </a-drawer>
+
+  <!-- 一键清理确认：和设置页共用 a-modal，不用系统原生对话框 -->
+  <a-modal
+    v-model:open="clearAllSkinsModalOpen"
+    title="一键清理所有皮肤"
+    :width="520"
+    centered
+    :z-index="60001"
+    :mask-closable="false"
+    :closable="!clearAllSkinsLoading"
+    :confirm-loading="clearAllSkinsLoading"
+    :ok-button-props="{ danger: true }"
+    :cancel-button-props="{ disabled: clearAllSkinsLoading }"
+    ok-text="删除"
+    cancel-text="取消"
+    @ok="confirmClearAllSkins"
+  >
+    <div v-if="clearAllSkinsInfo" class="clear-skins-body">
+      <a-alert
+        type="warning"
+        show-icon
+        message="删除后无法恢复"
+        description="只删除下面这个目录，皮肤存储路径下的其它文件不受影响。"
+      />
+      <div class="clear-skins-path">{{ clearAllSkinsInfo.dir }}</div>
+      <div class="clear-skins-stats">
+        共 {{ clearAllSkinsInfo.files }} 个文件（{{ formatBytes(clearAllSkinsInfo.bytes) }}），
+        {{ clearAllSkinsInfo.heroes }} 个英雄目录、{{ clearAllSkinsInfo.zips }} 个皮肤包
+      </div>
+      <ul class="clear-skins-list">
+        <li>已注入到游戏里的皮肤不会自动移除，需要的话先到「皮肤使用中」停用或清理缓存。</li>
+        <li v-if="clearAllSkinsInfo.syncEnabled">
+          皮肤自动同步当前已开启；不关闭的话，下次检查会把删掉的皮肤重新下载回来。
+        </li>
+      </ul>
+      <a-checkbox
+        v-if="clearAllSkinsInfo.syncEnabled"
+        v-model:checked="clearAllSkinsDisableSync"
+        class="clear-skins-checkbox"
+      >
+        同时关闭皮肤自动同步（避免马上重新下载）
+      </a-checkbox>
+    </div>
+    <div v-else class="clear-skins-body">正在统计皮肤目录…</div>
+  </a-modal>
 </template>
 <script setup lang="ts">
   import { useRoute } from 'vue-router';
@@ -332,11 +392,14 @@
   import useGlobalState from '@/hooks/use-global-state';
   import {
     f_checkCanAutoConfirm,
+    f_clearAllSkins,
     f_confirmChoseSkin,
     f_detectLocaleConfigFile,
     f_getGamePath,
     f_getLocaleCodes,
     f_getLocaleWatcherState,
+    f_getSkinCleanupInfo,
+    f_getSkinDefaultSuffix,
     f_getSkinSyncState,
     f_getToolsEnvState,
     f_importLeagueSkinsFolder,
@@ -389,7 +452,35 @@
   const { handleDrawOpen, drawerOpen, loadFilePath } = useFeature();
   const importLeagueSkinsLoading = ref(false);
   const importLeagueSkinsFolderLoading = ref(false);
+  const clearAllSkinsLoading = ref(false);
+  const clearAllSkinsModalOpen = ref(false);
+  /** `getSkinCleanupInfo()` 的结果：目录、文件数、体积、同步状态 */
+  const clearAllSkinsInfo = ref<any>(null);
+  const clearAllSkinsDisableSync = ref(true);
   const activeTab = ref('skin');
+  const formatBytes = (bytes: number) => {
+    const value = Number(bytes) || 0;
+    if (value < 1024) {
+      return `${value} B`;
+    }
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let size = value / 1024;
+    let index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index++;
+    }
+    return `${size.toFixed(size >= 100 ? 0 : 1)} ${units[index]}`;
+  };
+  /** 清理按钮提示里显示的完整目录，和主进程一样按「去空格 + 去尾部斜杠」拼 */
+  const skinOutputDir = computed(() => {
+    const root = `${skinPath.value ?? ''}`.trim().replace(/[\\/]+$/, '');
+    const suffix = `${skinDefaultSuffix.value ?? ''}`.trim();
+    if (!root) {
+      return '（未设置皮肤存储路径）';
+    }
+    return suffix ? `${root}\\${suffix}` : root;
+  });
 
   // ===== 工具环境（随安装包放在 resources\tools，不再需要手动初始化） =====
   const toolsEnvState = ref<{
@@ -449,6 +540,73 @@
     await f_setConfig(SKIN_DEFAULT_SUFFIX_CONFIG_KEY, skinDefaultSuffix.value);
     await loadFilePath();
     message.success('设置成功');
+  };
+  /**
+   * 一键清理所有皮肤：先取目录统计，再用页面里的 a-modal 确认。
+   *
+   * 先比对输入框和已保存的目录名：没点「设置目录名称」就改过的话直接拦下，
+   * 免得用户以为删的是新名字，实际删的是旧目录。
+   */
+  const handleClearAllSkins = async () => {
+    if (clearAllSkinsLoading.value) {
+      return;
+    }
+    const input = `${skinDefaultSuffix.value ?? ''}`.trim();
+    if (!input) {
+      message.warning('皮肤目录名称不能为空');
+      return;
+    }
+    const saved = `${(await f_getSkinDefaultSuffix()) ?? ''}`.trim();
+    if (input !== saved) {
+      message.warning('皮肤目录名称还没保存，请先点「设置目录名称」再清理');
+      return;
+    }
+    clearAllSkinsLoading.value = true;
+    try {
+      const info = await f_getSkinCleanupInfo();
+      if (!info?.ok) {
+        message.error(`无法清理：${info?.error || '未知错误'}`);
+        return;
+      }
+      if (!info.exists) {
+        message.info(`皮肤目录不存在，不需要清理：${info.dir}`);
+        return;
+      }
+      if (info.syncRunning) {
+        message.warning('皮肤同步正在进行，请等同步结束（或先关闭自动同步）再清理');
+        return;
+      }
+      clearAllSkinsInfo.value = info;
+      clearAllSkinsDisableSync.value = !!info.syncEnabled;
+      clearAllSkinsModalOpen.value = true;
+    } catch (error) {
+      message.error(`读取皮肤目录失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      clearAllSkinsLoading.value = false;
+    }
+  };
+  const confirmClearAllSkins = async () => {
+    if (clearAllSkinsLoading.value) {
+      return;
+    }
+    clearAllSkinsLoading.value = true;
+    try {
+      const result = await f_clearAllSkins({
+        // 没开同步时不用传，主进程也会忽略
+        disableSync: clearAllSkinsInfo.value?.syncEnabled ? clearAllSkinsDisableSync.value : false,
+      });
+      if (result?.ok) {
+        clearAllSkinsModalOpen.value = false;
+        if (result.removed) {
+          await refreshSkinSync();
+        }
+      }
+      // 失败时主进程已经弹过提示，保留弹窗让用户能重试或取消
+    } catch (error) {
+      message.error(`清理失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      clearAllSkinsLoading.value = false;
+    }
   };
   const setScreenshotPath = async () => {
     const path = await f_selectPathOrFile('openDirectory', screenshotPath.value);
@@ -711,5 +869,37 @@
     color: #999;
     font-size: 12px;
     cursor: default;
+  }
+
+  // 一键清理弹窗：路径 / 统计 / 提示，和设置页的浅色卡片保持一致
+  .clear-skins-body {
+    color: rgba(0, 0, 0, 0.75);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .clear-skins-path {
+    margin: 12px 0 8px;
+    padding: 8px 10px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    background: #f5f5f5;
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
+    word-break: break-all;
+  }
+
+  .clear-skins-stats {
+    color: rgba(0, 0, 0, 0.65);
+  }
+
+  .clear-skins-list {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    color: rgba(0, 0, 0, 0.65);
+  }
+
+  .clear-skins-checkbox {
+    margin-top: 12px;
   }
 </style>

@@ -24,6 +24,7 @@ import { pipeline } from 'node:stream/promises';
 import axios, { type AxiosInstance } from 'axios';
 import { LogMsgUtil, ProgressMsgUtil } from '../utils/message';
 import { readJsonConfig, writeJsonConfig } from '../utils/json-config';
+import { isUnderDir } from '../utils/skin-archive';
 import { parseLeagueSkinsEntry } from './league-skins-import';
 
 // ==================== 常量 ====================
@@ -308,6 +309,32 @@ export const syncTargetPath = (
     heroId: parsed.heroId,
     skinIndex: parsed.skinIndex,
   };
+};
+
+/**
+ * 一键清理某个皮肤目录后调用：只丢掉映射到该目录的同步记录。
+ *
+ * 记录留着的话，重新导入同一批皮肤后文件 mtime 全变了，`planSync` 会把它们当成
+ * 「本地改动」再整库下载一遍；清掉后 `SKIN_SYNC_MISSING_ONLY` 会把重新导入的
+ * 文件「认领」回来（只记 SHA，不下载）。返回清掉的条数。
+ */
+export const forgetSkinSyncStateUnder = (skinRoot: string, suffix: string): number => {
+  const state = readState();
+  const outputDir = path.join(skinRoot, suffix);
+  let removed = 0;
+  for (const entryPath of Object.keys(state.files)) {
+    const mapped = syncTargetPath(skinRoot, suffix, entryPath);
+    if (!mapped || !isUnderDir(mapped.target, outputDir)) {
+      continue;
+    }
+    delete state.files[entryPath];
+    removed++;
+  }
+  if (removed > 0) {
+    state.updatedAt = new Date().toISOString();
+    writeState(state);
+  }
+  return removed;
 };
 
 /**

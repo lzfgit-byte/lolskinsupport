@@ -246,6 +246,18 @@ export const f_importLeagueSkinsFolder = async () => {
   return executeFunction('importLeagueSkinsFolder');
 };
 /**
+ * export const getSkinCleanupInfo = async () => {
+ */
+export const f_getSkinCleanupInfo = async () => {
+  return executeFunction('getSkinCleanupInfo');
+};
+/**
+ * export const clearAllSkins = async (options?: { disableSync?: boolean }) => {
+ */
+export const f_clearAllSkins = async (options?: { disableSync?: boolean }) => {
+  return executeFunction('clearAllSkins', options);
+};
+/**
  * export const getSkinImage = (skinId: string) => {
  */
 export const f_getSkinImage = async (skinId: string) => {

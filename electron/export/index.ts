@@ -33,6 +33,9 @@ import { showSliderConfirm } from '../hooks/use-confirm-window';
 import { closeBuildWindow, showBuildWindow, updateBuildWindow } from '../hooks/build-window';
 import { lcuConnector } from '../http/lcuConnector';
 import { patchJsonConfig, readJsonConfig } from '../utils/json-config';
+import { isManagedToolsPath, resolveToolsDir } from '../utils/tools-path';
+import { isUnderDir, removeFilesUnder } from '../utils/skin-archive';
+import { clearSkinOutput, formatBytes, inspectSkinOutput } from '../utils/skin-cleanup';
 import {
   loadSkinData,
   loadSkinDataByFile,
@@ -48,12 +51,11 @@ import {
   readSkinCheck,
   skinCheckPath,
 } from './skin-check';
-import { isManagedToolsPath, resolveToolsDir } from '../utils/tools-path';
-import { isUnderDir, removeFilesUnder } from '../utils/skin-archive';
 import { toSkinIndex as resolveSkinIndex } from './skin-id';
 import { ltfInjector } from './ltfSession';
 import { importLeagueSkinsFromFolder, importLeagueSkinsFromZip } from './league-skins-import';
 import {
+  forgetSkinSyncStateUnder,
   getSkinSyncState,
   setSkinSyncSettings,
   syncSkinsNow,
@@ -189,8 +191,9 @@ export const autoBuildSkin = async (
     // （下面 `const ok = existsSync(skinPath)` 就是看有没有文件）。
     const removed = discardSkinArchive(skinPath);
     LogMsgUtil.sendLogMsg(
-      `[构建] 强制重新构建 ${heroId}_${skinId}` +
-        (removed ? '（已删掉旧包和检查结果）' : '（原来没有包）')
+      `[构建] 强制重新构建 ${heroId}_${skinId}${
+        removed ? '（已删掉旧包和检查结果）' : '（原来没有包）'
+      }`
     );
   }
 
@@ -198,13 +201,8 @@ export const autoBuildSkin = async (
   let lastError = '';
   setBuildLogSink((line) => updateBuildWindow({ detail: line }));
   try {
-    await loadSkinDataByFile(
-      idName,
-      wadPath,
-      null,
-      skinIndex,
-      undefined,
-      (percent, message) => updateBuildWindow({ percent, message, state: 'running' })
+    await loadSkinDataByFile(idName, wadPath, null, skinIndex, undefined, (percent, message) =>
+      updateBuildWindow({ percent, message, state: 'running' })
     );
   } catch (error) {
     lastError = (error as Error)?.message ?? `${error}`;
@@ -222,7 +220,12 @@ export const autoBuildSkin = async (
   if (ok) {
     closeBuildWindow(2500);
   }
-  return { ok, existed: false, path: skinPath, error: ok ? undefined : lastError || '没有生成皮肤文件' };
+  return {
+    ok,
+    existed: false,
+    path: skinPath,
+    error: ok ? undefined : lastError || '没有生成皮肤文件',
+  };
 };
 export const readConfig = () => readJsonConfig(configPath);
 export const setConfig = (key: string, value: string) => {
@@ -505,7 +508,9 @@ export const loadSkins = async () => {
     MessageUtil.warning(`有 ${empty} 个皮肤包是空的（生成失败），已跳过，请重新生成`);
   }
   if (stale > 0) {
-    MessageUtil.warning(`有 ${stale} 个皮肤包是旧版本生成的，建议重新生成一次（否则可能缺动作/音效）`);
+    MessageUtil.warning(
+      `有 ${stale} 个皮肤包是旧版本生成的，建议重新生成一次（否则可能缺动作/音效）`
+    );
   }
   if (blocked > 0) {
     MessageUtil.warning(`有 ${blocked} 个皮肤没过 LTK 检查（会被判 skinhack），已跳过`);
@@ -747,6 +752,91 @@ export const importLeagueSkinsFolder = async () => {
   }
 
   return imported;
+};
+
+/**
+ * 「一键清理所有皮肤」的预览数据：目录名是否合法、目录在不在、多少文件 / 多大，
+ * 以及皮肤自动同步的状态。页面用它渲染自己的确认弹窗（和设置页同一个 a-modal），
+ * 不走系统原生对话框。
+ */
+export const getSkinCleanupInfo = async () => {
+  const skinRoot = getSkinPath();
+  const suffix = getSkinDefaultSuffix();
+  const info = await inspectSkinOutput(skinRoot, suffix);
+  const sync = getSkinSyncState();
+  return {
+    ...info,
+    skinRoot,
+    syncEnabled: !!sync.settings?.enabled,
+    syncRunning: sync.running,
+  };
+};
+
+/**
+ * 一键清理所有皮肤：删除 `<皮肤存储路径>/<皮肤目录名称>` 整个目录。
+ *
+ * 确认弹窗在渲染进程（`config-page.vue` 的 a-modal），这里只做最后的路径校验、
+ * 删除和提示；`disableSync` 来自弹窗里的勾选项。删之前会再查一次皮肤同步状态，
+ * 避免弹窗开着的时候同步刚好开始。
+ */
+export const clearAllSkins = async (options?: { disableSync?: boolean }) => {
+  const skinRoot = getSkinPath();
+  const suffix = getSkinDefaultSuffix();
+  const info = await inspectSkinOutput(skinRoot, suffix);
+  if (!info.ok) {
+    MessageUtil.error(`清理失败：${info.error}`);
+    return { ...info, canceled: false, removed: false };
+  }
+  if (!info.exists) {
+    MessageUtil.info(`皮肤目录不存在，不需要清理：${info.dir}`);
+    return { ...info, canceled: false, removed: false };
+  }
+  const sync = getSkinSyncState();
+  if (sync.running) {
+    MessageUtil.warning('皮肤同步正在进行，请等同步结束（或先关闭自动同步）再清理');
+    return { ...info, ok: false, canceled: true, removed: false, error: '皮肤同步正在进行' };
+  }
+  const syncEnabled = !!sync.settings?.enabled;
+
+  LogMsgUtil.sendLogMsg(`[清理皮肤] 开始删除 ${info.dir}（${info.files} 个文件）`);
+  const cleared = await clearSkinOutput(skinRoot, suffix);
+  if (!cleared.ok || !cleared.removed) {
+    const error = cleared.error || '未知错误';
+    MessageUtil.error(`清理失败：${error}`);
+    LogMsgUtil.sendLogMsg(`[清理皮肤] 失败：${error}`);
+    return { ...cleared, canceled: false };
+  }
+
+  let syncClosed = false;
+  if (syncEnabled && options?.disableSync) {
+    try {
+      setSkinSyncSettings({ enabled: false });
+      syncClosed = true;
+    } catch (error) {
+      // 皮肤已经删掉了，别因为写配置失败把整个操作报成「清理失败」
+      LogMsgUtil.sendLogMsg(
+        `[清理皮肤] 关闭自动同步失败：${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+  // 记录留着会被下次同步当成「本地改动」重新下载，删完顺手清掉属于这个目录的记录
+  try {
+    const forgotten = forgetSkinSyncStateUnder(skinRoot, suffix);
+    if (forgotten > 0) {
+      LogMsgUtil.sendLogMsg(`[清理皮肤] 已清掉 ${forgotten} 条皮肤同步记录`);
+    }
+  } catch (error) {
+    // 皮肤已经删掉了，同步记录清不掉只是下次可能多重下一遍，不能报成清理失败
+    LogMsgUtil.sendLogMsg(
+      `[清理皮肤] 清同步记录失败：${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+  const summary = `已清理全部皮肤：${cleared.files} 个文件（${formatBytes(cleared.bytes)}）${
+    syncClosed ? '；皮肤自动同步已关闭' : ''
+  }`;
+  MessageUtil.success(summary);
+  LogMsgUtil.sendLogMsg(`[清理皮肤] ${summary}`);
+  return { ...cleared, canceled: false };
 };
 
 export const shoutDownModTools = async () => {

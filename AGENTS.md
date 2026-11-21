@@ -141,3 +141,14 @@
 - 自测：`native/tools` 应有 15 个文件；打包验证用
   `npx electron-builder --dir`，看 `release\<版本>\win-unpacked\resources\tools\mod-tools.exe`
   在不在（旧的 `public/tools` + `tools.zip` 方案已经废弃）。
+
+## 六、界面交互：跟随现有页面设计（2026-11-21）
+
+- 业务确认 / 提示一律用页面内的 Ant Design Vue 组件：`a-modal` / `Modal.confirm` /
+  `message` / `notification`。**不要**用 Electron 原生 `dialog.showMessageBox` /
+  `showErrorBox` 做业务交互（选文件、选目录、选保存位置仍然用原生对话框）。
+- 弹窗的尺寸、圆角、间距、按钮（`size`、`danger`、loading）和文案风格要和现有设置页一致；
+  在深色主界面里突然弹出 Windows 原生白框，会被当成程序 bug。
+- 破坏性操作：标题写清对象，正文列出**完整路径 + 影响范围**；主按钮用 `danger`，
+  默认焦点放在「取消」，并且必须能直接从弹窗里取消（不能只靠右上角关闭按钮）。
+- 参考实现：`src/view/components/config-page.vue` 的「一键清理所有皮肤」`a-modal`。

@@ -141,6 +141,7 @@ const {
   setSkinSyncSettings,
   startSkinSyncMonitor,
   testSkinSyncProxy,
+  forgetSkinSyncStateUnder,
 } = await import(`file:///${BUNDLE.replace(/\\/g, '/')}`);
 
 const targetOf = (repoPath) =>
@@ -228,7 +229,11 @@ try {
     assert.equal(result.downloaded, 0, `downloaded=${result.downloaded}`);
     assert.equal(result.adopted, 2, `adopted=${result.adopted}`);
     assert.equal(proxyFileGets, getsBefore);
-    assert.equal(fs.readFileSync(vladimir, 'utf-8'), 'local-imported-copy', '认领时不能覆盖本地文件');
+    assert.equal(
+      fs.readFileSync(vladimir, 'utf-8'),
+      'local-imported-copy',
+      '认领时不能覆盖本地文件'
+    );
     return '认领 2 个';
   });
 
@@ -296,6 +301,15 @@ try {
     assert.equal(result.localChanged, 1, `localChanged=${result.localChanged}`);
     assert.equal(result.downloaded, 1, `downloaded=${result.downloaded}`);
     return 'mtime 判定生效';
+  });
+
+  await step('一键清理后忘掉同步记录（避免重导入后被当成改动）', () => {
+    const before = getSkinSyncState().state.recorded;
+    assert.ok(before > 0, `应已有同步记录，实际 ${before}`);
+    const removed = forgetSkinSyncStateUnder(skinRoot, 'wad_skins');
+    assert.equal(removed, before);
+    assert.equal(getSkinSyncState().state.recorded, 0);
+    return `${removed} 条记录`;
   });
 
   await step('测试代理：只拉清单，不下载文件', async () => {

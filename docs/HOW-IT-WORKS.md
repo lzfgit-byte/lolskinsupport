@@ -45,6 +45,7 @@ Electron 主进程 ──(TCP JSON, 127.0.0.1:46321-46340)──> LeagueToolFlop
 | `electron/export/shutdown.ts` | 退出清理：关窗口 / 退出时收尾，硬超时后强制关掉 LTK Manager |
 | `electron/export/ltfBridge.ts` | 桥客户端：端口/令牌发现、逐行 JSON 协议 |
 | `electron/export/league-skins-import.ts` | LeagueSkins 导入：整包 zip / 本地文件夹（流式、去重、预检） |
+| `electron/utils/skin-cleanup.ts` | 一键清理：目录名校验、统计、删除 `<SKIN_PATH>/<后缀>` |
 | `electron/export/skin-sync.ts` | 皮肤自动同步：拉清单、按 SHA 判变化、走代理下载 |
 | `electron/utils/zip-archive.ts` | 流式 ZIP 读取器（ZIP64，>2 GiB 可用） |
 
@@ -333,6 +334,35 @@ manifest:  https://raw.githubusercontent.com/Alban1911/LeagueSkins/manifest/mani
 
 > 首次同步如果没有本地皮肤，等于下载整库（约 4.5 GB）；经本机代理实测速度有限，
 > 建议先用「整包导入」或「从文件夹导入」落一批，之后只下增量。
+
+### 5.5 一键清理所有皮肤
+
+按钮在「设置 → 皮肤设置 → 皮肤目录名称」这一行，删的是：
+
+```
+<SKIN_PATH>/<SKIN_DEFAULT_SUFFIX>/
+```
+
+也就是全部导入 / 同步 / 构建出来的 `<heroId>/<heroId>_<n>.zip` 和旁边的 `.check.json`；
+`SKIN_PATH` 下的其它文件（手动放的原始 zip、别的目录）不动，已经注入到游戏里的副本
+（`installed` / `overlay`）也不会自动移除，需要另行停用或在「皮肤使用中」里清理缓存。
+
+实现分两层：`electron/utils/skin-cleanup.ts` 是纯函数（`npm run cleanup:test`），
+`electron/export/index.ts` 的 `clearAllSkins` 负责 IPC、校验和删除；确认弹窗在渲染进程，
+是设置页里的 `a-modal`（`config-page.vue`），**不用**系统原生 `dialog.showMessageBox`。
+
+1. 目录名来自用户输入（也可能来自被改坏的 `config.json`），当不可信输入校验：
+   只允许单个文件夹名，拒绝 `..`、路径分隔符、盘符、Windows 保留名、结尾的点/空格；
+   解析出的路径还必须**严格**位于 `SKIN_PATH` 下（复用 `isUnderDir()`），否则拒绝。
+2. 先遍历统计文件数 / 总体积 / 英雄目录数，弹窗里原样展示；目录本来就不存在时直接提示
+   「不需要清理」，不创建目录。目标是文件或符号链接时拒绝。
+3. 弹窗的「删除」按钮用 `danger`，默认焦点在「取消」；`SKIN_SYNC_ENABLED` 为真时多一个勾选项
+   「同时关闭皮肤自动同步」（默认勾上）——否则下一次定时检查会把整库重新下载回来。
+4. 皮肤同步正在跑时直接拒绝（避免边下边删）；删除用 `fs.rm(recursive)` 并重试，
+   删不掉会明确报「可能有程序正在使用」（常见于游戏里正挂着皮肤）。
+5. 删完把 `skin_sync_state.json` 里映射到该目录的记录一起清掉（`forgetSkinSyncStateUnder`）：
+   否则重新导入同一批皮肤后 mtime 全变，自动同步会把它们误判成「本地改动」再整库下载。
+6. 删完不重建空目录：下一次导入 / 构建 / 同步会自动创建。
 
 ---
 
