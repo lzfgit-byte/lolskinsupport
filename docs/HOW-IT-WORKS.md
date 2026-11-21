@@ -91,11 +91,14 @@ Electron 主进程 ──(TCP JSON, 127.0.0.1:46321-46340)──> LeagueToolFlop
    - 写 `overlay_config`（当前皮肤 id）与 `SKIN_IMAGE`；
    - 调 `ltfInjector.applySkins([...])` —— 注入会话开始（下一节）。
 
+> 皮肤包本身「应该怎么生成」（base-slot 外壳、补丁层、验收清单）不在这篇，
+> 见 `docs/SKIN-BUILD-AND-SKINHACK.md` §1.6。
+
 ### 3.3.1 点「构建并注入」
 
 和「使用皮肤」相反，这个按钮**每次都重新出包**：
 
-1. `doMkOverlay()` 直接调 `autoBuildSkin(wadPath, heroId, skinId, { force: true })`，
+1. `doMkOverlay()` 直接调 `f_rebuildSkin()`（主进程 `autoBuildSkin(wadPath, heroId, skinId, true)`），
    不走 `ensureSkinBuilt()`（那条路「包还在就跳过」，改过生成逻辑以后点按钮注入的还是旧包）；
 2. 主进程 `discardSkinArchive()` 先删掉 `skins\<suffix>\<heroId>\<heroId>_<n>.zip` 和旁边的
    `.check.json`（只删皮肤目录下的文件，路径不在皮肤目录里就跳过并写日志），再走完整生成；

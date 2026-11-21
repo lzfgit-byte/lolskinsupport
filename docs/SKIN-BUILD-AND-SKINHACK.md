@@ -24,6 +24,10 @@
                         音效别名（补 bank、改事件名）
                         网格重建 + championSkinName/skeleton/simpleSkin
                         音频身份换回 base
+                        动画图改成 Skin0 随包
+                        base-slot 外壳：base bin 只留身份 + Resources、
+                          皮肤自己的 bin 随包、linked 并集、删挂点不存在的 idle 特效
+                        （可选）英雄专属补丁：补条件 / 改映射 / 合并伴随系统
                                             │
                                           .bin
                                             │
@@ -34,7 +38,11 @@
                             <hero>_<n>.zip + <hero>_<n>.zip.check.json
 ```
 
-一句话：**改内容（网格）再改名字（身份 + 音频），最后自己按 LTK 的规则验一遍**。
+一句话：**改内容（网格、身份名、音频）→ 把整包塞进 base 槽位 → 自己按 LTK 的规则验一遍**。
+补丁层只给「游戏数据里根本没有这段定义」的英雄，主流程不按英雄特判。
+
+> 逐条规则、实测的包结构、生成顺序、什么时候必须写补丁，见 **§1.6**（这一节是速查，
+> 细节和证据在 §4）。
 
 ---
 
@@ -59,6 +67,7 @@
 | **（一个）当前皮肤文件** | 皮肤选择面板 → 操作区 | 只生成当前选中的那个皮肤（`loadSkinDataByFilePath(wad, skinIndex)`） |
 | **（多个）全部皮肤文件** | 同上 | 把这个英雄 WAD 里所有 `skin<n>.bin` 都生成一遍（`loadSkinDataByFilePath(wad)`，`current = -1`） |
 | **使用皮肤** | 同上 | 注入到 LTK Manager 并记为「使用中」。右上角浮钮的「应用前先构建皮肤 zip」打开时，会先重建 zip 再注入 |
+| **构建并注入** | 同上 | **每次都重新构建**（先删掉上一次的 zip + `.check.json`，再走完整流程），成功才注入；不写「使用中」的账本 |
 
 皮肤 id 是 `<英雄id><序号>`（如 Akali `84102` = hero 84、`skin102`），生成时要的是序号
 `102`（`electron/export/skin-id.ts` 的 `toSkinIndex()` 负责换算）。
@@ -76,11 +85,13 @@
 | 5 | 音效别名：改单位名/事件名，往皮肤事件 bank 里补 base 名字的别名 Event，语音补 sidecar bank | `electron/export/skin-banks.ts` | `音效别名 94 个，语音别名 62 个（…），单位 Akali_Skin102_SFX->Akali_Base_SFX，随包 bank 2 个` |
 | 6 | 网格重建 + 身份改名 | `skin-rebase.ts` + `skin-mesh.ts` | `ASSETS/…/Skin102/Akali_Skin102.skn -> assets/characters/akali/skins/base/akali.skn (null vertex，2491860 字节)` |
 | 7 | 动画图：把皮肤自己那份 `animations/skin<n>.bin` 改名成 Skin0 放进包，链接一起改 | `skin-animation.ts` | `[动画图] akali: DATA/Characters/Akali/Animations/Skin102.bin -> data/characters/akali/animations/skin0.bin（… -> …/Skin0，改写 animationGraphData + linked）` |
-| 8 | 转回 bin | `pyToBinsCall()` | `[封包完成 ritobin]` |
-| 9 | **LTK 名字检查** | `electron/export/skin-check.ts` | `[检查] 84_102 通过 LTK 名字检查` 或 `[检查] … 会被 LTK 判 skinhack（9 处）：…` |
-| 10 | 打 WAD | `wad-make.exe` | `[正在封包] 生成 WAD` + `[INF] Packing / Reading / Writing / Done!` |
-| 11 | 打 zip（`META/info.json` + `WAD/<英雄>.wad.client`） | `createZipFile()` | `[ZIP完成] 84_102.zip` |
-| 12 | 写检查结果 sidecar | `writeSkinCheck()` | 文件 `<zip>.check.json` |
+| 8 | base-slot 外壳：皮肤自己的 bin 原样随包（删皮肤名 VFX 闸门）、base bin 只留身份 + Resources、linked 并集、删挂点不存在的 idle 特效 | `applyBaseSlotShell()` → `skin-base-slot.ts` | `[base-slot] rumble: 皮肤自己的 bin 随包 skin3.bin（删掉 N 处皮肤名 VFX 闸门…）` + `bin 只留 0x… + 0x…（去掉 N 个内嵌条目），linked 补 N 条…` |
+| 9 | 英雄专属补丁（可选）：插条件/映射，按 hash 搬条目，合并伴随系统的 emitter | `skin-patch.ts` + `copyResolvedEntries()` + `composeEmitters()` | `套用 rumble 专属补丁 2 块` / `按 hash 搬进 3 个条目` / `合并伴随系统的 emitter（0xa075fcc1 ← 6 个 key）` |
+| 10 | 转回 bin | `pyToBinsCall()` | `[封包完成 ritobin]` |
+| 11 | **LTK 名字检查** | `electron/export/skin-check.ts` | `[检查] 84_102 通过 LTK 名字检查` 或 `[检查] … 会被 LTK 判 skinhack（9 处）：…` |
+| 12 | 打 WAD | `wad-make.exe` | `[正在封包] 生成 WAD` + `[INF] Packing / Reading / Writing / Done!` |
+| 13 | 打 zip（`META/info.json` + `WAD/<英雄>.wad.client`） | `createZipFile()` | `[ZIP完成] 84_102.zip` |
+| 14 | 写检查结果 sidecar | `writeSkinCheck()` | 文件 `<zip>.check.json` |
 
 ### 1.4 产物
 
@@ -99,13 +110,19 @@ zip 里面只有两样东西：
 ```
 META/info.json                 { Author, Description, Name: "84_102", Version }
 WAD/Akali.wad.client           ← wad-make 打包，chunk 是下面的文件
-   data/characters/akali/skins/skin0.bin                     皮肤数据（已改写）
-   data/characters/akali/animations/skin0.bin                皮肤自己的动画图（改成 Skin0，见 §4.7）
+   data/characters/akali/skins/skin0.bin                      base-slot 外壳：只剩身份对象 + Resources
+   data/characters/akali/skins/skin102.bin                    皮肤自己的 bin（原样随包，只删皮肤名闸门）
+   data/characters/akali/animations/skin0.bin                 皮肤自己的动画图（改成 Skin0，见 §4.7）
    assets/characters/akali/skins/base/akali.skn|.skl          重建过的网格/骨架
    assets/sounds/…/sfx/…/akali_skin102_sfx_events.bnk         改过的皮肤事件 bank
    assets/sounds/…/sfx/…/base/akali_base_sfx_events.bnk       让位过的 base 事件 bank
    assets/sounds/…/vo/…/akali_skin102_vo_basetag_events.bnk   语音别名 sidecar
 ```
+
+> `skins/skin<n>.bin` 是 builder 7 起的结构：皮肤自己的粒子/系统留在这份 bin 里随包，
+> base 槽位的 `skin0.bin` 只放身份 + `Resources`。builder ≤ 6 把这几十条粒子内嵌进
+> `skin0.bin`，那套在「皮肤自带粒子 + 自带动画图」的英雄上会整条特效链对不上（见 §4.2.1）。
+> 两个 bin 同时在包里是正常的。
 
 > `animations/skin0.bin` 只有「皮肤的 bin 链接到别的皮肤动画图」时才有（`data/characters/<角色>/skins/skin0.bin`
 > 里 `animationGraphData` 指向非 Skin0，见 §4.7）；本来就指 Skin0 的皮肤不会多这个文件。
@@ -124,6 +141,105 @@ WAD/Akali.wad.client           ← wad-make 打包，chunk 是下面的文件
 | LTK 名字检查（5 MB 文本） | ~0.2 ms |
 | wad-make + 压缩 | 100–300 ms |
 | **单个皮肤合计** | **0.5–1.5 s**（皮肤越大越慢） |
+
+### 1.6 皮肤包规范（builder 8）：照着就能做对
+
+这一节把「一个皮肤包应该怎么生成」收成一张清单：包长什么样、必须做哪几件事、按什么顺序、
+什么时候才需要写英雄补丁、怎么验收。每条规则的**理由和实测证据**在 §4，这里只写规则。
+
+#### 1.6.1 包长什么样（68_3 Rumble 实测，builder 8）
+
+```
+WAD/Rumble.wad.client                             323 KB
+├─ data/characters/rumble/skins/skin0.bin          39,544 B   只 2 个 entry：身份对象 + Resources
+├─ data/characters/rumble/skins/skin3.bin         190,171 B   皮肤自己的 bin，原样（只删了皮肤名闸门）
+├─ data/characters/rumble/animations/skin0.bin     16,761 B   皮肤自己的动画图（改成 Skin0）
+├─ assets/characters/rumble/skins/base/rumble.skn 512,914 B   重建过的网格
+├─ assets/characters/rumble/skins/base/rumble.skl  11,320 B   重建过的骨架
+└─ assets/sounds/…/*_events.bnk                       ×3      音效/语音别名 bank
+```
+
+要点：
+
+- **两个 bin 同时在包里**：`skins/skin0.bin` 是给 patcher 的 base 槽位（只有身份 + `Resources`），
+  `skins/skin<n>.bin` 是皮肤自己的完整数据（粒子、系统本体都在这里）。builder ≤ 6 把粒子
+  内嵌进 `skin0.bin`，在「自带粒子 + 自带动画图」的英雄上会让整条特效链对不上（§4.2.1）；
+- 网格/骨架走 **base 路径**（`…/skins/base/<英雄>.skn|.skl`），文件名照抄游戏 base 皮肤里的写法；
+- `animations/skin0.bin` 只在皮肤 bin 的 `animationGraphData` 指向非 Skin0 时才有（§4.7）；
+- 整个 zip 只有 `META/info.json` + `WAD/<英雄>.wad.client` 两个文件（外加旁边的 `.check.json`，不在 zip 里）。
+
+#### 1.6.2 必须做的事（少一件就有可见后果）
+
+| # | 做什么 | 不做会怎样 | 代码 |
+| --- | --- | --- | --- |
+| 1 | 定向解包，只取本 WAD 的 `skins/skin*.bin` + `skin0.bin` | 全量解包整份 WAD，慢一个量级以上 | `doUnpackWadFile(targeted)` |
+| 2 | 身份改名：entry key → `Skins/Skin0`；`championSkinName` / `skeleton` / `simpleSkin` 换成 base 的；`objectPath` 留在原皮肤命名空间 | 直接被判 skinhack，或模型换成 base | `patchPyFile()` + `skin-rebase.ts` |
+| 3 | 网格重建：`.skn` 末尾加一个顶点、`.skl` 末尾加一根 `null_bone` | 与游戏里任何皮肤逐字节相同 → 判 skinhack | `skin-mesh.ts` |
+| 4 | 炫彩按独立皮肤的身份写（`skinClassification` 用 base 的值） | 炫彩塞进 base 槽位后 Q 歪、E 火箭和 R 不出现（§4.2 最后一条） | `normalizeChromaClassification()` |
+| 5 | base bin 只留「身份对象 + `Resources`」，补 `skinParent = 0`，去掉 `championSkinId` | 内嵌粒子链断掉；gear/多形态按原皮肤找目标 | `stripInlineEntries()` / `ensureSkinParent()` / `dropChampionSkinId()` |
+| 6 | 皮肤自己的 bin 整份随包；删 `keywordsRequired` 里的皮肤名闸门，**保留** `keywordsExcluded` | 闸门留着 → E 火箭、推进器、Q/R 命中一个都不渲染；excluded 删了 → base 光晕常驻脚下 | `dropSkinKeywordGates()` |
+| 7 | `linked` = 皮肤自己的 ∪ 游戏 base `skin0.bin` 的 | `Resources` 指向 `Skins/Skin0/Particles/…` 的 key 定义在 base 才列的 bin 里，缺了 R/E 施法特效解析不到 | `mergeLinkedBins()` |
+| 8 | `idleParticlesEffects` 里 `boneName` 不在本皮肤骨架的条目删掉 | 挂点不存在时游戏把特效塌到模型原点（脚下一团） | `dropIdleEffectsWithoutJoints()` |
+| 9 | `Resources` 的 value 是**条目 key** 时，条目本体要从随包皮肤 bin 搬进 base bin（只搬点名的） | props 的解析只认自己这个 bin，不搬就是断链（R 燃烧消失） | `copyResolvedEntries()` |
+| 10 | 音频身份换回 base（`TagEventList`、单位名、事件别名），语音用 sidecar bank 补 | `TagEventList` / `BankUnits` 带原皮肤名 → 判 skinhack；只改名不补别名 → 游戏里没声音 | `skin-banks.ts` |
+| 11 | LTK 名字检查通过才封包，结果写 `<zip>.check.json` | 不合格的包注入后整局 overlay 被关（`c0000229`） | `skin-check.ts` |
+
+补丁层（第 12 类，**只有登记了补丁的英雄才有**）：游戏数据里根本没有的条件/映射/伴随系统，
+由 `skin-patches/<英雄>.ts` 补，见 §4.2.2 和下面的 §1.6.4。
+
+#### 1.6.3 生成顺序（代码实际执行顺序）
+
+```
+loadSkinDataByFile(wadPath, skinIndex)          electron/export/load-skin-data.ts
+ 1. 定向解包 + ritobin 批量转 py
+ 2. patchPyFile()                     entry key / mResourceResolver → Skin0
+ 3. readBaseSkinData()                读 base 名字 + 音频段（+ base 的 mesh 路径）
+ 4. planBankAliases()                 音效/语音别名，生成的 bank 写进 packDir
+ 5. rebaseSkinPy()                    championSkinName / skeleton / simpleSkin / gear / 炫彩分类
+ 6. rebaseSkinAnimationGraph()        皮肤动画图 → animations/skin0.bin
+ 7. revealGearSubmeshes()             gear 被去掉时补回枪械 submesh + 特效映射
+ 8. applyBaseSlotShell()              ▸ 皮肤 bin 随包（删闸门）
+                                      ▸ base bin 去 championSkinId / 补 skinParent=0
+                                      ▸ 删挂点不存在的 idle 特效
+                                      ▸ 只留身份 + Resources
+                                      ▸ linked 并集
+                                      ▸ applySkinPatch()        英雄补丁（可选）
+                                      ▸ copyResolvedEntries()   按 hash 搬条目
+                                      ▸ composeEmitters()       合并伴随系统
+                                      ▸ findUnresolvedResourceRefs() 诊断日志
+ 9. pyToBinsCall()                    转回 bin
+10. LTK 名字检查（checkSkinNames）
+11. wad-make → <英雄>.wad.client
+12. createZipFile() + writeSkinCheck()
+```
+
+#### 1.6.4 什么时候必须写英雄补丁
+
+判据（满足任意一条，且**只能用游戏数据**拼出来）：
+
+1. 这段定义在游戏数据里**根本不存在**：把该英雄所有 bin 转成文本扫一遍，字段/哈希 0 命中
+   （Rumble 的 `PersistentEffectConditions` 就是这么查出来的，52 个 bin 全扫）；
+2. 手改包（Rose 的 `.fantome`）能跑、纯数据流程跑不通，差别是「补了一段数据 / 改了一条映射 /
+   把第二个系统并进来」—— 那就把这三件事写成补丁，**不要把粒子本体抄进补丁**（builder 8 的
+   `copyResolvedEntries()` / `composeEmitters()` 会从游戏数据里取）。
+
+写补丁的规矩（§4.2.2）：
+
+- 一个英雄一个文件（`electron/export/skin-patches/<英雄>.ts`），在 `index.ts` 里登记；
+- 只做四类操作：`propsInsert`、`entriesInsert`、`resourceMap.set/remove`、`composeEntries`；
+- 补丁里写死的粒子路径常带原皮肤命名空间，没验证过的皮肤用 `skins: [n]` 限住；
+- 目前只有 Rumble（`skins: [3]`）。其它英雄没登记 → 走纯数据流程，包内容和补丁英雄的「无补丁部分」一致。
+
+#### 1.6.5 验收（每次都一样）
+
+1. `<zip>.check.json`：`ok: true`，`builder` 等于 `SKIN_ARCHIVE_BUILDER`（当前 8）；
+2. 构建日志里这几句都在（缺哪句就说明哪一层没走）：
+   `[base-slot] … 皮肤自己的 bin 随包` / `bin 只留 …` / `[检查] … 通过 LTK 名字检查`；
+3. 游戏内看四项：**模型 + 待机/走路动作**、**Q**、**E**、**R**（Rumble 68_3 的验收基准就是
+   Q 单个方向、E 火箭有命中、R 有燃烧 + 裂坑）；
+4. 改过生成代码后，用界面上的「**构建并注入**」重建后再验 —— 它会强制重新出包；
+   「使用皮肤」在包已存在时是复用的，拿它验证会验到旧包；
+5. 被判 skinhack → §2；其它症状 → §5 常见坑。
 
 ---
 
@@ -628,7 +744,7 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | 改完还是缺特效，翻遍游戏数据都找不到那段定义 | 某个技能（Rumble 的 R）纯数据重建后完全没有特效 | 缺的是 props 里的**触发条件**（游戏数据没有），粒子定义本身在皮肤 bin 里；`mResourceResolver` 只能引用同一个 bin 的条目 → 走英雄专属补丁（§4.2.2） |
 | 补丁插进去了但游戏里还是不亮 | 包里能看到 `VfxSystemDefinitionData`，游戏不渲染 | 没人引用它。`PersistentVfxData.effectKey` 要在 `Resources.resourceMap` 里解析得到，R 的燃烧引用（`0x74ad149b`）也要指过来 —— `resourceMap.set`（§4.2.2） |
 | 同一段特效渲染两遍（Q 的火焰两个方向） | 特效出现了，但方向/位置有两份 | 同一个粒子被两套 key 各解析一遍：base 皮肤那份 resolver 里的 key 和皮肤自己的 key 都指向同一段粒子。用 `resourceMap.remove` 删掉多的那套（§4.2.2，Rumble 的 `0x52c319c0`/`0x55c31e79`） |
-| 换版本后旧包还是老样子 | 界面里已经有 zip，不会重新生成 | 包内容版本变了（`SKIN_ARCHIVE_BUILDER`），旧包会被当成「没有」自动重建；想强制重来就删掉那个 zip（或 `*.zip.check.json`） |
+| 换版本后旧包还是老样子 | 界面里已经有 zip，不会重新生成 | 包内容版本变了（`SKIN_ARCHIVE_BUILDER`），旧包会被当成「没有」自动重建；想强制重来就点「构建并注入」（每次都重新出包），或手动删掉那个 zip 和 `.check.json` |
 | 直接改语言 WAD 里的语音 bank | 某些语言没声音 | 用语言无关的 sidecar（§4.5） |
 | 转文本时没屏蔽 LTK 共享缓存 | 同一份 bin 在不同机器上转出来的文本不一样（装了 LTK Manager 的会解出名字，没装的全是哈希），排查时对不上 | 转换时用 `--hashtable-dir` 指到空目录，只用我们自己的精简表（见 `ritobin.ts`） |
 | 检查通过但游戏里仍没换肤 | 看 LTK 日志是不是**别的 mod** 被拒 | patcher 一次拒一个 WAD，可能不是你这个包 |
@@ -666,11 +782,14 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | `electron/export/skin-base-slot.ts` | base-slot 外壳重建（builder 7，规则见 §4.2.1） |
 | `electron/export/skin-patch.ts` | 英雄专属补丁层的套用逻辑（builder 8，三类插入） |
 | `electron/export/skin-patches/` | 各英雄的补丁数据（`index.ts` 注册表，`rumble.ts` 是 R 燃烧特效） |
-| `electron/export/index.ts` | 注入入口 `injectSkin()`：读检查结果，不通过就不加载 |
+| `electron/utils/skin-archive.ts` | 强制重建前删旧包的范围判断（只删皮肤目录里的文件） |
+| `electron/export/index.ts` | 注入入口 `injectSkin()`：读检查结果，不通过就不加载；`autoBuildSkin(wad, hero, skin, force)` |
 | `electron/export/wad-index.ts` | 皮肤 bin 索引（`skinbins-index.txt`）的读取与定向解包 |
 | `test/skin-check.test.mjs` | LTK 名字规则的单测 |
 | `test/skin-animation.test.mjs` | 动画图改名的单测（字符串 / 哈希两种文本形态） |
 | `test/skin-patch.test.mjs` | 补丁层单测（缩进、幂等、坏片段、Rumble 补丁内容） |
+| `test/skin-base-slot.test.mjs` | base-slot 单测（搬条目 / 合并 emitter / 未解析引用） |
+| `test/skin-archive.test.mjs` | 删旧包范围判断的单测（目录内外、`..`、跨盘） |
 | `docs/HOW-IT-WORKS.md` | 整体架构（本文件是它 §6 的展开） |
 
 ---
