@@ -406,10 +406,102 @@ LTK Manager 启动 patcher 前还有一层**按 mod 元数据**的拦截
   是 `0x0`，平时靠 gear 的 `mVFXResourceResolver` 补 —— 去掉 gear 后 W 的枪口特效就没了。
   把 gear 的 `resourceMap` 补进皮肤的 `Resources`：key 按哈希对，value 是哈希时用粒子的
   `particlePath` 反查路径；key 名和皮肤里不一致的，再从粒子路径反推名字
-  （`.../MissFortune_Skin69_W_Buf_LWeapon00` → `MissFortune_W_Buf_LWeapon`）再按哈希匹配。
+  （`.../MissFortune_Skin69_W_Buf_LWeapon00` → `MissFortune_W_Buf_LWeapon`）再按哈希匹配；
+- **炫彩（chroma）按独立皮肤的身份写**（`normalizeChromaClassification()`）：
+  源皮肤带 `skinParent`（父皮肤 id）、`skinClassification = 2` 的就是炫彩 —— 它的数据本来是
+  给游戏「和父皮肤一起加载」用的。塞进 base 槽位后父皮肤不在，游戏仍按炫彩处理，实测
+  68_9（68009，父皮肤 68004）模型和走路都对，但 Q 的火焰歪、E 的火箭看不到、R 没特效：
+  Rumble 的技能特效是动画图里的 `mEffectKey` 事件经皮肤 `Resources.resourceMap` 解析成粒子
+  （`Characters/Rumble/Skins/Skin4/Particles/...`）的，炫彩身份下这条链拿不到父皮肤上下文。
+  处理：把 `skinClassification` 换成 base 皮肤的值（独立皮肤都是 1），`skinParent` 留着
+  （Rose 的包也留着）；不是炫彩的皮肤一个字节都不动 —— 传说/终极皮肤的分类不能被抹平。
 
 > 这三条（骨架引用照抄、`objectPath`、`skinUpgradeData`）就是「我们的 21_69 走路没动画、
 > Rose 的包正常」的全部差别 —— 网格文件逐字节相同、皮肤 bin 其余字段一致。
+
+### 4.2.1 base-slot 外壳（builder 7）
+
+`electron/export/skin-base-slot.ts`。规则来自 **Rose 的 `skins/68/68003/68003.fantome`**
+（那份包在游戏里 Q/E/R 都正常），逐条对照后固化成数据驱动的处理，不按英雄特判：
+
+1. **base 的 bin 只留身份对象 + `Resources`**（`stripInlineEntries()`）。builder ≤ 6 把皮肤
+   自带的几十条粒子内嵌进 `skins/skin0.bin`，实测 Gnar/Rumble 这类「皮肤自带粒子 + 自带
+   动画图」的皮肤会整条特效解析链对不上：Q 火焰落点歪、E 火箭和 R 特效不出现。
+2. **`objectPath` 留在原皮肤命名空间**（不再改写成 `Skin0`）、补 `skinParent = 0`、
+   去掉 `championSkinId`（`ensureSkinParent()` / `dropChampionSkinId()`）。
+3. **`linked` 并上 base 皮肤 `skin0.bin` 的清单**（`mergeLinkedBins()`）。base 的清单里有
+   皮肤 bin 没列的多皮肤 bin，`Resources` 里指向 `Skins/Skin0/Particles/...` 的那些 key
+   就定义在里面（Rumble 的 `Rumble_Base_E_mis`、`Rumble_Base_R_cas_rocket`）。少了它们
+   这些 key 指向的粒子在游戏里根本不存在。
+4. **皮肤自己的 bin 整份随包**（覆盖同路径），并把 `keywordsRequired` 里等于原皮肤名的
+   闸门删掉（`dropSkinKeywordGates()`）：
+
+   ```
+   Filtering: pointer = VfxEmitterFiltering {
+       keywordsRequired: list[string] = { "RumbleSkin03" }   ← 删掉整块
+   }
+   Filtering: pointer = VfxEmitterFiltering {
+       keywordsExcluded: list[string] = { "RumbleSkin03" }   ← 必须原样保留
+   }
+   ```
+
+   过滤器匹配的是「皮肤 tag / 皮肤名」（原版 68003 的 `tagEventList` 里就有 `RumbleSkin03`），
+   base-slot 的身份拿不到原皮肤的 tag，不删的话 E 的火箭、推进器、Q/R 命中这些 emitter
+   一个都不渲染；而 `keywordsExcluded` 是「这个皮肤不要渲染」，删掉会让 base 皮肤的光晕
+   一直挂在脚下（Rumble 的 `P_buf` 就是）。
+5. **`idleParticlesEffects` 里挂点骨头不存在的条目删掉**（`dropIdleEffectsWithoutJoints()`，
+   骨架关节名由 `skin-mesh.ts` 的 `readSkeletonJointNames()` 读出）。这些特效写死了
+   `Pipe` / `Rocket` / `Spike` / `robot_root` 这类骨头，皮肤骨架里没有时游戏把它们塌到
+   模型原点 —— Rumble 那团「脚下一只闪电」就是 `Idle_taze_01`（`Spike`）和
+   `Idle_shortcircuit_01`（`robot_root`）。
+
+日志：`[base-slot] … 皮肤自己的 bin 随包 skinN.bin（删掉 N 处皮肤名 VFX 闸门）` /
+`bin 只留 … 、linked 补 N 条、去掉 championSkinId、补 skinParent=0、删 N 条 idle 特效`。
+
+> 顺带：builder 7 起皮肤 bin 的文本转换优先用**随包完整名字表**
+> （`native/tools/ritobin/bin/hashes`）。精简表里没有 `idleParticlesEffects` /
+> `keywordsRequired` / `Filtering` 这些字段名，读出来全是 `0x…`，上面几步就没法按名字改
+> （耗时同量级：191KB 的 bin 约 110ms）。
+
+### 4.2.2 英雄专属补丁层（builder 8）
+
+`electron/export/skin-patch.ts` + `electron/export/skin-patches/`。
+
+base-slot 外壳是**通用规则**，能重建的东西全靠数据推导；但有一类特效数据在游戏数据里
+**根本不存在**，规则推导不出来 —— 手改包是把整段定义搬进包里才跑通的。这一层就是给这种
+英雄留的可选补丁，主流程不按英雄特判：
+
+- **没登记补丁的英雄 → 什么都不做**（`findSkinPatch()` 返回 `null`），走纯数据流程，
+  包内容和 builder 7 完全一样；
+- **登记了补丁的英雄 → 在 base-slot 外壳改写完之后**，把补丁里的数据块插进 bin 的文本。
+
+补丁只做三类插入，不改任何已有字段：
+
+| 操作 | 位置 | 典型用途 |
+| --- | --- | --- |
+| `propsInsert` | `SkinCharacterDataProperties` 里，锚在某个字段之后（`after: 'skinParent'`） | `ChromaData`、`PersistentEffectConditions` |
+| `entriesInsert` | 顶层 `entries` 表末尾 | `0x… = VfxSystemDefinitionData { … }` 这类独立条目 |
+| `resourceMap.set` | `Resources.resourceMap` 里（有就覆盖值，没有就追加） | 让新加的粒子定义被引用、补齐 `PersistentVfxData.effectKey` |
+| `resourceMap.remove` | 同上，删掉指定的 key | 同一个粒子被两套 key 各解析一遍 → 渲染两遍（Rumble 的 Q 两个方向火焰） |
+
+细节：
+
+- 片段按「最小缩进对齐目标层级」重新缩进（props 8 空格、entries 4 空格），补丁文件里
+  从任意缩进写都行；插入前校验花括号配平，配不平直接抛错，不出半残的包；
+- 幂等：片段首行已存在就跳过，同一个包重复构建不会插第二遍；
+- `skins: [3]` 可以只对某几个皮肤序号生效（不填 = 该英雄所有皮肤）。补丁里的粒子路径
+  经常写死原皮肤的命名空间（`Skins/Skin3/Particles/…`），没验证过的皮肤不要跟着套；
+- 日志：`[base-slot] … 套用 rumble 专属补丁 3 块（…）`。
+
+现有的补丁只有 Rumble（`skin-patches/rumble.ts`，出处 Rose 的 `68003.fantome`）：
+R 的「燃烧」特效在游戏数据里没有，纯数据重建出来 R 完全不显示。补丁补三块 ——
+`ChromaData` 占位、`PersistentEffectConditions`（`RumbleFlameThrower` buff 的
+`AllTrueMaterialDriver` + 定时驱动，两处 `PersistentVfxData.boneName = "R_Flame"`）、
+`0xa075fcc1 = VfxSystemDefinitionData`（`Rumble_Skin03_R_tar_team_green` 整段粒子），
+再用 `resourceMap.set` 把 `0x74ad149b` 指到这段粒子、补上两个 `effectKey`
+（`0x97e29b7d` / `0x68ba7d5d`），并用 `resourceMap.remove` 删掉我们这边多出来的
+`0x52c319c0` / `0x55c31e79` —— 那两条也指向 `Rumble_Skin03_Q_cas_01/_02`，不删的话
+Q 的火焰会从两个方向各喷一次。
 
 ### 4.3 音频身份
 
@@ -504,6 +596,12 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | 皮肤专属动作（跑步/技能动作）不对 | 模型在、动作像 base 皮肤的 | 皮肤 bin 的 `animationGraphData` 指向 `Animations/Skin<n>`，包里没带那份动画图 → §4.7 |
 | 模型少枪/少挂件 | 动作、声音都对了，模型上少一两个部件 | 这些 submesh 被 `initialSubmeshToHide` 藏着、原本靠 gear 系统显示；gear 数据被去掉后要补显示（§4.2，日志 `… submesh 补显示：…`） |
 | 放技能后模型上的特效没有 | 皮肤、动作都正常，W/被动这类挂在枪上的特效不显示 | 这些特效 key 在皮肤 `Resources` 里是 `0x0`，靠 gear 的 `mVFXResourceResolver` 补；gear 去掉后要把映射补进 `Resources`（§4.2，日志 `特效映射补 N 条`） |
+| 炫彩（chroma）的技能特效歪/没有 | 模型和走路都对，Q 的火焰方向不对、E 的火箭看不到、R 没特效 | 源皮肤是炫彩（`skinParent` + `skinClassification = 2`），塞进 base 槽位后父皮肤不在，特效解析链（动画图 `mEffectKey` → `Resources.resourceMap` → 父皮肤粒子）失效；按独立皮肤的身份写（§4.2，日志 `炫彩按独立皮肤写`） |
+| 独立皮肤（不是炫彩）也 Q 火焰歪 / E 火箭和 R 特效没有 | 皮肤是自己带粒子、带动画图的那种（Rumble 68003 最典型） | builder ≤ 6 把粒子内嵌进 base bin，且身份改写把 `objectPath` 挪到了 `Skin0`、`linked` 漏了 base 清单 —— 见 §4.2.1（builder 7 的 base-slot 外壳） |
+| 皮肤脚下一直挂着一团光/闪电 | 技能/被动都对，就是模型原点有常驻特效 | 两个来源，都在 §4.2.1：① `idleParticlesEffects` 的 `boneName` 在皮肤骨架里不存在（`Spike`/`robot_root`…），塌到原点；② 删 `keywordsRequired` 时把 `keywordsExcluded` 也删了，base 皮肤的 `P_buf` 光晕变成常驻 |
+| 改完还是缺特效，翻遍游戏数据都找不到那段定义 | 某个技能（Rumble 的 R）纯数据重建后完全没有特效 | 这段定义游戏里就没有，手改包是搬进包里的 → 走英雄专属补丁（§4.2.2，`skin-patches/`） |
+| 补丁插进去了但游戏里还是不亮 | 包里能看到 `VfxSystemDefinitionData`，游戏不渲染 | 没人引用它。`PersistentVfxData.effectKey` 要在 `Resources.resourceMap` 里解析得到，R 的燃烧引用（`0x74ad149b`）也要指过来 —— `resourceMap.set`（§4.2.2） |
+| 同一段特效渲染两遍（Q 的火焰两个方向） | 特效出现了，但方向/位置有两份 | 同一个粒子被两套 key 各解析一遍：base 皮肤那份 resolver 里的 key 和皮肤自己的 key 都指向同一段粒子。用 `resourceMap.remove` 删掉多的那套（§4.2.2，Rumble 的 `0x52c319c0`/`0x55c31e79`） |
 | 换版本后旧包还是老样子 | 界面里已经有 zip，不会重新生成 | 包内容版本变了（`SKIN_ARCHIVE_BUILDER`），旧包会被当成「没有」自动重建；想强制重来就删掉那个 zip（或 `*.zip.check.json`） |
 | 直接改语言 WAD 里的语音 bank | 某些语言没声音 | 用语言无关的 sidecar（§4.5） |
 | 转文本时没屏蔽 LTK 共享缓存 | 同一份 bin 在不同机器上转出来的文本不一样（装了 LTK Manager 的会解出名字，没装的全是哈希），排查时对不上 | 转换时用 `--hashtable-dir` 指到空目录，只用我们自己的精简表（见 `ritobin.ts`） |
@@ -514,7 +612,8 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 ## 6. 每次改动后的自检清单
 
 1. `npm run skincheck:test`（LTK 名字规则）、`npm run banks:test`（别名规划）、
-   `npm run rebase:test`（网格重建 + 身份改写）、`npm run audio:test`、`npm run anim:test`（动画图改名）；
+   `npm run rebase:test`（网格重建 + 身份改写）、`npm run audio:test`、`npm run anim:test`（动画图改名）、
+   `npm run baseslot:test`（base-slot 外壳）、`npm run patch:test`（英雄专属补丁层）；
 2. 真实构建一个皮肤（选一个「有状态类事件」的，比如 Akali 102 或者新英雄），看日志里
    有没有 `[检查] … 通过 LTK 名字检查`；
 3. 进游戏 → 看 LTK Manager 日志里有没有 `c0000229`；有问题就去
@@ -537,10 +636,14 @@ Switch_AkaliSkin102_Footsteps_Brush    ← 同上
 | `electron/export/skin-banks.ts` | 音效/语音别名规划（换事件名 + bank 补 Action + sidecar） |
 | `electron/export/bnk.ts` | BNK 读写（照 Rose 的 `bnk.py`，没改过的 bank 逐字节写回） |
 | `electron/export/skin-check.ts` | LTK 名字检查 + `.check.json` 读写 |
+| `electron/export/skin-base-slot.ts` | base-slot 外壳重建（builder 7，规则见 §4.2.1） |
+| `electron/export/skin-patch.ts` | 英雄专属补丁层的套用逻辑（builder 8，三类插入） |
+| `electron/export/skin-patches/` | 各英雄的补丁数据（`index.ts` 注册表，`rumble.ts` 是 R 燃烧特效） |
 | `electron/export/index.ts` | 注入入口 `injectSkin()`：读检查结果，不通过就不加载 |
 | `electron/export/wad-index.ts` | 皮肤 bin 索引（`skinbins-index.txt`）的读取与定向解包 |
 | `test/skin-check.test.mjs` | LTK 名字规则的单测 |
 | `test/skin-animation.test.mjs` | 动画图改名的单测（字符串 / 哈希两种文本形态） |
+| `test/skin-patch.test.mjs` | 补丁层单测（缩进、幂等、坏片段、Rumble 补丁内容） |
 | `docs/HOW-IT-WORKS.md` | 整体架构（本文件是它 §6 的展开） |
 
 ---

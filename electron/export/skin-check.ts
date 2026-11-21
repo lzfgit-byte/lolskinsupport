@@ -46,10 +46,19 @@ export interface SkinCheckProblem {
  *   删掉（`unhideSubmeshes()`），否则模型上少两把枪。
  *   4 → 5：同样为了补 gear，把 gear 的 `mVFXResourceResolver.resourceMap` 补进皮肤的
  *   `Resources`（`applyGearVfxMap()`），否则 W 的枪口特效没有。
+ *   5 → 6：炫彩（有 `skinParent`、`skinClassification = 2`）按独立皮肤的身份写
+ *   （`normalizeChromaClassification()`）—— 炫彩塞进 base 槽位后技能特效解析不到。
+ *   6 → 7：base-slot 外壳（`skin-base-slot.ts`，对照 Rose 的 68003 包）：base 的 bin 只留
+ *   身份 + `Resources`、`objectPath` 留在原皮肤命名空间、`linked` 并上 base 的清单、
+ *   原皮肤 bin 整份随包并删掉含皮肤名的 `keywordsRequired` 闸门、删挂点不存在的 idle 特效。
+ *   6 及以前的包把整套粒子内嵌进 base bin，特效链对不上（Q 火焰歪、E/R 缺特效）。
+ *   7 → 8：英雄专属补丁层（`skin-patches/`，`applySkinPatch()`）：游戏数据里根本不存在
+ *   那段定义时（Rumble 的 R 燃烧特效）由补丁把数据块插进 base-slot 的 bin。没登记补丁的
+ *   英雄走纯数据流程，包内容和 7 一样，只是版本号变了。
  *
  * `checkHasSkins()` / `autoBuildSkin()` 看到旧版本会把包当成「没有」，重新生成一次。
  */
-export const SKIN_ARCHIVE_BUILDER = 5;
+export const SKIN_ARCHIVE_BUILDER = 8;
 
 export interface SkinCheckResult {
   /** 检查通过 */

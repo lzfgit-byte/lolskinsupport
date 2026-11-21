@@ -119,6 +119,24 @@ export const isSkeleton = (data: Buffer): boolean => u32(data, 4) === SKL_FORMAT
 
 export const isMesh = (data: Buffer): boolean => u32(data, 0) === SKN_MAGIC;
 
+/**
+ * 骨架里的关节名（按关节顺序，原样大小写）。
+ *
+ * 用来判断技能特效的挂点骨头在不在：bin 里的 `boneName`（`Idle_taze_01` 的 `Spike` 这类）
+ * 找不到对应关节时，游戏会把特效塌到模型原点 —— 看着就是「脚下一团东西」。
+ * 读不懂的骨架返回空数组，调用方据此跳过（不要拿空集合去删特效）。
+ */
+export const readSkeletonJointNames = (data: Buffer): string[] => {
+  try {
+    const layout = readSkeleton(data);
+    return layout.strings.slice(0, layout.count).map((item) =>
+      data.toString('latin1', item.start, Math.max(item.start, item.end - 1))
+    );
+  } catch {
+    return [];
+  }
+};
+
 interface SkeletonLayout {
   count: number;
   offsets: number[];

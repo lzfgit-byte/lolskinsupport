@@ -33,6 +33,7 @@ import {
   readGearVfxMap,
   readSkinMeshFields,
   readSkinMeshRefs,
+  readSkinClassification,
   rebaseSkinPy,
   unhideSubmeshes,
 } from './skin-rebase';
@@ -44,6 +45,20 @@ import {
   rebaseSkinAnimationLink,
 } from './skin-animation';
 import { checkSkinNames, describeSkinCheck, SKIN_ARCHIVE_BUILDER, writeSkinCheck } from './skin-check';
+import {
+  dropChampionSkinId,
+  dropIdleEffectsWithoutJoints,
+  dropSkinKeywordGates,
+  ensureSkinParent,
+  mergeLinkedBins,
+  readChampionSkinName,
+  readEntryKeyOfClass,
+  readLinkedBins,
+  stripInlineEntries,
+} from './skin-base-slot';
+import { applySkinPatch } from './skin-patch';
+import { findSkinPatch } from './skin-patches';
+import { readSkeletonJointNames } from './skin-mesh';
 
 // 模拟 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -180,7 +195,14 @@ const patchPyFile = (heroName: string, pyPath: string, skinId: any) => {
 /** 该角色 base 皮肤的身份（championSkinName + 音频段），每个角色只读一次游戏 skin0.bin */
 const baseSkinCache = new Map<
   string,
-  { name: string; audio: AudioBlocks | null; mesh: { skeleton?: string; simpleSkin?: string } }
+  {
+    name: string;
+    audio: AudioBlocks | null;
+    mesh: { skeleton?: string; simpleSkin?: string };
+    classification: number | null;
+    /** base 皮肤的 `linked` 清单：本皮肤 bin 没列的，要并进 base-slot 的清单里 */
+    linked: string[];
+  }
 >();
 
 /**
@@ -201,6 +223,10 @@ const readBaseSkinData = async (
   audio: AudioBlocks | null;
   /** base 皮肤 bin 里的骨架/网格引用（大小写照抄，用来写回皮肤 bin） */
   mesh: { skeleton?: string; simpleSkin?: string };
+  /** base 皮肤的 `skinClassification`（独立皮肤是 1），炫彩要照它写 */
+  classification: number | null;
+  /** base 皮肤的 `linked` 清单（base-slot 包要和本皮肤的并集） */
+  linked: string[];
 }> => {
   const cached = baseSkinCache.get(character);
   if (cached !== undefined) {
@@ -216,28 +242,32 @@ const readBaseSkinData = async (
       basePy = baseBinPath.replace(/\.bin$/, '.py');
     }
     if (!basePy || !fs.existsSync(basePy)) {
-      baseSkinCache.set(character, { name: '', audio: null, mesh: {} });
-      return { name: '', audio: null, mesh: {} };
+      const empty = { name: '', audio: null, mesh: {}, classification: null, linked: [] };
+      baseSkinCache.set(character, empty);
+      return empty;
     }
     const text = fs.readFileSync(basePy, 'utf-8');
     const matched = /championSkinName:\s*string\s*=\s*"([^"]*)"/.exec(text);
     const name = matched ? matched[1] : '';
     const audio = readAudioBlocks(text);
     const mesh = readSkinMeshFields(text);
+    const classification = readSkinClassification(text);
+    const linked = readLinkedBins(text);
     if (!prefetchedPy) {
       fs.rmSync(basePy, { force: true });
     }
     logData(
       ` [base-skin] ${character} 的 base 皮肤: ${name || '(没找到)'}` +
         `，音频段 ${audio ? '已读到' : '没读到'}` +
-        `，骨架 ${mesh.skeleton ?? '(没读到)'}`
+        `，骨架 ${mesh.skeleton ?? '(没读到)'}` +
+        `，linked ${linked.length} 条`
     );
-    const result = { name, audio, mesh };
+    const result = { name, audio, mesh, classification, linked };
     baseSkinCache.set(character, result);
     return result;
   } catch (error) {
     logData(` [base-skin] 读取 ${character} base 皮肤数据失败:`, error?.message ?? error);
-    const result = { name: '', audio: null, mesh: {} };
+    const result = { name: '', audio: null, mesh: {}, classification: null, linked: [] };
     baseSkinCache.set(character, result);
     return result;
   }
@@ -531,6 +561,118 @@ const revealGearSubmeshes = async (options: {
     logData(` [base-skin] ${character}: 没找到 gear 对象 ${link}，枪械 submesh/特效不补`);
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
+  }
+};
+
+/**
+ * builder 7：把 rebase 好的皮肤 bin 改造成「base-slot 外壳」（规则和理由见 `skin-base-slot.ts`
+ * 的文件头，对照 Rose 的 `skins/68/68003/68003.fantome`）：
+ *
+ * 1. 该皮肤自己的 bin **整份随包**（覆盖同路径），只把 `keywordsRequired` 里含原皮肤名的
+ *    闸门删掉 —— 粒子按皮肤 tag 过滤，base 身份拿不到原皮肤的 tag，不删的话 E 的火箭、
+ *    推进器这些 emitter 全都不渲染；
+ * 2. base 那份只留「身份对象 + Resources」，粒子仍由上面那份提供；
+ * 3. `linked` 并上 base 皮肤的清单（`Resources` 里指向 `Skins/Skin0/Particles/...` 的 key
+ *    定义在 base 清单独有的多皮肤 bin 里，少了它们 R/E 的施法特效会解析不到）；
+ * 4. 挂点骨头不存在的 idle 特效应删掉（会塌到脚下）。
+ */
+const applyBaseSlotShell = async (options: {
+  /** base-slot 的 py（会被改写成只剩身份 + Resources） */
+  pyPath: string;
+  /** 打包目录（wad-make 的输入） */
+  packDir: string;
+  /** 角色目录名（小写） */
+  character: string;
+  /** 皮肤序号，>0 时才会随包原皮肤的 bin */
+  skinId: number;
+  /** 原皮肤 bin 的原始 py（没 patch 过身份的那份） */
+  sourcePyPath: string;
+  /** base 皮肤的 linked 清单 */
+  baseLinks: string[];
+  /** 随包的骨架（相对 packDir），读关节名用；没有就跳过 idle 检查 */
+  skeletonPath: string | null;
+  log: (message: string) => void;
+}): Promise<void> => {
+  const { pyPath, packDir, character, skinId, log } = options;
+  if (!fs.existsSync(pyPath)) {
+    return;
+  }
+
+  if (skinId > 0 && fs.existsSync(options.sourcePyPath)) {
+    const sourceText = fs.readFileSync(options.sourcePyPath, 'utf-8');
+    const sourceSkinName = readChampionSkinName(sourceText);
+    const gated = dropSkinKeywordGates(sourceText, sourceSkinName);
+    const overridePy = path.join(packDir, `data/characters/${character}/skins/skin${skinId}.py`);
+    fs.mkdirSync(path.dirname(overridePy), { recursive: true });
+    fs.writeFileSync(overridePy, gated.text, 'utf-8');
+    const toBin = pyToBinsCall(overridePy);
+    await runCommand(toBin.command, false, ...toBin.args);
+    const overrideBin = overridePy.replace(/\.py$/, '.bin');
+    if (fs.existsSync(overrideBin)) {
+      log(
+        ` [base-slot] ${character}: 皮肤自己的 bin 随包 skin${skinId}.bin` +
+          `（删掉 ${gated.removed.length} 处皮肤名 VFX 闸门：${gated.removed.slice(0, 3).join('；') || '无'}）`
+      );
+    } else {
+      log(` [base-slot] ${character}: skin${skinId}.py 转回 bin 失败，粒子将没有来源`);
+    }
+    deleteFile(overridePy);
+  }
+
+  let text = fs.readFileSync(pyPath, 'utf-8');
+  const propsKey = readEntryKeyOfClass(text, 'SkinCharacterDataProperties');
+  const resourceKey = readEntryKeyOfClass(text, 'ResourceResolver');
+  if (!propsKey || !resourceKey) {
+    log(` [base-slot] ${character}: 找不到身份对象/Resources，保持原来的整份 bin`);
+    return;
+  }
+
+  const noId = dropChampionSkinId(text);
+  text = noId.text;
+  const parent = ensureSkinParent(text);
+  text = parent.text;
+
+  let idleDropped: string[] = [];
+  if (options.skeletonPath) {
+    const skeletonFile = path.join(packDir, options.skeletonPath);
+    const joints = fs.existsSync(skeletonFile)
+      ? readSkeletonJointNames(fs.readFileSync(skeletonFile))
+      : [];
+    if (joints.length > 0) {
+      const idle = dropIdleEffectsWithoutJoints(text, joints);
+      text = idle.text;
+      idleDropped = idle.removed;
+    } else {
+      log(` [base-slot] ${character}: 骨架读不出关节名，跳过 idle 特效检查`);
+    }
+  }
+
+  const stripped = stripInlineEntries(text, [propsKey, resourceKey]);
+  text = stripped.text;
+  const relinked = mergeLinkedBins(text, [
+    ...options.baseLinks,
+    `data/characters/${character}/skins/skin${skinId}.bin`,
+  ]);
+  text = relinked.text;
+
+  // builder 8：英雄专属补丁（`skin-patches/`）。没有登记的英雄就是纯数据流程，这里什么都不做 ——
+  // 只有「游戏数据里根本没有这段定义」的皮肤才需要补丁，补丁只插入数据块，不改已有字段。
+  const patched = applySkinPatch(text, findSkinPatch(character, skinId));
+  text = patched.text;
+
+  fs.writeFileSync(pyPath, text, 'utf-8');
+
+  log(
+    ` [base-slot] ${character}: bin 只留 ${propsKey} + ${resourceKey}` +
+      `（去掉 ${stripped.removed.length} 个内嵌条目），` +
+      `linked 补 ${relinked.added.length} 条` +
+      `${noId.removed.length > 0 ? '，去掉 championSkinId' : ''}` +
+      `${parent.added.length > 0 ? '，补 skinParent=0' : ''}` +
+      `${idleDropped.length > 0 ? `，删 ${idleDropped.length} 条挂点不存在的 idle 特效` : ''}` +
+      `${patched.added.length > 0 ? `，套用 ${character} 专属补丁 ${patched.added.length} 块（${patched.added.join('；')}）` : ''}`
+  );
+  if (idleDropped.length > 0) {
+    log(` [base-slot] ${character}: 删掉的 idle 特效 ${idleDropped.slice(0, 8).join('、')}`);
   }
 };
 
@@ -982,6 +1124,7 @@ const buildSkinDataByFile = async (
           skinId,
           baseSkeleton: baseSkin.mesh.skeleton,
           baseSimpleSkin: baseSkin.mesh.simpleSkin,
+          baseClassification: baseSkin.classification,
           baseAudio: audioBlocks,
           extractRoot: currentExtraPath,
           assets,
@@ -1013,6 +1156,21 @@ const buildSkinDataByFile = async (
               extractRoot: currentExtraPath,
             });
           }
+          // builder 7：base-slot 外壳（只留身份 + Resources、皮肤 bin 随包、linked 并集、
+          // 删挂点不存在的 idle 特效）。理由见 skin-base-slot.ts 文件头。
+          const skeletonMesh = rebase.meshes.find((item) =>
+            item.path.toLowerCase().endsWith('.skl')
+          );
+          await applyBaseSlotShell({
+            pyPath,
+            packDir,
+            character: heroNameInLine,
+            skinId,
+            sourcePyPath: preparedPy,
+            baseLinks: baseSkin.linked,
+            skeletonPath: skeletonMesh ? skeletonMesh.path : null,
+            log: logData,
+          });
         }
       } else {
         logData(` [base-skin] 跳过 ${heroNameInLine}：没有读到 base 皮肤名`);
@@ -1036,8 +1194,7 @@ const buildSkinDataByFile = async (
                 describeSkinCheck({ problems: checkProblems })
         );
       }
-      const packCall = pyToBinsCall(pyPath);
-      await runCommand(packCall.command, true, ...packCall.args);
+      const packCall = pyToBinsCall(pyPath);      await runCommand(packCall.command, true, ...packCall.args);
       logData(` [封包完成 ritobin] ${pyPath}`);
       deleteFile(pyPath);
       onProgress?.(

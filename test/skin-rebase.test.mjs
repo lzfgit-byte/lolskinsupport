@@ -30,6 +30,7 @@ const {
   unhideSubmeshes,
   readGearVfxMap,
   applyGearVfxMap,
+  normalizeChromaClassification,
 } = await import(`file:///${BUNDLE.replace(/\\/g, '/')}`);
 const { rebuildMesh, isRebuilt } = meshModule;
 
@@ -344,7 +345,7 @@ try {
     return file;
   };
 
-  await step('objectPath：entry 自己的路径也换成 Skin0（哈希形态）', () => {
+  await step('objectPath：留在原皮肤的命名空间（builder 7 不再换成 Skin0）', () => {
     const oldHash = fnv('Characters/Vayne/Skins/Skin11');
     const py = withExtra(`        objectPath: hash = 0x${oldHash}`);
     const assets = new Map([
@@ -360,14 +361,15 @@ try {
       outputRoot: path.join(dir, 'pack-objectpath'),
     });
     assert.ok(result);
-    assert.equal(result.objectPathRenamed, true, '应该认出来并改写');
+    assert.equal(result.objectPathRenamed, false, '不该再改写 objectPath');
     const text = fs.readFileSync(py, 'utf-8');
-    assert.ok(
+    assert.ok(text.includes(`objectPath: hash = 0x${oldHash}`), '原皮肤的 objectPath 要留着');
+    assert.equal(
       text.includes(`0x${fnv('Characters/Vayne/Skins/Skin0')}`),
-      '要换成 Skin0 的哈希'
+      false,
+      '不能换成 Skin0'
     );
-    assert.equal(text.includes(`0x${oldHash}`), false, '旧哈希不该留');
-    return `0x${oldHash} -> Skin0`;
+    return '0x' + oldHash + ' 保留';
   });
 
   await step('skinUpgradeData：gear 目标不在本包里去整段', () => {
@@ -528,6 +530,52 @@ try {
     assert.match(applied.text, new RegExp(`"Vayne_W_Max" = "${particlePath}"`));
     assert.doesNotMatch(applied.text, /= 0x0/);
     return '2 条';
+  });
+  await step('normalizeChromaClassification：炫彩改成独立皮肤的分类', () => {
+    const py = `entries: map[hash, embed] = {
+    "Characters/Rumble/Skins/Skin0" = SkinCharacterDataProperties {
+        0x87225880: u32 = 2
+        championSkinId: i32 = 68009
+        skinParent: i32 = 4
+    }
+}
+`;
+    const result = normalizeChromaClassification(py, 1);
+    assert.equal(result.changed, true);
+    assert.deepEqual({ from: result.from, to: result.to }, { from: 2, to: 1 });
+    assert.match(result.text, /0x87225880: u32 = 1/);
+    // 再跑一次就是幂等的
+    assert.equal(normalizeChromaClassification(result.text, 1).changed, false);
+    return '2 -> 1';
+  });
+
+  await step('normalizeChromaClassification：独立皮肤（没有 skinParent）不动', () => {
+    const py = `entries: map[hash, embed] = {
+    "Characters/MissFortune/Skins/Skin0" = SkinCharacterDataProperties {
+        skinClassification: u32 = 3
+        championSkinId: i32 = 21069
+    }
+}
+`;
+    const result = normalizeChromaClassification(py, 1);
+    assert.equal(result.changed, false);
+    assert.match(result.text, /skinClassification: u32 = 3/);
+    return '保留 3';
+  });
+
+  await step('normalizeChromaClassification：名字解不出来（哈希写法）也认', () => {
+    const py = `entries: map[hash, embed] = {
+    "Characters/Rumble/Skins/Skin0" = SkinCharacterDataProperties {
+        0x87225880: u32 = 2
+        0x514b1c48: i32 = 13
+    }
+}
+`;
+    const result = normalizeChromaClassification(py, null);
+    assert.equal(result.changed, true);
+    assert.equal(result.to, 1);
+    assert.match(result.text, /0x87225880: u32 = 1/);
+    return '没有 base 值时用 1';
   });
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });

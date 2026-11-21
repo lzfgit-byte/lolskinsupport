@@ -70,45 +70,45 @@ const makeWork = () => {
   return workDir;
 };
 
-await check('精简名字表能解出锚点：只调一次，不退回完整表', async () => {
+await check('随包完整名字表能解出锚点：只调一次（builder 7 起优先用它）', async () => {
   const dir = makeWork();
   const calls = [];
   const run = async (args) => {
     calls.push(args);
-    // 模拟 ritobin-tools：-H 指到精简表时解出名字
+    // 模拟 ritobin-tools：完整表把所有字段名都解出来
     fs.writeFileSync(path.join(dir, 'skin', 'vayne', 'skin11.py'), 'championSkinName: string = "VayneBase"\nSkinCharacterDataProperties {');
   };
   const result = await convertBinsToPy(run, dir);
   const args = calls[0];
   assert.equal(calls.length, 1, '只该调一次');
   assert.equal(args[0], '-H', '前置参数该是 -H <表目录>');
-  assert.equal(args[1], ensureRitobinHashDir(), '该用精简名字表目录');
+  assert.equal(args[1], ritobinHashTablesDir(), '该用随包完整名字表目录');
   assert.ok(args.includes('--hashtable-dir'), '该屏蔽 LTK 共享缓存');
   assert.ok(args.includes('convert'), '新工具要带 convert 子命令');
   assert.ok(args.includes('-r'), '批量要递归');
   assert.deepEqual(args.slice(-2), ['--ext', 'py'], '输出扩展名要是 .py');
-  assert.equal(result.slimHashes, true);
+  assert.equal(result.slimHashes, false);
   assert.equal(result.count, 1);
   return `${result.elapsedMs}ms`;
 });
 
-await check('锚点没解出来：删掉 py 并用随包完整表重转一次', async () => {
+await check('完整表也解不出锚点：删掉 py 再退回精简表', async () => {
   const dir = makeWork();
   const calls = [];
   const run = async (args) => {
     calls.push(args);
-    const slim = args[1] === ensureRitobinHashDir();
+    const full = args[1] === ritobinHashTablesDir();
     fs.writeFileSync(
       path.join(dir, 'skin', 'vayne', 'skin11.py'),
-      slim ? '0x2d78c328: string = "VayneBase"' : 'championSkinName: string = "VayneBase"\nSkinCharacterDataProperties {'
+      full ? '0x2d78c328: string = "VayneBase"' : 'championSkinName: string = "VayneBase"\nSkinCharacterDataProperties {'
     );
   };
   const logs = [];
   const result = await convertBinsToPy(run, dir, (message) => logs.push(message));
-  assert.equal(calls.length, 2, '先精简表再完整表');
-  assert.equal(calls[1][1], ritobinHashTablesDir(), '第二次该用随包完整名字表');
-  assert.equal(result.slimHashes, false);
-  assert.ok(logs.some((line) => line.includes('完整名字表')), '应该有回退日志');
+  assert.equal(calls.length, 2, '先完整表再精简表');
+  assert.equal(calls[1][1], ensureRitobinHashDir(), '第二次该用精简名字表');
+  assert.equal(result.slimHashes, true);
+  assert.ok(logs.some((line) => line.includes('精简名字表')), '应该有回退日志');
   return '回退正常';
 });
 

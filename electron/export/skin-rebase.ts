@@ -63,6 +63,8 @@ export interface RebaseResult {
   upgradeDropped: boolean;
   /** 被去掉的 gear 对象（`Characters/.../Gear/<名>` 或它的哈希），用来补枪械 submesh / 特效映射 */
   upgradeLinks: string[];
+  /** 炫彩（chroma）改成独立皮肤身份时改的 `skinClassification`；不是炫彩就是 undefined */
+  classification?: { from: number | null; to: number };
 }
 
 export interface RebaseSkinPyOptions {
@@ -80,6 +82,8 @@ export interface RebaseSkinPyOptions {
   baseSimpleSkin?: string;
   /** 该角色 base 皮肤（游戏 skin0.bin）的音频段，用来把皮肤音频身份换回 base */
   baseAudio?: AudioBlocks;
+  /** base 皮肤 bin 里的 `skinClassification`（独立皮肤是 1，炫彩是 2） */
+  baseClassification?: number | null;
   /** 游戏 WAD 解压目录（里面有 assets/、data/），可选 */
   extractRoot?: string;
   /** 已经取出来的资源（key 是小写相对路径），从游戏 WAD 按需抽取时用 */
@@ -226,6 +230,55 @@ export const rebaseSkinObjectPath = (
     return `"${value.replace(/Skin\d+$/i, 'Skin0')}"`;
   });
   return { text: next, replaced };
+};
+
+/**
+ * 炫彩（chroma）的身份：`skinParent` = 父皮肤 id，`skinClassification` = 2。
+ *
+ * 这两个字段在「独立皮肤」里不存在（`skinClassification` 是 1）。炫彩的数据本来是
+ * 给游戏「和父皮肤一起加载」用的，我们把它塞进 base 皮肤槽位后，父皮肤不在，
+ * 游戏仍然按炫彩处理这份数据 —— 实测 68_9（68009，父皮肤 68004）走路和模型都对，
+ * 但 Q/E/R 的特效没了/歪了：Rumble 的技能特效是动画图里 `mEffectKey` 事件经皮肤
+ * `Resources.resourceMap` 解析成粒子的，炫彩身份下这条解析链拿不到父皮肤上下文。
+ *
+ * 处理：把炫彩按「独立皮肤」的身份写 —— `skinClassification` 换成 base 皮肤的值
+ * （独立皮肤 / base 都是 1）；`skinParent` 留着（Rose 的包也留着，游戏不会因为它
+ * 去找不存在的父皮肤数据）。
+ */
+const SKIN_PARENT_FIELD = `(?:skinParent|${hashPattern(ritobinHash('skinParent'))})`;
+const SKIN_CLASSIFICATION_FIELD = `(?:skinClassification|${hashPattern(
+  ritobinHash('skinClassification')
+)})`;
+
+/** 读 `skinParent`（没有这个字段返回 null，独立皮肤就是这样） */
+export const readSkinParent = (text: string): number | null => {
+  const matched = new RegExp(`${SKIN_PARENT_FIELD}:\\s*i32\\s*=\\s*(-?\\d+)`).exec(text);
+  return matched ? Number(matched[1]) : null;
+};
+
+/** 读 `skinClassification` */
+export const readSkinClassification = (text: string): number | null => {
+  const matched = new RegExp(`${SKIN_CLASSIFICATION_FIELD}:\\s*u32\\s*=\\s*(\\d+)`).exec(text);
+  return matched ? Number(matched[1]) : null;
+};
+
+/**
+ * 炫彩（有 `skinParent`）的 `skinClassification` 换成独立皮肤的值（默认 1）。
+ *
+ * 不是炫彩的皮肤原样返回 —— 传说/终极皮肤的分类（走路、专属动作）不能被抹平。
+ */
+export const normalizeChromaClassification = (
+  text: string,
+  baseClassification?: number | null
+): { text: string; changed: boolean; from: number | null; to: number } => {
+  const parent = readSkinParent(text);
+  const from = readSkinClassification(text);
+  const to = baseClassification ?? 1;
+  if (parent === null || parent <= 0 || from === null || from === to) {
+    return { text, changed: false, from, to };
+  }
+  const field = new RegExp(`(${SKIN_CLASSIFICATION_FIELD}:\\s*u32\\s*=\\s*)\\d+`);
+  return { text: text.replace(field, `$1${to}`), changed: true, from, to };
 };
 
 /**
@@ -599,16 +652,17 @@ export const rebaseSkinPy = (options: RebaseSkinPyOptions): RebaseResult | null 
   ].join('\n');
   const audioLeftover = skinAudioMarkers(audioText, character);
 
-  // objectPath：这条 entry 自己的路径也换成 base 皮肤（游戏自带 skin0.bin 就是这么写的）
-  let objectPathRenamed = false;
-  if (options.skinId !== undefined) {
-    const objectPath = rebaseSkinObjectPath(next, character, options.skinId);
-    next = objectPath.text;
-    objectPathRenamed = objectPath.replaced > 0;
-  }
+  // objectPath：**不换**。base-slot 包的身份对象留在原皮肤的命名空间
+  // （`Characters/<英雄>/Skins/Skin<N>`），和 Rose 的 68003 包一致 —— 它把 entry key、
+  // `mResourceResolver` 换成 Skin0/Resources，但 objectPath 仍是 `Skins/Skin3`。
+  // 改成 Skin0 会让「特效按皮肤命名空间解析」这条链对不上（Q 火焰落点歪、E/R 没特效）。
+  const objectPathRenamed = false;
   // gear 形态升级：目标对象不在本包里的整段去掉（理由见 dropDanglingSkinUpgrade）
   const upgrade = dropDanglingSkinUpgrade(next);
   next = upgrade.text;
+  // 炫彩当成独立皮肤写（理由见 normalizeChromaClassification）
+  const classified = normalizeChromaClassification(next, options.baseClassification);
+  next = classified.text;
 
   fs.writeFileSync(options.pyPath, next, 'utf-8');
 
@@ -616,13 +670,16 @@ export const rebaseSkinPy = (options: RebaseSkinPyOptions): RebaseResult | null 
     `[base-skin] ${character}: championSkinName=${options.baseChampionSkinName}，` +
       `skeleton=${skeletonRef}，simpleSkin=${simpleSkinRef}`
   );
-  if (objectPathRenamed) {
-    log(`[base-skin] ${character}: objectPath 换成 base 皮肤自己的路径`);
-  }
   if (upgrade.dropped) {
     log(
       `[base-skin] ${character}: 去掉 skinUpgradeData（gear 目标不在本包里：` +
         `${upgrade.links.slice(0, 3).join(', ')}）`
+    );
+  }
+  if (classified.changed) {
+    log(
+      `[base-skin] ${character}: 炫彩按独立皮肤写（skinClassification ` +
+        `${classified.from} -> ${classified.to}）`
     );
   }
   if (audioReplaced.length > 0) {
@@ -652,5 +709,8 @@ export const rebaseSkinPy = (options: RebaseSkinPyOptions): RebaseResult | null 
     objectPathRenamed,
     upgradeDropped: upgrade.dropped,
     upgradeLinks: upgrade.links,
+    classification: classified.changed
+      ? { from: classified.from, to: classified.to }
+      : undefined,
   };
 };

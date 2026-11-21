@@ -255,25 +255,34 @@ export const convertBinsToPy = async (
   log?: (message: string) => void
 ): Promise<ConvertResult> => {
   const startedAt = Date.now();
+  // builder 7 起，皮肤 bin 的文本要按字段名改写（`idleParticlesEffects` / `keywordsRequired`
+  // / `Filtering` 这些没在精简表里）。随包完整表只有 400KB，转换耗时和精简表同量级
+  // （191KB 的 bin 约 110ms），所以直接用完整表，别再靠「解不出锚点再重转」兜底。
+  const full = ritobinHashTablesDir();
   const slim = ensureRitobinHashDir();
-  const attempts: string[][] = [];
-  if (slim) {
-    attempts.push(binsToPyCall(dir, true, slim).args);
+  const attempts: { args: string[]; slim: boolean }[] = [];
+  if (fs.existsSync(full)) {
+    attempts.push({ args: binsToPyCall(dir, true, full).args, slim: false });
   }
-  attempts.push(binsToPyCall(dir, true, ritobinHashTablesDir()).args);
+  if (slim) {
+    attempts.push({ args: binsToPyCall(dir, true, slim).args, slim: true });
+  }
+  if (attempts.length === 0) {
+    attempts.push({ args: binsToPyCall(dir, true, null).args, slim: false });
+  }
 
   for (let index = 0; index < attempts.length; index++) {
-    await run(attempts[index]);
+    await run(attempts[index].args);
     if (pysHaveAnchors(dir)) {
       return {
         count: listFiles(dir, '.py').length,
-        slimHashes: index === 0 && !!slim,
+        slimHashes: attempts[index].slim,
         elapsedMs: Date.now() - startedAt,
       };
     }
     if (index < attempts.length - 1) {
-      // 精简表没覆盖到（游戏改了字段名？）：删掉这批只有哈希的 py，用完整表重来
-      log?.('[ritobin] 精简名字表里没解出锚点，改用随包完整名字表重转一次');
+      // 完整表没覆盖到（游戏改了字段名？）：删掉这批只有哈希的 py，换精简表再试
+      log?.('[ritobin] 完整名字表里没解出锚点，改用精简名字表重转一次');
       for (const file of listFiles(dir, '.py')) {
         fs.rmSync(file, { force: true });
       }
